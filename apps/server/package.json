@@ -1,0 +1,29 @@
+{
+  "name": "server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "db:push": "prisma db push --schema ./prisma/schema",
+    "db:studio": "prisma studio",
+    "db:generate": "prisma generate --schema ./prisma/schema",
+    "db:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@orpc/client": "^1.4.1",
+    "@orpc/server": "^1.4.1",
+    "@prisma/client": "^6.7.0",
+    "better-auth": "^1.2.8",
+    "dotenv": "^16.5.0",
+    "fast-xml-parser": "^5.2.5",
+    "next": "15.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "prisma": "^6.7.0",
+    "typescript": "^5"
+  }
+}

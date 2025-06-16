@@ -1,0 +1,42 @@
+-- CreateTable
+CREATE TABLE "ffmpeg_settings" (
+    "_id" TEXT NOT NULL PRIMARY KEY DEFAULT 'singleton',
+    "ffmpegPath" TEXT NOT NULL DEFAULT 'ffmpeg',
+    "ffprobePath" TEXT NOT NULL DEFAULT 'ffprobe',
+    "pathLocked" BOOLEAN NOT NULL DEFAULT false,
+    "autoDetectPath" BOOLEAN NOT NULL DEFAULT true,
+    "enableTranscoding" BOOLEAN NOT NULL DEFAULT true,
+    "targetResolution" TEXT NOT NULL DEFAULT '1920x1080',
+    "videoBitrate" TEXT NOT NULL DEFAULT '3000k',
+    "videoBufSize" TEXT NOT NULL DEFAULT '6000k',
+    "videoCodec" TEXT NOT NULL DEFAULT 'libx264',
+    "audioCodec" TEXT NOT NULL DEFAULT 'aac',
+    "audioSampleRate" INTEGER NOT NULL DEFAULT 48000,
+    "audioBitrate" TEXT NOT NULL DEFAULT '128k',
+    "audioChannels" INTEGER NOT NULL DEFAULT 2,
+    "enableHardwareAccel" BOOLEAN NOT NULL DEFAULT false,
+    "hardwareAccelType" TEXT NOT NULL DEFAULT '',
+    "hardwareDevice" TEXT NOT NULL DEFAULT '',
+    "videoPreset" TEXT NOT NULL DEFAULT 'medium',
+    "videoCrf" INTEGER NOT NULL DEFAULT 23,
+    "maxMuxingQueueSize" INTEGER NOT NULL DEFAULT 1024,
+    "threads" INTEGER NOT NULL DEFAULT 0,
+    "outputFormat" TEXT NOT NULL DEFAULT 'mpegts',
+    "segmentTime" INTEGER NOT NULL DEFAULT 2,
+    "segmentListSize" INTEGER NOT NULL DEFAULT 5,
+    "errorScreen" TEXT NOT NULL DEFAULT 'pic',
+    "errorAudio" TEXT NOT NULL DEFAULT 'silent',
+    "logLevel" TEXT NOT NULL DEFAULT 'error',
+    "enableStats" BOOLEAN NOT NULL DEFAULT false,
+    "statsFilePath" TEXT NOT NULL DEFAULT '',
+    "globalOptions" TEXT NOT NULL DEFAULT '',
+    "inputOptions" TEXT NOT NULL DEFAULT '',
+    "outputOptions" TEXT NOT NULL DEFAULT '',
+    "settingsId" TEXT NOT NULL DEFAULT 'singleton',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ffmpeg_settings_settingsId_fkey" FOREIGN KEY ("settingsId") REFERENCES "settings" ("_id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ffmpeg_settings_settingsId_key" ON "ffmpeg_settings"("settingsId");

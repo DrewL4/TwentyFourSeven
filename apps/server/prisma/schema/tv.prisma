@@ -1,0 +1,379 @@
+model MediaServer {
+  id       String @id @default(cuid()) @map("_id")
+  name     String
+  url      String
+  token    String?
+  type     ServerType @default(PLEX)
+  active   Boolean @default(true)
+  
+  libraries MediaLibrary[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("media_server")
+}
+
+model MediaLibrary {
+  id       String @id @default(cuid()) @map("_id")
+  name     String
+  key      String // Plex library key
+  type     LibraryType
+  
+  serverId String
+  server   MediaServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  
+  shows    MediaShow[]
+  movies   MediaMovie[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([serverId, key])
+  @@map("media_library")
+}
+
+model MediaShow {
+  id          String @id @default(cuid()) @map("_id")
+  title       String
+  year        Int?
+  summary     String?
+  poster      String?
+  backdrop    String?
+  ratingKey   String // Plex rating key
+  
+  // Additional metadata fields
+  studio      String?
+  contentRating String?
+  genres      String? // JSON string of genre names
+  directors   String? // JSON string of director names
+  writers     String? // JSON string of writer names
+  actors      String? // JSON string of actor names
+  countries   String? // JSON string of country names
+  
+  libraryId   String
+  library     MediaLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  
+  episodes    MediaEpisode[]
+  channelShows ChannelShow[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([libraryId, ratingKey])
+  @@map("media_show")
+}
+
+model MediaEpisode {
+  id          String @id @default(cuid()) @map("_id")
+  title       String
+  summary     String?
+  duration    Int // Duration in milliseconds
+  seasonNumber Int
+  episodeNumber Int
+  thumb       String?
+  ratingKey   String // Plex rating key
+  
+  showId      String
+  show        MediaShow @relation(fields: [showId], references: [id], onDelete: Cascade)
+  
+  programs    Program[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([showId, ratingKey])
+  @@map("media_episode")
+}
+
+model MediaMovie {
+  id          String @id @default(cuid()) @map("_id")
+  title       String
+  year        Int?
+  summary     String?
+  poster      String?
+  backdrop    String?
+  duration    Int // Duration in milliseconds
+  ratingKey   String // Plex rating key
+  
+  // Additional metadata fields
+  studio      String?
+  contentRating String?
+  genres      String? // JSON string of genre names
+  directors   String? // JSON string of director names
+  writers     String? // JSON string of writer names
+  actors      String? // JSON string of actor names
+  countries   String? // JSON string of country names
+  
+  libraryId   String
+  library     MediaLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  
+  programs    Program[]
+  channelMovies ChannelMovie[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([libraryId, ratingKey])
+  @@map("media_movie")
+}
+
+model Channel {
+  id          String @id @default(cuid()) @map("_id")
+  number      Int @unique
+  name        String
+  icon        String?
+  stealth     Boolean @default(false)
+  groupTitle  String?
+  
+  programs    Program[]
+  channelShows ChannelShow[]
+  channelMovies ChannelMovie[]
+  
+  // Programming configuration
+  startTime   String? // HH:MM format
+  
+  // Channel icon settings
+  iconWidth   Int @default(120)
+  iconDuration Int @default(60) // seconds
+  iconPosition String @default("2") // 1-9 grid position
+  
+  // Guide settings
+  guideFlexPlaceholder String @default("")
+  guideMinimumDurationSeconds Int @default(300) // 5 minutes
+  
+  // On-demand settings
+  isOnDemand Boolean @default(false)
+  onDemandModulo Int @default(1)
+  
+  // Episode memory settings
+  episodeMemoryEnabled Boolean @default(false)
+  
+  // Automation filter settings
+  autoFilterEnabled Boolean @default(false)
+  filterGenres String? // JSON string of genre filters
+  filterActors String? // JSON string of actor filters
+  filterDirectors String? // JSON string of director filters
+  filterStudios String? // JSON string of studio filters
+  filterYearStart Int?
+  filterYearEnd Int?
+  filterRating String? // Content rating filter
+  filterType String @default("both") // "movies", "shows", "both"
+  lastAutoScanAt DateTime?
+  
+  // Advanced reorder options for automation
+  defaultEpisodeOrder String @default("sequential") // "sequential", "random", "shuffle"
+  respectEpisodeOrder Boolean @default(true)
+  blockShuffle Boolean @default(false)
+  blockShuffleSize Int @default(1)
+  autoSortMethod String? // "title-asc", "title-desc", "year-newest", "year-oldest", etc.
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("channel")
+}
+
+model Program {
+  id          String @id @default(cuid()) @map("_id")
+  
+  channelId   String
+  channel     Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  
+  // Either episode or movie
+  episodeId   String?
+  episode     MediaEpisode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  
+  movieId     String?
+  movie       MediaMovie? @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  
+  startTime   DateTime
+  duration    Int // Duration in milliseconds
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("program")
+}
+
+model ChannelShow {
+  id        String @id @default(cuid()) @map("_id")
+  
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  
+  showId    String
+  show      MediaShow @relation(fields: [showId], references: [id], onDelete: Cascade)
+  
+  // Programming order/settings
+  order     Int @default(0)
+  weight    Int @default(1)
+  
+  // Programming features
+  shuffle   Boolean @default(false)
+  shuffleOrder String @default("next") // next, random
+  blockShuffle Boolean @default(false)
+  blockShuffleSize Int @default(1)
+  
+  // Episode memory (last played episode tracking)
+  lastPlayedEpisodeId String?
+  lastPlayedAt DateTime?
+  
+  // Episode ordering constraints
+  respectOrder Boolean @default(true)
+  maxConsecutiveEpisodes Int @default(0) // 0 = unlimited
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([channelId, showId])
+  @@map("channel_show")
+}
+
+model ChannelMovie {
+  id        String @id @default(cuid()) @map("_id")
+  
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  
+  movieId   String
+  movie     MediaMovie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  
+  // Programming order/settings  
+  order     Int @default(0)
+  weight    Int @default(1)
+  
+  // Programming features
+  shuffle   Boolean @default(false)
+  maxConsecutiveMovies Int @default(0) // 0 = unlimited
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([channelId, movieId])
+  @@map("channel_movie")
+}
+
+model Settings {
+  id        String @id @default("singleton") @map("_id")
+  
+  // Server settings
+  port      Int @default(3000)
+  ffmpegPath String @default("ffmpeg") // Keep for migration compatibility
+  concurrentStreams Int @default(1)
+  
+  // HDHR Settings
+  hdhrActive Boolean @default(false)
+  hdhrDeviceId String @default("")
+  hdhrFriendlyName String @default("My TV Server")
+  hdhrTunerCount Int @default(1)
+  
+  // Guide settings
+  guideDays Int @default(3) // Number of days of guide data to generate
+  
+  ffmpegSettings FfmpegSettings?
+  plexSettings PlexSettings?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("settings")
+}
+
+model FfmpegSettings {
+  id        String @id @default("singleton") @map("_id")
+  
+  // FFMPEG executable settings
+  ffmpegPath String @default("ffmpeg")
+  ffprobePath String @default("ffprobe")
+  pathLocked Boolean @default(false)
+  autoDetectPath Boolean @default(true)
+  
+  // Transcoding settings
+  enableTranscoding Boolean @default(true)
+  targetResolution String @default("1920x1080") // empty for no scaling
+  videoBitrate String @default("3000k")
+  videoBufSize String @default("6000k")
+  videoCodec String @default("libx264")
+  audioCodec String @default("aac")
+  audioSampleRate Int @default(48000)
+  audioBitrate String @default("128k")
+  audioChannels Int @default(2)
+  
+  // Hardware acceleration
+  enableHardwareAccel Boolean @default(false)
+  hardwareAccelType String @default("") // vaapi, nvenc, qsv, videotoolbox
+  hardwareDevice String @default("") // /dev/dri/renderD128, cuda:0, etc
+  
+  // Quality and performance settings
+  videoPreset String @default("medium") // ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+  videoCrf Int @default(23) // 0-51, lower is better quality
+  maxMuxingQueueSize Int @default(1024)
+  threads Int @default(0) // 0 for auto
+  
+  // Format settings
+  outputFormat String @default("mpegts")
+  segmentTime Int @default(2) // seconds
+  segmentListSize Int @default(5)
+  
+  // Error handling
+  errorScreen String @default("pic") // pic, blank, static, testsrc, text, kill
+  errorAudio String @default("silent") // whitenoise, sine, silent
+  
+  // Logging and debugging
+  logLevel String @default("error") // quiet, panic, fatal, error, warning, info, verbose, debug, trace
+  enableStats Boolean @default(false)
+  statsFilePath String @default("")
+  
+  // Advanced options
+  globalOptions String @default("") // Additional global ffmpeg options
+  inputOptions String @default("") // Additional input options
+  outputOptions String @default("") // Additional output options
+  
+  settingsId String @unique @default("singleton")
+  settings  Settings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("ffmpeg_settings")
+}
+
+model PlexSettings {
+  id        String @id @default("singleton") @map("_id")
+  
+  url       String @default("")
+  token     String @default("")
+  
+  // Library management settings
+  autoRefreshLibraries Boolean @default(false)
+  refreshInterval Int @default(24) // hours
+  
+  // Guide settings
+  arGuide Boolean @default(false)
+  arChannels Boolean @default(false)
+  
+  // Connection settings
+  connectionTimeout Int @default(10000) // milliseconds
+  requestTimeout Int @default(30000) // milliseconds
+  
+  settingsId String @unique @default("singleton")
+  settings  Settings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("plex_settings")
+}
+
+enum ServerType {
+  PLEX
+  JELLYFIN
+  EMBY
+}
+
+enum LibraryType {
+  MOVIE
+  SHOW
+  MUSIC
+} 
