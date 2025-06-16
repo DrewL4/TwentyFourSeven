@@ -12,8 +12,8 @@ COPY apps/web/package*.json ./apps/web/
 COPY apps/server/package*.json ./apps/server/
 COPY turbo.json ./
 
-# Install ALL dependencies (including devDependencies for building)
-RUN npm ci && npm cache clean --force
+# Install dependencies with npm ci for faster, reproducible builds
+RUN npm ci --prefer-offline --no-audit --progress=false
 
 # Build stage
 FROM base AS builder
@@ -21,6 +21,8 @@ WORKDIR /app
 
 # Copy source code
 COPY . .
+
+# Copy only node_modules (no separate copy step needed)
 COPY --from=deps /app/node_modules ./node_modules
 
 # Set production environment
@@ -30,61 +32,45 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Build applications
 RUN npm run build
 
-# Production stage
+# Production stage - single dependency installation
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install curl for health checks, openssl for secret generation, nginx, and pciutils for GPU detection
-RUN apk add --no-cache curl openssl nginx pciutils
+# Install system dependencies in one layer
+RUN apk add --no-cache curl openssl nginx pciutils && \
+    addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs && \
+    mkdir -p /app/database /app/static /var/log/nginx /var/lib/nginx /run/nginx && \
+    mkdir -p /var/lib/nginx/tmp/client_body /var/lib/nginx/tmp/proxy /var/lib/nginx/tmp/fastcgi /var/lib/nginx/tmp/uwsgi /var/lib/nginx/tmp/scgi && \
+    chown -R nextjs:nodejs /app/database /app/static /var/log/nginx /var/lib/nginx /run/nginx
 
-# Create app user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# Copy package files for production install
+COPY package*.json ./
+COPY apps/web/package*.json ./apps/web/
+COPY apps/server/package*.json ./apps/server/
+COPY turbo.json ./
 
-# Copy built applications
+# Install only production dependencies
+RUN npm ci --only=production --prefer-offline --no-audit --progress=false && \
+    npm cache clean --force
+
+# Copy built applications with proper ownership
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next ./apps/web/.next
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/.next ./apps/server/.next
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/package.json ./apps/web/package.json
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/package.json ./apps/server/package.json
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
-COPY --from=builder --chown=nextjs:nodejs /app/turbo.json ./
 
 # Copy prisma files (multi-file schema setup)
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/prisma/schema ./apps/server/prisma/schema
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/prisma/generated ./apps/server/prisma/generated
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/prisma.config.ts ./apps/server/
 
-# Install only production dependencies for runtime
-COPY package*.json ./
-COPY apps/web/package*.json ./apps/web/
-COPY apps/server/package*.json ./apps/server/
-COPY turbo.json ./
-RUN npm ci --only=production && npm cache clean --force
-
-# Fix permissions for node_modules so nextjs user can write to it
-RUN chown -R nextjs:nodejs /app/node_modules
-
 # Copy nginx configuration
 COPY --chown=nextjs:nodejs nginx.conf /etc/nginx/nginx.conf
-
-# Create directories for database and static files
-RUN mkdir -p /app/database && chown nextjs:nodejs /app/database
-RUN mkdir -p /app/static && chown nextjs:nodejs /app/static
-RUN mkdir -p /var/log/nginx && chown nextjs:nodejs /var/log/nginx
-RUN mkdir -p /var/lib/nginx && chown nextjs:nodejs /var/lib/nginx
-RUN mkdir -p /run/nginx && chown nextjs:nodejs /run/nginx
-
-# Create nginx temporary directories and fix permissions
-RUN mkdir -p /var/lib/nginx/tmp/client_body \
-    /var/lib/nginx/tmp/proxy \
-    /var/lib/nginx/tmp/fastcgi \
-    /var/lib/nginx/tmp/uwsgi \
-    /var/lib/nginx/tmp/scgi && \
-    chown -R nextjs:nodejs /var/lib/nginx
 
 USER nextjs
 
