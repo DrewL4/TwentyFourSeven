@@ -1466,8 +1466,7 @@ export const appRouter = {
         .input(z.object({
           autoRefreshLibraries: z.boolean().optional(),
           refreshInterval: z.number().optional(),
-          arGuide: z.boolean().optional(),
-          arChannels: z.boolean().optional(),
+          webhookEnabled: z.boolean().optional(),
           connectionTimeout: z.number().optional(),
           requestTimeout: z.number().optional()
         }))
@@ -1479,7 +1478,7 @@ export const appRouter = {
             update: {}
           });
 
-          return await prisma.plexSettings.upsert({
+          const updatedSettings = await prisma.plexSettings.upsert({
             where: { id: "singleton" },
             create: { 
               id: "singleton",
@@ -1488,6 +1487,112 @@ export const appRouter = {
             },
             update: input
           });
+
+          // Update sync schedules if auto-refresh settings changed
+          if (input.autoRefreshLibraries !== undefined || input.refreshInterval !== undefined) {
+            try {
+              const { StartupService } = await import('../lib/startup');
+              
+              // Get all Plex servers
+              const plexServers = await prisma.mediaServer.findMany({
+                where: {
+                  type: 'PLEX',
+                  active: true
+                }
+              });
+
+              // Update sync schedule for each server
+              for (const server of plexServers) {
+                StartupService.updateServerSyncSchedule(
+                  server.id, 
+                  updatedSettings.autoRefreshLibraries,
+                  updatedSettings.refreshInterval
+                );
+              }
+            } catch (error) {
+              console.error('Failed to update sync schedules:', error);
+            }
+          }
+
+          return updatedSettings;
+        })
+    },
+
+    webhooks: {
+      getActivity: publicProcedure
+        .input(z.object({
+          limit: z.number().default(50),
+          offset: z.number().default(0),
+          source: z.string().optional(),
+          status: z.string().optional()
+        }))
+        .handler(async ({ input }) => {
+          const where: any = {};
+          
+          if (input.source) {
+            where.source = input.source;
+          }
+          
+          if (input.status) {
+            where.status = input.status;
+          }
+          
+          const [activities, total] = await Promise.all([
+            prisma.webhookActivity.findMany({
+              where,
+              orderBy: { createdAt: 'desc' },
+              take: input.limit,
+              skip: input.offset
+            }),
+            prisma.webhookActivity.count({ where })
+          ]);
+          
+          return {
+            activities,
+            total,
+            hasMore: input.offset + input.limit < total
+          };
+        }),
+        
+      getStats: publicProcedure.handler(async () => {
+        const stats = await Promise.all([
+          prisma.webhookActivity.count(),
+          prisma.webhookActivity.count({ where: { status: 'processed' } }),
+          prisma.webhookActivity.count({ where: { status: 'failed' } }),
+          prisma.webhookActivity.count({ 
+            where: { 
+              createdAt: { 
+                gte: new Date(Date.now() - 24 * 60 * 60 * 1000) 
+              }
+            }
+          })
+        ]);
+        
+        return {
+          total: stats[0],
+          processed: stats[1],
+          failed: stats[2],
+          last24Hours: stats[3]
+        };
+      }),
+      
+      clearActivity: protectedProcedure
+        .input(z.object({
+          olderThanDays: z.number().default(7)
+        }))
+        .handler(async ({ input }) => {
+          const cutoffDate = new Date(Date.now() - input.olderThanDays * 24 * 60 * 60 * 1000);
+          
+          const result = await prisma.webhookActivity.deleteMany({
+            where: {
+              createdAt: { lt: cutoffDate }
+            }
+          });
+          
+          return {
+            deleted: result.count,
+            message: `Deleted ${result.count} webhook activities older than ${input.olderThanDays} days`
+          };
         })
     }
   },
@@ -1543,7 +1648,7 @@ export const appRouter = {
     }),
 
     validate: protectedProcedure.handler(async () => {
-      const { XmltvValidator } = await import('@/lib/xmltv-validator');
+      const { XmltvValidator } = await import('../lib/xmltv-validator');
       const report = await XmltvValidator.generateValidationReport();
       const consistency = await XmltvValidator.validateXmltvConsistency();
       

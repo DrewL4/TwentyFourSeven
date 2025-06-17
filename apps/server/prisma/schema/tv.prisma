@@ -349,9 +349,8 @@ model PlexSettings {
   autoRefreshLibraries Boolean @default(false)
   refreshInterval Int @default(24) // hours
   
-  // Guide settings
-  arGuide Boolean @default(false)
-  arChannels Boolean @default(false)
+  // Webhook settings
+  webhookEnabled Boolean @default(true)
   
   // Connection settings
   connectionTimeout Int @default(10000) // milliseconds
@@ -364,6 +363,33 @@ model PlexSettings {
   updatedAt DateTime @updatedAt
   
   @@map("plex_settings")
+}
+
+model WebhookActivity {
+  id            String @id @default(cuid()) @map("_id")
+  
+  // Webhook source
+  source        String // "plex", "emby", etc.
+  serverName    String
+  serverId      String?
+  
+  // Event details
+  eventType     String // "library.new", "library.update", etc.
+  contentType   String // "movie", "show", "episode"
+  contentTitle  String
+  contentId     String? // rating key or similar
+  
+  // Processing status
+  status        String @default("pending") // "pending", "processed", "failed"
+  errorMessage  String?
+  
+  // Metadata
+  payload       String? // JSON payload for debugging
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("webhook_activity")
 }
 
 enum ServerType {

@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,10 +75,18 @@ export default function PlexSettingsPage() {
   const [availableLibraries, setAvailableLibraries] = useState<PlexLibrary[]>([]);
   const [selectedLibraries, setSelectedLibraries] = useState<string[]>([]);
   const [librarySelectionServer, setLibrarySelectionServer] = useState<any>(null);
+  const [webhookUrl, setWebhookUrl] = useState('');
+
+  // Set webhook URL on client side
+  useEffect(() => {
+    setWebhookUrl(`${window.location.origin}/api/plex/webhook`);
+  }, []);
 
   // Queries
   const serversQuery = useQuery(orpc.servers.list.queryOptions());
   const plexSettingsQuery = useQuery(orpc.settings.plex.get.queryOptions());
+  const webhookStatsQuery = useQuery(orpc.settings.webhooks.getStats.queryOptions());
+  const webhookActivityQuery = useQuery(orpc.settings.webhooks.getActivity.queryOptions({ input: { limit: 10 } }));
 
   // Mutations
   const plexLoginMutation = useMutation({
@@ -728,68 +736,17 @@ export default function PlexSettingsPage() {
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>AR Guide Integration</Label>
+                    <Label>Enable Webhooks</Label>
                     <p className="text-sm text-muted-foreground">
-                      Enable augmented reality guide features
+                      Allow real-time sync from Plex when content is added or updated
                     </p>
                   </div>
                   <Switch
-                    checked={plexSettingsQuery.data.arGuide}
+                    checked={plexSettingsQuery.data.webhookEnabled}
                     onCheckedChange={(checked: boolean) => 
-                      updatePlexSettingsMutation.mutate({ arGuide: checked })
+                      updatePlexSettingsMutation.mutate({ webhookEnabled: checked })
                     }
                   />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>AR Channels</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Enable AR features for channel browsing
-                    </p>
-                  </div>
-                  <Switch
-                    checked={plexSettingsQuery.data.arChannels}
-                    onCheckedChange={(checked: boolean) => 
-                      updatePlexSettingsMutation.mutate({ arChannels: checked })
-                    }
-                  />
-                </div>
-
-                <Separator />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="connectionTimeout">Connection Timeout (s)</Label>
-                    <Input
-                      id="connectionTimeout"
-                      type="number"
-                      min="5"
-                      max="120"
-                      value={plexSettingsQuery.data.connectionTimeout}
-                      onChange={(e) => 
-                        updatePlexSettingsMutation.mutate({ 
-                          connectionTimeout: parseInt(e.target.value) || 30 
-                        })
-                      }
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="requestTimeout">Request Timeout (s)</Label>
-                    <Input
-                      id="requestTimeout"
-                      type="number"
-                      min="10"
-                      max="300"
-                      value={plexSettingsQuery.data.requestTimeout}
-                      onChange={(e) => 
-                        updatePlexSettingsMutation.mutate({ 
-                          requestTimeout: parseInt(e.target.value) || 60 
-                        })
-                      }
-                    />
-                  </div>
                 </div>
               </div>
             )}
@@ -1125,6 +1082,152 @@ export default function PlexSettingsPage() {
           to import your media for use in DizqueTV channels.
         </AlertDescription>
       </Alert>
+
+      {/* Webhook Status Section */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Server className="w-5 h-5" />
+            Webhook Configuration
+          </CardTitle>
+          <CardDescription>
+            Real-time sync of new content from Plex to DizqueTV
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-muted/50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Webhook URL</p>
+                <p className="text-sm text-muted-foreground">
+                  Configure this URL in your Plex server settings
+                </p>
+              </div>
+              <Badge variant="outline">Active</Badge>
+            </div>
+            
+            <div className="mt-3 flex items-center gap-2">
+              <Input
+                value={webhookUrl}
+                readOnly
+                className="font-mono text-sm"
+              />
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && navigator.clipboard) {
+                    navigator.clipboard.writeText(webhookUrl);
+                    toast.success('Webhook URL copied to clipboard');
+                  }
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Webhook Status and Stats */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Webhook Status</p>
+                <p className="text-sm text-muted-foreground">
+                  {plexSettingsQuery.data?.webhookEnabled 
+                    ? "Endpoint is ready to receive Plex events" 
+                    : "Webhooks are disabled - enable in Plex Settings below"}
+                </p>
+              </div>
+              <Badge 
+                variant={plexSettingsQuery.data?.webhookEnabled ? "default" : "secondary"} 
+                className={plexSettingsQuery.data?.webhookEnabled ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}
+              >
+                {plexSettingsQuery.data?.webhookEnabled ? (
+                  <>
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Enabled
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3 h-3 mr-1" />
+                    Disabled
+                  </>
+                )}
+              </Badge>
+            </div>
+
+            {/* Webhook Stats */}
+            {webhookStatsQuery.data && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm font-medium">Total Events</p>
+                  <p className="text-2xl font-bold text-primary">{webhookStatsQuery.data.total}</p>
+                </div>
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <p className="text-sm font-medium">Processed</p>
+                  <p className="text-2xl font-bold text-green-600">{webhookStatsQuery.data.processed}</p>
+                </div>
+                <div className="bg-red-50 p-3 rounded-lg">
+                  <p className="text-sm font-medium">Failed</p>
+                  <p className="text-2xl font-bold text-red-600">{webhookStatsQuery.data.failed}</p>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm font-medium">Last 24h</p>
+                  <p className="text-2xl font-bold text-blue-600">{webhookStatsQuery.data.last24Hours}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Recent Activity */}
+            {webhookActivityQuery.data && webhookActivityQuery.data.activities.length > 0 && (
+              <div>
+                <p className="font-medium mb-3">Recent Activity</p>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {webhookActivityQuery.data.activities.map((activity: any) => (
+                    <div key={activity.id} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{activity.contentTitle}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {activity.eventType} • {activity.serverName} • {new Date(activity.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <Badge 
+                        variant={activity.status === 'processed' ? 'default' : activity.status === 'failed' ? 'destructive' : 'secondary'}
+                        className="text-xs"
+                      >
+                        {activity.status}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* No Activity Message */}
+            {webhookActivityQuery.data && webhookActivityQuery.data.activities.length === 0 && (
+              <div className="text-center py-6">
+                <p className="text-muted-foreground">No webhook activity yet</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Try adding new content to your Plex server to test the webhook
+                </p>
+              </div>
+            )}
+            
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Setup Instructions:</strong>
+                <ol className="list-decimal ml-4 mt-2 space-y-1">
+                  <li>Open your Plex server settings</li>
+                  <li>Navigate to Settings → Network → Webhooks</li>
+                  <li>Add the webhook URL above</li>
+                  <li>Test by adding new content to your Plex server</li>
+                </ol>
+              </AlertDescription>
+            </Alert>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 } 

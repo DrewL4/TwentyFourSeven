@@ -43,8 +43,7 @@ export type PlexSettingsMinAggregateOutputType = {
   token: string | null
   autoRefreshLibraries: boolean | null
   refreshInterval: number | null
-  arGuide: boolean | null
-  arChannels: boolean | null
+  webhookEnabled: boolean | null
   connectionTimeout: number | null
   requestTimeout: number | null
   settingsId: string | null
@@ -58,8 +57,7 @@ export type PlexSettingsMaxAggregateOutputType = {
   token: string | null
   autoRefreshLibraries: boolean | null
   refreshInterval: number | null
-  arGuide: boolean | null
-  arChannels: boolean | null
+  webhookEnabled: boolean | null
   connectionTimeout: number | null
   requestTimeout: number | null
   settingsId: string | null
@@ -73,8 +71,7 @@ export type PlexSettingsCountAggregateOutputType = {
   token: number
   autoRefreshLibraries: number
   refreshInterval: number
-  arGuide: number
-  arChannels: number
+  webhookEnabled: number
   connectionTimeout: number
   requestTimeout: number
   settingsId: number
@@ -102,8 +99,7 @@ export type PlexSettingsMinAggregateInputType = {
   token?: true
   autoRefreshLibraries?: true
   refreshInterval?: true
-  arGuide?: true
-  arChannels?: true
+  webhookEnabled?: true
   connectionTimeout?: true
   requestTimeout?: true
   settingsId?: true
@@ -117,8 +113,7 @@ export type PlexSettingsMaxAggregateInputType = {
   token?: true
   autoRefreshLibraries?: true
   refreshInterval?: true
-  arGuide?: true
-  arChannels?: true
+  webhookEnabled?: true
   connectionTimeout?: true
   requestTimeout?: true
   settingsId?: true
@@ -132,8 +127,7 @@ export type PlexSettingsCountAggregateInputType = {
   token?: true
   autoRefreshLibraries?: true
   refreshInterval?: true
-  arGuide?: true
-  arChannels?: true
+  webhookEnabled?: true
   connectionTimeout?: true
   requestTimeout?: true
   settingsId?: true
@@ -234,8 +228,7 @@ export type PlexSettingsGroupByOutputType = {
   token: string
   autoRefreshLibraries: boolean
   refreshInterval: number
-  arGuide: boolean
-  arChannels: boolean
+  webhookEnabled: boolean
   connectionTimeout: number
   requestTimeout: number
   settingsId: string
@@ -272,8 +265,7 @@ export type PlexSettingsWhereInput = {
   token?: Prisma.StringFilter<"PlexSettings"> | string
   autoRefreshLibraries?: Prisma.BoolFilter<"PlexSettings"> | boolean
   refreshInterval?: Prisma.IntFilter<"PlexSettings"> | number
-  arGuide?: Prisma.BoolFilter<"PlexSettings"> | boolean
-  arChannels?: Prisma.BoolFilter<"PlexSettings"> | boolean
+  webhookEnabled?: Prisma.BoolFilter<"PlexSettings"> | boolean
   connectionTimeout?: Prisma.IntFilter<"PlexSettings"> | number
   requestTimeout?: Prisma.IntFilter<"PlexSettings"> | number
   settingsId?: Prisma.StringFilter<"PlexSettings"> | string
@@ -288,8 +280,7 @@ export type PlexSettingsOrderByWithRelationInput = {
   token?: Prisma.SortOrder
   autoRefreshLibraries?: Prisma.SortOrder
   refreshInterval?: Prisma.SortOrder
-  arGuide?: Prisma.SortOrder
-  arChannels?: Prisma.SortOrder
+  webhookEnabled?: Prisma.SortOrder
   connectionTimeout?: Prisma.SortOrder
   requestTimeout?: Prisma.SortOrder
   settingsId?: Prisma.SortOrder
@@ -308,8 +299,7 @@ export type PlexSettingsWhereUniqueInput = Prisma.AtLeast<{
   token?: Prisma.StringFilter<"PlexSettings"> | string
   autoRefreshLibraries?: Prisma.BoolFilter<"PlexSettings"> | boolean
   refreshInterval?: Prisma.IntFilter<"PlexSettings"> | number
-  arGuide?: Prisma.BoolFilter<"PlexSettings"> | boolean
-  arChannels?: Prisma.BoolFilter<"PlexSettings"> | boolean
+  webhookEnabled?: Prisma.BoolFilter<"PlexSettings"> | boolean
   connectionTimeout?: Prisma.IntFilter<"PlexSettings"> | number
   requestTimeout?: Prisma.IntFilter<"PlexSettings"> | number
   createdAt?: Prisma.DateTimeFilter<"PlexSettings"> | Date | string
@@ -323,8 +313,7 @@ export type PlexSettingsOrderByWithAggregationInput = {
   token?: Prisma.SortOrder
   autoRefreshLibraries?: Prisma.SortOrder
   refreshInterval?: Prisma.SortOrder
-  arGuide?: Prisma.SortOrder
-  arChannels?: Prisma.SortOrder
+  webhookEnabled?: Prisma.SortOrder
   connectionTimeout?: Prisma.SortOrder
   requestTimeout?: Prisma.SortOrder
   settingsId?: Prisma.SortOrder
@@ -346,8 +335,7 @@ export type PlexSettingsScalarWhereWithAggregatesInput = {
   token?: Prisma.StringWithAggregatesFilter<"PlexSettings"> | string
   autoRefreshLibraries?: Prisma.BoolWithAggregatesFilter<"PlexSettings"> | boolean
   refreshInterval?: Prisma.IntWithAggregatesFilter<"PlexSettings"> | number
-  arGuide?: Prisma.BoolWithAggregatesFilter<"PlexSettings"> | boolean
-  arChannels?: Prisma.BoolWithAggregatesFilter<"PlexSettings"> | boolean
+  webhookEnabled?: Prisma.BoolWithAggregatesFilter<"PlexSettings"> | boolean
   connectionTimeout?: Prisma.IntWithAggregatesFilter<"PlexSettings"> | number
   requestTimeout?: Prisma.IntWithAggregatesFilter<"PlexSettings"> | number
   settingsId?: Prisma.StringWithAggregatesFilter<"PlexSettings"> | string
@@ -361,8 +349,7 @@ export type PlexSettingsCreateInput = {
   token?: string
   autoRefreshLibraries?: boolean
   refreshInterval?: number
-  arGuide?: boolean
-  arChannels?: boolean
+  webhookEnabled?: boolean
   connectionTimeout?: number
   requestTimeout?: number
   createdAt?: Date | string
@@ -376,8 +363,7 @@ export type PlexSettingsUncheckedCreateInput = {
   token?: string
   autoRefreshLibraries?: boolean
   refreshInterval?: number
-  arGuide?: boolean
-  arChannels?: boolean
+  webhookEnabled?: boolean
   connectionTimeout?: number
   requestTimeout?: number
   settingsId?: string
@@ -391,8 +377,7 @@ export type PlexSettingsUpdateInput = {
   token?: Prisma.StringFieldUpdateOperationsInput | string
   autoRefreshLibraries?: Prisma.BoolFieldUpdateOperationsInput | boolean
   refreshInterval?: Prisma.IntFieldUpdateOperationsInput | number
-  arGuide?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  arChannels?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  webhookEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   connectionTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   requestTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -406,8 +391,7 @@ export type PlexSettingsUncheckedUpdateInput = {
   token?: Prisma.StringFieldUpdateOperationsInput | string
   autoRefreshLibraries?: Prisma.BoolFieldUpdateOperationsInput | boolean
   refreshInterval?: Prisma.IntFieldUpdateOperationsInput | number
-  arGuide?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  arChannels?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  webhookEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   connectionTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   requestTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   settingsId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -421,8 +405,7 @@ export type PlexSettingsCreateManyInput = {
   token?: string
   autoRefreshLibraries?: boolean
   refreshInterval?: number
-  arGuide?: boolean
-  arChannels?: boolean
+  webhookEnabled?: boolean
   connectionTimeout?: number
   requestTimeout?: number
   settingsId?: string
@@ -436,8 +419,7 @@ export type PlexSettingsUpdateManyMutationInput = {
   token?: Prisma.StringFieldUpdateOperationsInput | string
   autoRefreshLibraries?: Prisma.BoolFieldUpdateOperationsInput | boolean
   refreshInterval?: Prisma.IntFieldUpdateOperationsInput | number
-  arGuide?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  arChannels?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  webhookEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   connectionTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   requestTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -450,8 +432,7 @@ export type PlexSettingsUncheckedUpdateManyInput = {
   token?: Prisma.StringFieldUpdateOperationsInput | string
   autoRefreshLibraries?: Prisma.BoolFieldUpdateOperationsInput | boolean
   refreshInterval?: Prisma.IntFieldUpdateOperationsInput | number
-  arGuide?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  arChannels?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  webhookEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   connectionTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   requestTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   settingsId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -470,8 +451,7 @@ export type PlexSettingsCountOrderByAggregateInput = {
   token?: Prisma.SortOrder
   autoRefreshLibraries?: Prisma.SortOrder
   refreshInterval?: Prisma.SortOrder
-  arGuide?: Prisma.SortOrder
-  arChannels?: Prisma.SortOrder
+  webhookEnabled?: Prisma.SortOrder
   connectionTimeout?: Prisma.SortOrder
   requestTimeout?: Prisma.SortOrder
   settingsId?: Prisma.SortOrder
@@ -491,8 +471,7 @@ export type PlexSettingsMaxOrderByAggregateInput = {
   token?: Prisma.SortOrder
   autoRefreshLibraries?: Prisma.SortOrder
   refreshInterval?: Prisma.SortOrder
-  arGuide?: Prisma.SortOrder
-  arChannels?: Prisma.SortOrder
+  webhookEnabled?: Prisma.SortOrder
   connectionTimeout?: Prisma.SortOrder
   requestTimeout?: Prisma.SortOrder
   settingsId?: Prisma.SortOrder
@@ -506,8 +485,7 @@ export type PlexSettingsMinOrderByAggregateInput = {
   token?: Prisma.SortOrder
   autoRefreshLibraries?: Prisma.SortOrder
   refreshInterval?: Prisma.SortOrder
-  arGuide?: Prisma.SortOrder
-  arChannels?: Prisma.SortOrder
+  webhookEnabled?: Prisma.SortOrder
   connectionTimeout?: Prisma.SortOrder
   requestTimeout?: Prisma.SortOrder
   settingsId?: Prisma.SortOrder
@@ -559,8 +537,7 @@ export type PlexSettingsCreateWithoutSettingsInput = {
   token?: string
   autoRefreshLibraries?: boolean
   refreshInterval?: number
-  arGuide?: boolean
-  arChannels?: boolean
+  webhookEnabled?: boolean
   connectionTimeout?: number
   requestTimeout?: number
   createdAt?: Date | string
@@ -573,8 +550,7 @@ export type PlexSettingsUncheckedCreateWithoutSettingsInput = {
   token?: string
   autoRefreshLibraries?: boolean
   refreshInterval?: number
-  arGuide?: boolean
-  arChannels?: boolean
+  webhookEnabled?: boolean
   connectionTimeout?: number
   requestTimeout?: number
   createdAt?: Date | string
@@ -603,8 +579,7 @@ export type PlexSettingsUpdateWithoutSettingsInput = {
   token?: Prisma.StringFieldUpdateOperationsInput | string
   autoRefreshLibraries?: Prisma.BoolFieldUpdateOperationsInput | boolean
   refreshInterval?: Prisma.IntFieldUpdateOperationsInput | number
-  arGuide?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  arChannels?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  webhookEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   connectionTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   requestTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -617,8 +592,7 @@ export type PlexSettingsUncheckedUpdateWithoutSettingsInput = {
   token?: Prisma.StringFieldUpdateOperationsInput | string
   autoRefreshLibraries?: Prisma.BoolFieldUpdateOperationsInput | boolean
   refreshInterval?: Prisma.IntFieldUpdateOperationsInput | number
-  arGuide?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  arChannels?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  webhookEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   connectionTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   requestTimeout?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -633,8 +607,7 @@ export type PlexSettingsSelect<ExtArgs extends runtime.Types.Extensions.Internal
   token?: boolean
   autoRefreshLibraries?: boolean
   refreshInterval?: boolean
-  arGuide?: boolean
-  arChannels?: boolean
+  webhookEnabled?: boolean
   connectionTimeout?: boolean
   requestTimeout?: boolean
   settingsId?: boolean
@@ -649,8 +622,7 @@ export type PlexSettingsSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   token?: boolean
   autoRefreshLibraries?: boolean
   refreshInterval?: boolean
-  arGuide?: boolean
-  arChannels?: boolean
+  webhookEnabled?: boolean
   connectionTimeout?: boolean
   requestTimeout?: boolean
   settingsId?: boolean
@@ -665,8 +637,7 @@ export type PlexSettingsSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   token?: boolean
   autoRefreshLibraries?: boolean
   refreshInterval?: boolean
-  arGuide?: boolean
-  arChannels?: boolean
+  webhookEnabled?: boolean
   connectionTimeout?: boolean
   requestTimeout?: boolean
   settingsId?: boolean
@@ -681,8 +652,7 @@ export type PlexSettingsSelectScalar = {
   token?: boolean
   autoRefreshLibraries?: boolean
   refreshInterval?: boolean
-  arGuide?: boolean
-  arChannels?: boolean
+  webhookEnabled?: boolean
   connectionTimeout?: boolean
   requestTimeout?: boolean
   settingsId?: boolean
@@ -690,7 +660,7 @@ export type PlexSettingsSelectScalar = {
   updatedAt?: boolean
 }
 
-export type PlexSettingsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "url" | "token" | "autoRefreshLibraries" | "refreshInterval" | "arGuide" | "arChannels" | "connectionTimeout" | "requestTimeout" | "settingsId" | "createdAt" | "updatedAt", ExtArgs["result"]["plexSettings"]>
+export type PlexSettingsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "url" | "token" | "autoRefreshLibraries" | "refreshInterval" | "webhookEnabled" | "connectionTimeout" | "requestTimeout" | "settingsId" | "createdAt" | "updatedAt", ExtArgs["result"]["plexSettings"]>
 export type PlexSettingsInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   settings?: boolean | Prisma.SettingsDefaultArgs<ExtArgs>
 }
@@ -712,8 +682,7 @@ export type $PlexSettingsPayload<ExtArgs extends runtime.Types.Extensions.Intern
     token: string
     autoRefreshLibraries: boolean
     refreshInterval: number
-    arGuide: boolean
-    arChannels: boolean
+    webhookEnabled: boolean
     connectionTimeout: number
     requestTimeout: number
     settingsId: string
@@ -1148,8 +1117,7 @@ export interface PlexSettingsFieldRefs {
   readonly token: Prisma.FieldRef<"PlexSettings", 'String'>
   readonly autoRefreshLibraries: Prisma.FieldRef<"PlexSettings", 'Boolean'>
   readonly refreshInterval: Prisma.FieldRef<"PlexSettings", 'Int'>
-  readonly arGuide: Prisma.FieldRef<"PlexSettings", 'Boolean'>
-  readonly arChannels: Prisma.FieldRef<"PlexSettings", 'Boolean'>
+  readonly webhookEnabled: Prisma.FieldRef<"PlexSettings", 'Boolean'>
   readonly connectionTimeout: Prisma.FieldRef<"PlexSettings", 'Int'>
   readonly requestTimeout: Prisma.FieldRef<"PlexSettings", 'Int'>
   readonly settingsId: Prisma.FieldRef<"PlexSettings", 'String'>

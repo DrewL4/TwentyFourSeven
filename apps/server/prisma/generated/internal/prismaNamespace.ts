@@ -409,7 +409,8 @@ export const ModelName = {
   ChannelMovie: 'ChannelMovie',
   Settings: 'Settings',
   FfmpegSettings: 'FfmpegSettings',
-  PlexSettings: 'PlexSettings'
+  PlexSettings: 'PlexSettings',
+  WebhookActivity: 'WebhookActivity'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -425,7 +426,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "session" | "account" | "verification" | "mediaServer" | "mediaLibrary" | "mediaShow" | "mediaEpisode" | "mediaMovie" | "channel" | "program" | "channelShow" | "channelMovie" | "settings" | "ffmpegSettings" | "plexSettings"
+    modelProps: "user" | "session" | "account" | "verification" | "mediaServer" | "mediaLibrary" | "mediaShow" | "mediaEpisode" | "mediaMovie" | "channel" | "program" | "channelShow" | "channelMovie" | "settings" | "ffmpegSettings" | "plexSettings" | "webhookActivity"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1613,6 +1614,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    WebhookActivity: {
+      payload: Prisma.$WebhookActivityPayload<ExtArgs>
+      fields: Prisma.WebhookActivityFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.WebhookActivityFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.WebhookActivityFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload>
+        }
+        findFirst: {
+          args: Prisma.WebhookActivityFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.WebhookActivityFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload>
+        }
+        findMany: {
+          args: Prisma.WebhookActivityFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload>[]
+        }
+        create: {
+          args: Prisma.WebhookActivityCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload>
+        }
+        createMany: {
+          args: Prisma.WebhookActivityCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.WebhookActivityCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload>[]
+        }
+        delete: {
+          args: Prisma.WebhookActivityDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload>
+        }
+        update: {
+          args: Prisma.WebhookActivityUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload>
+        }
+        deleteMany: {
+          args: Prisma.WebhookActivityDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.WebhookActivityUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.WebhookActivityUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload>[]
+        }
+        upsert: {
+          args: Prisma.WebhookActivityUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookActivityPayload>
+        }
+        aggregate: {
+          args: Prisma.WebhookActivityAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateWebhookActivity>
+        }
+        groupBy: {
+          args: Prisma.WebhookActivityGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WebhookActivityGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.WebhookActivityCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WebhookActivityCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1950,8 +2025,7 @@ export const PlexSettingsScalarFieldEnum = {
   token: 'token',
   autoRefreshLibraries: 'autoRefreshLibraries',
   refreshInterval: 'refreshInterval',
-  arGuide: 'arGuide',
-  arChannels: 'arChannels',
+  webhookEnabled: 'webhookEnabled',
   connectionTimeout: 'connectionTimeout',
   requestTimeout: 'requestTimeout',
   settingsId: 'settingsId',
@@ -1960,6 +2034,25 @@ export const PlexSettingsScalarFieldEnum = {
 } as const
 
 export type PlexSettingsScalarFieldEnum = (typeof PlexSettingsScalarFieldEnum)[keyof typeof PlexSettingsScalarFieldEnum]
+
+
+export const WebhookActivityScalarFieldEnum = {
+  id: 'id',
+  source: 'source',
+  serverName: 'serverName',
+  serverId: 'serverId',
+  eventType: 'eventType',
+  contentType: 'contentType',
+  contentTitle: 'contentTitle',
+  contentId: 'contentId',
+  status: 'status',
+  errorMessage: 'errorMessage',
+  payload: 'payload',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type WebhookActivityScalarFieldEnum = (typeof WebhookActivityScalarFieldEnum)[keyof typeof WebhookActivityScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -2123,6 +2216,7 @@ export type GlobalOmitConfig = {
   settings?: Prisma.SettingsOmit
   ffmpegSettings?: Prisma.FfmpegSettingsOmit
   plexSettings?: Prisma.PlexSettingsOmit
+  webhookActivity?: Prisma.WebhookActivityOmit
 }
 
 /* Types for Logging */

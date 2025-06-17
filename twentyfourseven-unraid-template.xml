@@ -14,7 +14,7 @@
   <WebUI>http://[IP]:[PORT:80]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/drew4/twentyfourseven/main/twentyfourseven-unraid-template.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/drew4/twentyfourseven/main/icon.png</Icon>
-  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <ExtraParams>--restart=unless-stopped --runtime=nvidia</ExtraParams>
   <PostArgs/>
   <CPUset/>
   <DateInstalled>1640995200</DateInstalled>

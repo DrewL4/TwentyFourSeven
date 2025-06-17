@@ -125,6 +125,11 @@ export type FfmpegSettings = Prisma.FfmpegSettingsModel
  * 
  */
 export type PlexSettings = Prisma.PlexSettingsModel
+/**
+ * Model WebhookActivity
+ * 
+ */
+export type WebhookActivity = Prisma.WebhookActivityModel
 
 export type ServerType = $Enums.ServerType
 export const ServerType = $Enums.ServerType
