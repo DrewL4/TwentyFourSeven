@@ -349,6 +349,10 @@ model PlexSettings {
   autoRefreshLibraries Boolean @default(false)
   refreshInterval Int @default(24) // hours
   
+  // Legacy AR settings (preserved for backward compatibility)
+  arGuide   Boolean @default(false)
+  arChannels Boolean @default(false)
+  
   // Webhook settings
   webhookEnabled Boolean @default(true)
   
