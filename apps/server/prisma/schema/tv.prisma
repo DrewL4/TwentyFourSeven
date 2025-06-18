@@ -271,6 +271,15 @@ model Settings {
   // Guide settings
   guideDays Int @default(3) // Number of days of guide data to generate
   
+  // WatchTower integration settings
+  watchTowerEnabled Boolean @default(false)
+  watchTowerUrl String @default("")
+  watchTowerUsername String @default("")
+  watchTowerPassword String @default("") // Encrypted/hashed
+  watchTowerAutoSync Boolean @default(false)
+  watchTowerSyncInterval Int @default(24) // hours
+  watchTowerLastSync DateTime?
+  
   ffmpegSettings FfmpegSettings?
   plexSettings PlexSettings?
   

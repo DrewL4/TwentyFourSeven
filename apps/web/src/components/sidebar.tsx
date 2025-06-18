@@ -14,7 +14,8 @@ import {
   User,
   LogOut,
   Home,
-  Rocket
+  Rocket,
+  Users
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { authClient } from "@/lib/auth-client";
@@ -32,6 +33,7 @@ export default function Sidebar() {
     { to: "/guide", label: "TV Guide", icon: Calendar },
     { to: "/channels", label: "Channels", icon: Radio },
     { to: "/library", label: "Library", icon: Library },
+    { to: "/users", label: "Users", icon: Users },
     { to: "/settings", label: "Settings", icon: Settings },
   ];
 

@@ -30,6 +30,7 @@ export type SettingsAvgAggregateOutputType = {
   concurrentStreams: number | null
   hdhrTunerCount: number | null
   guideDays: number | null
+  watchTowerSyncInterval: number | null
 }
 
 export type SettingsSumAggregateOutputType = {
@@ -37,6 +38,7 @@ export type SettingsSumAggregateOutputType = {
   concurrentStreams: number | null
   hdhrTunerCount: number | null
   guideDays: number | null
+  watchTowerSyncInterval: number | null
 }
 
 export type SettingsMinAggregateOutputType = {
@@ -49,6 +51,13 @@ export type SettingsMinAggregateOutputType = {
   hdhrFriendlyName: string | null
   hdhrTunerCount: number | null
   guideDays: number | null
+  watchTowerEnabled: boolean | null
+  watchTowerUrl: string | null
+  watchTowerUsername: string | null
+  watchTowerPassword: string | null
+  watchTowerAutoSync: boolean | null
+  watchTowerSyncInterval: number | null
+  watchTowerLastSync: Date | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -63,6 +72,13 @@ export type SettingsMaxAggregateOutputType = {
   hdhrFriendlyName: string | null
   hdhrTunerCount: number | null
   guideDays: number | null
+  watchTowerEnabled: boolean | null
+  watchTowerUrl: string | null
+  watchTowerUsername: string | null
+  watchTowerPassword: string | null
+  watchTowerAutoSync: boolean | null
+  watchTowerSyncInterval: number | null
+  watchTowerLastSync: Date | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -77,6 +93,13 @@ export type SettingsCountAggregateOutputType = {
   hdhrFriendlyName: number
   hdhrTunerCount: number
   guideDays: number
+  watchTowerEnabled: number
+  watchTowerUrl: number
+  watchTowerUsername: number
+  watchTowerPassword: number
+  watchTowerAutoSync: number
+  watchTowerSyncInterval: number
+  watchTowerLastSync: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -88,6 +111,7 @@ export type SettingsAvgAggregateInputType = {
   concurrentStreams?: true
   hdhrTunerCount?: true
   guideDays?: true
+  watchTowerSyncInterval?: true
 }
 
 export type SettingsSumAggregateInputType = {
@@ -95,6 +119,7 @@ export type SettingsSumAggregateInputType = {
   concurrentStreams?: true
   hdhrTunerCount?: true
   guideDays?: true
+  watchTowerSyncInterval?: true
 }
 
 export type SettingsMinAggregateInputType = {
@@ -107,6 +132,13 @@ export type SettingsMinAggregateInputType = {
   hdhrFriendlyName?: true
   hdhrTunerCount?: true
   guideDays?: true
+  watchTowerEnabled?: true
+  watchTowerUrl?: true
+  watchTowerUsername?: true
+  watchTowerPassword?: true
+  watchTowerAutoSync?: true
+  watchTowerSyncInterval?: true
+  watchTowerLastSync?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -121,6 +153,13 @@ export type SettingsMaxAggregateInputType = {
   hdhrFriendlyName?: true
   hdhrTunerCount?: true
   guideDays?: true
+  watchTowerEnabled?: true
+  watchTowerUrl?: true
+  watchTowerUsername?: true
+  watchTowerPassword?: true
+  watchTowerAutoSync?: true
+  watchTowerSyncInterval?: true
+  watchTowerLastSync?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -135,6 +174,13 @@ export type SettingsCountAggregateInputType = {
   hdhrFriendlyName?: true
   hdhrTunerCount?: true
   guideDays?: true
+  watchTowerEnabled?: true
+  watchTowerUrl?: true
+  watchTowerUsername?: true
+  watchTowerPassword?: true
+  watchTowerAutoSync?: true
+  watchTowerSyncInterval?: true
+  watchTowerLastSync?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -236,6 +282,13 @@ export type SettingsGroupByOutputType = {
   hdhrFriendlyName: string
   hdhrTunerCount: number
   guideDays: number
+  watchTowerEnabled: boolean
+  watchTowerUrl: string
+  watchTowerUsername: string
+  watchTowerPassword: string
+  watchTowerAutoSync: boolean
+  watchTowerSyncInterval: number
+  watchTowerLastSync: Date | null
   createdAt: Date
   updatedAt: Date
   _count: SettingsCountAggregateOutputType | null
@@ -273,6 +326,13 @@ export type SettingsWhereInput = {
   hdhrFriendlyName?: Prisma.StringFilter<"Settings"> | string
   hdhrTunerCount?: Prisma.IntFilter<"Settings"> | number
   guideDays?: Prisma.IntFilter<"Settings"> | number
+  watchTowerEnabled?: Prisma.BoolFilter<"Settings"> | boolean
+  watchTowerUrl?: Prisma.StringFilter<"Settings"> | string
+  watchTowerUsername?: Prisma.StringFilter<"Settings"> | string
+  watchTowerPassword?: Prisma.StringFilter<"Settings"> | string
+  watchTowerAutoSync?: Prisma.BoolFilter<"Settings"> | boolean
+  watchTowerSyncInterval?: Prisma.IntFilter<"Settings"> | number
+  watchTowerLastSync?: Prisma.DateTimeNullableFilter<"Settings"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"Settings"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Settings"> | Date | string
   ffmpegSettings?: Prisma.XOR<Prisma.FfmpegSettingsNullableScalarRelationFilter, Prisma.FfmpegSettingsWhereInput> | null
@@ -289,6 +349,13 @@ export type SettingsOrderByWithRelationInput = {
   hdhrFriendlyName?: Prisma.SortOrder
   hdhrTunerCount?: Prisma.SortOrder
   guideDays?: Prisma.SortOrder
+  watchTowerEnabled?: Prisma.SortOrder
+  watchTowerUrl?: Prisma.SortOrder
+  watchTowerUsername?: Prisma.SortOrder
+  watchTowerPassword?: Prisma.SortOrder
+  watchTowerAutoSync?: Prisma.SortOrder
+  watchTowerSyncInterval?: Prisma.SortOrder
+  watchTowerLastSync?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   ffmpegSettings?: Prisma.FfmpegSettingsOrderByWithRelationInput
@@ -308,6 +375,13 @@ export type SettingsWhereUniqueInput = Prisma.AtLeast<{
   hdhrFriendlyName?: Prisma.StringFilter<"Settings"> | string
   hdhrTunerCount?: Prisma.IntFilter<"Settings"> | number
   guideDays?: Prisma.IntFilter<"Settings"> | number
+  watchTowerEnabled?: Prisma.BoolFilter<"Settings"> | boolean
+  watchTowerUrl?: Prisma.StringFilter<"Settings"> | string
+  watchTowerUsername?: Prisma.StringFilter<"Settings"> | string
+  watchTowerPassword?: Prisma.StringFilter<"Settings"> | string
+  watchTowerAutoSync?: Prisma.BoolFilter<"Settings"> | boolean
+  watchTowerSyncInterval?: Prisma.IntFilter<"Settings"> | number
+  watchTowerLastSync?: Prisma.DateTimeNullableFilter<"Settings"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"Settings"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Settings"> | Date | string
   ffmpegSettings?: Prisma.XOR<Prisma.FfmpegSettingsNullableScalarRelationFilter, Prisma.FfmpegSettingsWhereInput> | null
@@ -324,6 +398,13 @@ export type SettingsOrderByWithAggregationInput = {
   hdhrFriendlyName?: Prisma.SortOrder
   hdhrTunerCount?: Prisma.SortOrder
   guideDays?: Prisma.SortOrder
+  watchTowerEnabled?: Prisma.SortOrder
+  watchTowerUrl?: Prisma.SortOrder
+  watchTowerUsername?: Prisma.SortOrder
+  watchTowerPassword?: Prisma.SortOrder
+  watchTowerAutoSync?: Prisma.SortOrder
+  watchTowerSyncInterval?: Prisma.SortOrder
+  watchTowerLastSync?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.SettingsCountOrderByAggregateInput
@@ -346,6 +427,13 @@ export type SettingsScalarWhereWithAggregatesInput = {
   hdhrFriendlyName?: Prisma.StringWithAggregatesFilter<"Settings"> | string
   hdhrTunerCount?: Prisma.IntWithAggregatesFilter<"Settings"> | number
   guideDays?: Prisma.IntWithAggregatesFilter<"Settings"> | number
+  watchTowerEnabled?: Prisma.BoolWithAggregatesFilter<"Settings"> | boolean
+  watchTowerUrl?: Prisma.StringWithAggregatesFilter<"Settings"> | string
+  watchTowerUsername?: Prisma.StringWithAggregatesFilter<"Settings"> | string
+  watchTowerPassword?: Prisma.StringWithAggregatesFilter<"Settings"> | string
+  watchTowerAutoSync?: Prisma.BoolWithAggregatesFilter<"Settings"> | boolean
+  watchTowerSyncInterval?: Prisma.IntWithAggregatesFilter<"Settings"> | number
+  watchTowerLastSync?: Prisma.DateTimeNullableWithAggregatesFilter<"Settings"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Settings"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Settings"> | Date | string
 }
@@ -360,6 +448,13 @@ export type SettingsCreateInput = {
   hdhrFriendlyName?: string
   hdhrTunerCount?: number
   guideDays?: number
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: string
+  watchTowerUsername?: string
+  watchTowerPassword?: string
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: number
+  watchTowerLastSync?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   ffmpegSettings?: Prisma.FfmpegSettingsCreateNestedOneWithoutSettingsInput
@@ -376,6 +471,13 @@ export type SettingsUncheckedCreateInput = {
   hdhrFriendlyName?: string
   hdhrTunerCount?: number
   guideDays?: number
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: string
+  watchTowerUsername?: string
+  watchTowerPassword?: string
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: number
+  watchTowerLastSync?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   ffmpegSettings?: Prisma.FfmpegSettingsUncheckedCreateNestedOneWithoutSettingsInput
@@ -392,6 +494,13 @@ export type SettingsUpdateInput = {
   hdhrFriendlyName?: Prisma.StringFieldUpdateOperationsInput | string
   hdhrTunerCount?: Prisma.IntFieldUpdateOperationsInput | number
   guideDays?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerUsername?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerPassword?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerAutoSync?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerSyncInterval?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerLastSync?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   ffmpegSettings?: Prisma.FfmpegSettingsUpdateOneWithoutSettingsNestedInput
@@ -408,6 +517,13 @@ export type SettingsUncheckedUpdateInput = {
   hdhrFriendlyName?: Prisma.StringFieldUpdateOperationsInput | string
   hdhrTunerCount?: Prisma.IntFieldUpdateOperationsInput | number
   guideDays?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerUsername?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerPassword?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerAutoSync?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerSyncInterval?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerLastSync?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   ffmpegSettings?: Prisma.FfmpegSettingsUncheckedUpdateOneWithoutSettingsNestedInput
@@ -424,6 +540,13 @@ export type SettingsCreateManyInput = {
   hdhrFriendlyName?: string
   hdhrTunerCount?: number
   guideDays?: number
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: string
+  watchTowerUsername?: string
+  watchTowerPassword?: string
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: number
+  watchTowerLastSync?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -438,6 +561,13 @@ export type SettingsUpdateManyMutationInput = {
   hdhrFriendlyName?: Prisma.StringFieldUpdateOperationsInput | string
   hdhrTunerCount?: Prisma.IntFieldUpdateOperationsInput | number
   guideDays?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerUsername?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerPassword?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerAutoSync?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerSyncInterval?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerLastSync?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -452,6 +582,13 @@ export type SettingsUncheckedUpdateManyInput = {
   hdhrFriendlyName?: Prisma.StringFieldUpdateOperationsInput | string
   hdhrTunerCount?: Prisma.IntFieldUpdateOperationsInput | number
   guideDays?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerUsername?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerPassword?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerAutoSync?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerSyncInterval?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerLastSync?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -466,6 +603,13 @@ export type SettingsCountOrderByAggregateInput = {
   hdhrFriendlyName?: Prisma.SortOrder
   hdhrTunerCount?: Prisma.SortOrder
   guideDays?: Prisma.SortOrder
+  watchTowerEnabled?: Prisma.SortOrder
+  watchTowerUrl?: Prisma.SortOrder
+  watchTowerUsername?: Prisma.SortOrder
+  watchTowerPassword?: Prisma.SortOrder
+  watchTowerAutoSync?: Prisma.SortOrder
+  watchTowerSyncInterval?: Prisma.SortOrder
+  watchTowerLastSync?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -475,6 +619,7 @@ export type SettingsAvgOrderByAggregateInput = {
   concurrentStreams?: Prisma.SortOrder
   hdhrTunerCount?: Prisma.SortOrder
   guideDays?: Prisma.SortOrder
+  watchTowerSyncInterval?: Prisma.SortOrder
 }
 
 export type SettingsMaxOrderByAggregateInput = {
@@ -487,6 +632,13 @@ export type SettingsMaxOrderByAggregateInput = {
   hdhrFriendlyName?: Prisma.SortOrder
   hdhrTunerCount?: Prisma.SortOrder
   guideDays?: Prisma.SortOrder
+  watchTowerEnabled?: Prisma.SortOrder
+  watchTowerUrl?: Prisma.SortOrder
+  watchTowerUsername?: Prisma.SortOrder
+  watchTowerPassword?: Prisma.SortOrder
+  watchTowerAutoSync?: Prisma.SortOrder
+  watchTowerSyncInterval?: Prisma.SortOrder
+  watchTowerLastSync?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -501,6 +653,13 @@ export type SettingsMinOrderByAggregateInput = {
   hdhrFriendlyName?: Prisma.SortOrder
   hdhrTunerCount?: Prisma.SortOrder
   guideDays?: Prisma.SortOrder
+  watchTowerEnabled?: Prisma.SortOrder
+  watchTowerUrl?: Prisma.SortOrder
+  watchTowerUsername?: Prisma.SortOrder
+  watchTowerPassword?: Prisma.SortOrder
+  watchTowerAutoSync?: Prisma.SortOrder
+  watchTowerSyncInterval?: Prisma.SortOrder
+  watchTowerLastSync?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -510,6 +669,7 @@ export type SettingsSumOrderByAggregateInput = {
   concurrentStreams?: Prisma.SortOrder
   hdhrTunerCount?: Prisma.SortOrder
   guideDays?: Prisma.SortOrder
+  watchTowerSyncInterval?: Prisma.SortOrder
 }
 
 export type SettingsScalarRelationFilter = {
@@ -555,6 +715,13 @@ export type SettingsCreateWithoutFfmpegSettingsInput = {
   hdhrFriendlyName?: string
   hdhrTunerCount?: number
   guideDays?: number
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: string
+  watchTowerUsername?: string
+  watchTowerPassword?: string
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: number
+  watchTowerLastSync?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   plexSettings?: Prisma.PlexSettingsCreateNestedOneWithoutSettingsInput
@@ -570,6 +737,13 @@ export type SettingsUncheckedCreateWithoutFfmpegSettingsInput = {
   hdhrFriendlyName?: string
   hdhrTunerCount?: number
   guideDays?: number
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: string
+  watchTowerUsername?: string
+  watchTowerPassword?: string
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: number
+  watchTowerLastSync?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   plexSettings?: Prisma.PlexSettingsUncheckedCreateNestedOneWithoutSettingsInput
@@ -601,6 +775,13 @@ export type SettingsUpdateWithoutFfmpegSettingsInput = {
   hdhrFriendlyName?: Prisma.StringFieldUpdateOperationsInput | string
   hdhrTunerCount?: Prisma.IntFieldUpdateOperationsInput | number
   guideDays?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerUsername?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerPassword?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerAutoSync?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerSyncInterval?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerLastSync?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   plexSettings?: Prisma.PlexSettingsUpdateOneWithoutSettingsNestedInput
@@ -616,6 +797,13 @@ export type SettingsUncheckedUpdateWithoutFfmpegSettingsInput = {
   hdhrFriendlyName?: Prisma.StringFieldUpdateOperationsInput | string
   hdhrTunerCount?: Prisma.IntFieldUpdateOperationsInput | number
   guideDays?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerUsername?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerPassword?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerAutoSync?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerSyncInterval?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerLastSync?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   plexSettings?: Prisma.PlexSettingsUncheckedUpdateOneWithoutSettingsNestedInput
@@ -631,6 +819,13 @@ export type SettingsCreateWithoutPlexSettingsInput = {
   hdhrFriendlyName?: string
   hdhrTunerCount?: number
   guideDays?: number
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: string
+  watchTowerUsername?: string
+  watchTowerPassword?: string
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: number
+  watchTowerLastSync?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   ffmpegSettings?: Prisma.FfmpegSettingsCreateNestedOneWithoutSettingsInput
@@ -646,6 +841,13 @@ export type SettingsUncheckedCreateWithoutPlexSettingsInput = {
   hdhrFriendlyName?: string
   hdhrTunerCount?: number
   guideDays?: number
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: string
+  watchTowerUsername?: string
+  watchTowerPassword?: string
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: number
+  watchTowerLastSync?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   ffmpegSettings?: Prisma.FfmpegSettingsUncheckedCreateNestedOneWithoutSettingsInput
@@ -677,6 +879,13 @@ export type SettingsUpdateWithoutPlexSettingsInput = {
   hdhrFriendlyName?: Prisma.StringFieldUpdateOperationsInput | string
   hdhrTunerCount?: Prisma.IntFieldUpdateOperationsInput | number
   guideDays?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerUsername?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerPassword?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerAutoSync?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerSyncInterval?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerLastSync?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   ffmpegSettings?: Prisma.FfmpegSettingsUpdateOneWithoutSettingsNestedInput
@@ -692,6 +901,13 @@ export type SettingsUncheckedUpdateWithoutPlexSettingsInput = {
   hdhrFriendlyName?: Prisma.StringFieldUpdateOperationsInput | string
   hdhrTunerCount?: Prisma.IntFieldUpdateOperationsInput | number
   guideDays?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerUrl?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerUsername?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerPassword?: Prisma.StringFieldUpdateOperationsInput | string
+  watchTowerAutoSync?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  watchTowerSyncInterval?: Prisma.IntFieldUpdateOperationsInput | number
+  watchTowerLastSync?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   ffmpegSettings?: Prisma.FfmpegSettingsUncheckedUpdateOneWithoutSettingsNestedInput
@@ -709,6 +925,13 @@ export type SettingsSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   hdhrFriendlyName?: boolean
   hdhrTunerCount?: boolean
   guideDays?: boolean
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: boolean
+  watchTowerUsername?: boolean
+  watchTowerPassword?: boolean
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: boolean
+  watchTowerLastSync?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   ffmpegSettings?: boolean | Prisma.Settings$ffmpegSettingsArgs<ExtArgs>
@@ -725,6 +948,13 @@ export type SettingsSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exte
   hdhrFriendlyName?: boolean
   hdhrTunerCount?: boolean
   guideDays?: boolean
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: boolean
+  watchTowerUsername?: boolean
+  watchTowerPassword?: boolean
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: boolean
+  watchTowerLastSync?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["settings"]>
@@ -739,6 +969,13 @@ export type SettingsSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
   hdhrFriendlyName?: boolean
   hdhrTunerCount?: boolean
   guideDays?: boolean
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: boolean
+  watchTowerUsername?: boolean
+  watchTowerPassword?: boolean
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: boolean
+  watchTowerLastSync?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["settings"]>
@@ -753,11 +990,18 @@ export type SettingsSelectScalar = {
   hdhrFriendlyName?: boolean
   hdhrTunerCount?: boolean
   guideDays?: boolean
+  watchTowerEnabled?: boolean
+  watchTowerUrl?: boolean
+  watchTowerUsername?: boolean
+  watchTowerPassword?: boolean
+  watchTowerAutoSync?: boolean
+  watchTowerSyncInterval?: boolean
+  watchTowerLastSync?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type SettingsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "port" | "ffmpegPath" | "concurrentStreams" | "hdhrActive" | "hdhrDeviceId" | "hdhrFriendlyName" | "hdhrTunerCount" | "guideDays" | "createdAt" | "updatedAt", ExtArgs["result"]["settings"]>
+export type SettingsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "port" | "ffmpegPath" | "concurrentStreams" | "hdhrActive" | "hdhrDeviceId" | "hdhrFriendlyName" | "hdhrTunerCount" | "guideDays" | "watchTowerEnabled" | "watchTowerUrl" | "watchTowerUsername" | "watchTowerPassword" | "watchTowerAutoSync" | "watchTowerSyncInterval" | "watchTowerLastSync" | "createdAt" | "updatedAt", ExtArgs["result"]["settings"]>
 export type SettingsInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   ffmpegSettings?: boolean | Prisma.Settings$ffmpegSettingsArgs<ExtArgs>
   plexSettings?: boolean | Prisma.Settings$plexSettingsArgs<ExtArgs>
@@ -781,6 +1025,13 @@ export type $SettingsPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
     hdhrFriendlyName: string
     hdhrTunerCount: number
     guideDays: number
+    watchTowerEnabled: boolean
+    watchTowerUrl: string
+    watchTowerUsername: string
+    watchTowerPassword: string
+    watchTowerAutoSync: boolean
+    watchTowerSyncInterval: number
+    watchTowerLastSync: Date | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["settings"]>
@@ -1217,6 +1468,13 @@ export interface SettingsFieldRefs {
   readonly hdhrFriendlyName: Prisma.FieldRef<"Settings", 'String'>
   readonly hdhrTunerCount: Prisma.FieldRef<"Settings", 'Int'>
   readonly guideDays: Prisma.FieldRef<"Settings", 'Int'>
+  readonly watchTowerEnabled: Prisma.FieldRef<"Settings", 'Boolean'>
+  readonly watchTowerUrl: Prisma.FieldRef<"Settings", 'String'>
+  readonly watchTowerUsername: Prisma.FieldRef<"Settings", 'String'>
+  readonly watchTowerPassword: Prisma.FieldRef<"Settings", 'String'>
+  readonly watchTowerAutoSync: Prisma.FieldRef<"Settings", 'Boolean'>
+  readonly watchTowerSyncInterval: Prisma.FieldRef<"Settings", 'Int'>
+  readonly watchTowerLastSync: Prisma.FieldRef<"Settings", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"Settings", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Settings", 'DateTime'>
 }

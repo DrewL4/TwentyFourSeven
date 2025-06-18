@@ -1731,7 +1731,8 @@ export const UserScalarFieldEnum = {
   emailVerified: 'emailVerified',
   image: 'image',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  watchTowerJoinDate: 'watchTowerJoinDate'
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
@@ -1971,6 +1972,13 @@ export const SettingsScalarFieldEnum = {
   hdhrFriendlyName: 'hdhrFriendlyName',
   hdhrTunerCount: 'hdhrTunerCount',
   guideDays: 'guideDays',
+  watchTowerEnabled: 'watchTowerEnabled',
+  watchTowerUrl: 'watchTowerUrl',
+  watchTowerUsername: 'watchTowerUsername',
+  watchTowerPassword: 'watchTowerPassword',
+  watchTowerAutoSync: 'watchTowerAutoSync',
+  watchTowerSyncInterval: 'watchTowerSyncInterval',
+  watchTowerLastSync: 'watchTowerLastSync',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -2025,6 +2033,8 @@ export const PlexSettingsScalarFieldEnum = {
   token: 'token',
   autoRefreshLibraries: 'autoRefreshLibraries',
   refreshInterval: 'refreshInterval',
+  arGuide: 'arGuide',
+  arChannels: 'arChannels',
   webhookEnabled: 'webhookEnabled',
   connectionTimeout: 'connectionTimeout',
   requestTimeout: 'requestTimeout',

@@ -1,5 +1,6 @@
 import { programmingService } from './programming-service';
 import { prisma } from './prisma';
+import { scheduler } from './scheduler';
 
 export class StartupService {
   private static initialized = false;
@@ -49,10 +50,24 @@ export class StartupService {
       // Initialize automatic Plex library sync
       await this.initializeAutomaticPlexSync();
 
+      // Initialize WatchTower sync scheduler
+      await this.initializeWatchTowerSync();
+
       console.log('✅ TwentyFour/Seven server initialized successfully');
     } catch (error) {
       console.error('❌ Error during server initialization:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Initialize WatchTower sync scheduler
+   */
+  private static async initializeWatchTowerSync() {
+    try {
+      await scheduler.startWatchTowerSync();
+    } catch (error) {
+      console.error('❌ Error initializing WatchTower sync:', error);
     }
   }
 
@@ -146,6 +161,9 @@ export class StartupService {
       console.log(`🧹 Cleaned up sync interval for server ${serverId}`);
     }
     this.syncIntervals.clear();
+    
+    // Cleanup WatchTower scheduler
+    scheduler.stopWatchTowerSync();
   }
 }
 

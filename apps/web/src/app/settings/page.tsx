@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Settings, Server, Radio, Video, Save, ExternalLink, Calendar } from "lucide-react";
+import { Settings, Server, Radio, Video, Save, ExternalLink, Calendar, Download } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import FirstTimeSetup from "@/components/first-time-setup";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
@@ -21,6 +22,8 @@ export default function SettingsPage() {
     hdhrTunerCount: 2,
     guideDays: 3
   });
+
+  const [showWatchTowerSetup, setShowWatchTowerSetup] = useState(false);
 
   const queryClient = useQueryClient();
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
@@ -341,6 +344,36 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          {/* WatchTower Integration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Download className="w-5 h-5 text-blue-600" />
+                WatchTower Integration
+              </CardTitle>
+              <CardDescription>
+                Import users and settings from your WatchTower application
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Import from WatchTower</p>
+                  <p className="text-xs text-muted-foreground">
+                    Connect to your WatchTower instance and import users, settings, and configuration
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => setShowWatchTowerSetup(true)}
+                  variant="outline"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Import from WatchTower
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* URLs and Integration */}
           <Card>
             <CardHeader>
@@ -409,6 +442,33 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* WatchTower Setup Modal */}
+      {showWatchTowerSetup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-900 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-gray-900 p-4 border-b flex items-center justify-between">
+              <h2 className="text-lg font-semibold">WatchTower Import</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowWatchTowerSetup(false)}
+              >
+                ✕
+              </Button>
+            </div>
+            <div className="p-0">
+              <FirstTimeSetup 
+                onComplete={() => {
+                  setShowWatchTowerSetup(false);
+                  // Optionally refresh the page or show success message
+                  window.location.reload();
+                }} 
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>
