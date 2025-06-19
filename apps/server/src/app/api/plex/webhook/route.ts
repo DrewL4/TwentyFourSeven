@@ -65,11 +65,23 @@ export async function POST(request: NextRequest) {
     
     // Parse the multipart form data that Plex sends
     const formData = await request.formData();
-    const payload = formData.get('payload') as string;
+    const payloadEntry = formData.get('payload');
     
-    if (!payload) {
+    if (!payloadEntry) {
       console.log('❌ No payload in webhook');
       return NextResponse.json({ error: 'No payload' }, { status: 400 });
+    }
+
+    // Handle both string and File payloads
+    let payload: string;
+    if (payloadEntry instanceof File) {
+      // If it's a File object, read the text content
+      payload = await payloadEntry.text();
+      console.log('📄 Received payload as File, extracted text content');
+    } else {
+      // If it's already a string, use it directly
+      payload = payloadEntry as string;
+      console.log('📝 Received payload as string');
     }
 
     const webhookData: PlexWebhookPayload = JSON.parse(payload);

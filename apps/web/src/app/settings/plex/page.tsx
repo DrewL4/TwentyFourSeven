@@ -1178,37 +1178,87 @@ export default function PlexSettingsPage() {
               </div>
             )}
 
-            {/* Recent Activity */}
+            {/* Recent Library Changes */}
             {webhookActivityQuery.data && webhookActivityQuery.data.activities.length > 0 && (
               <div>
-                <p className="font-medium mb-3">Recent Activity</p>
+                <p className="font-medium mb-3">Recent Library Changes</p>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {webhookActivityQuery.data.activities.map((activity: any) => (
-                    <div key={activity.id} className="flex items-center justify-between p-2 bg-muted/30 rounded">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{activity.contentTitle}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {activity.eventType} • {activity.serverName} • {new Date(activity.createdAt).toLocaleString()}
-                        </p>
-                      </div>
-                      <Badge 
-                        variant={activity.status === 'processed' ? 'default' : activity.status === 'failed' ? 'destructive' : 'secondary'}
-                        className="text-xs"
-                      >
-                        {activity.status}
-                      </Badge>
-                    </div>
-                  ))}
+                  {webhookActivityQuery.data.activities
+                    .filter((activity: any) => 
+                      activity.eventType === 'library.new' || 
+                      activity.eventType === 'library.removed' || 
+                      activity.eventType === 'library.delete' ||
+                      activity.eventType === 'library.update'
+                    )
+                    .map((activity: any) => {
+                      const getEventIcon = (eventType: string) => {
+                        switch (eventType) {
+                          case 'library.new':
+                            return '📥';
+                          case 'library.update':
+                            return '🔄';
+                          case 'library.removed':
+                          case 'library.delete':
+                            return '🗑️';
+                          default:
+                            return '📝';
+                        }
+                      };
+                      
+                      const getEventLabel = (eventType: string) => {
+                        switch (eventType) {
+                          case 'library.new':
+                            return 'Added';
+                          case 'library.update':
+                            return 'Updated';
+                          case 'library.removed':
+                          case 'library.delete':
+                            return 'Removed';
+                          default:
+                            return eventType;
+                        }
+                      };
+
+                      return (
+                        <div key={activity.id} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">{getEventIcon(activity.eventType)}</span>
+                              <p className="text-sm font-medium">{activity.contentTitle}</p>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {getEventLabel(activity.eventType)} • {activity.serverName} • {new Date(activity.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <Badge 
+                            variant={activity.status === 'processed' ? 'default' : activity.status === 'failed' ? 'destructive' : 'secondary'}
+                            className="text-xs"
+                          >
+                            {activity.status}
+                          </Badge>
+                        </div>
+                      );
+                    })}
                 </div>
+                {webhookActivityQuery.data.activities.filter((activity: any) => 
+                  activity.eventType === 'library.new' || 
+                  activity.eventType === 'library.removed' || 
+                  activity.eventType === 'library.delete' ||
+                  activity.eventType === 'library.update'
+                ).length === 0 && (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <p className="text-sm">No library changes recorded yet</p>
+                  </div>
+                )}
               </div>
             )}
 
             {/* No Activity Message */}
             {webhookActivityQuery.data && webhookActivityQuery.data.activities.length === 0 && (
               <div className="text-center py-6">
-                <p className="text-muted-foreground">No webhook activity yet</p>
+                <p className="text-muted-foreground">No library changes yet</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Try adding new content to your Plex server to test the webhook
+                  Add or remove content from your Plex server to see activity here
                 </p>
               </div>
             )}
