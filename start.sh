@@ -112,6 +112,20 @@ else
     echo "🔇 GPU detection disabled (GPU_DETECTION_ENABLED=false)"
 fi
 
+# Validate required NVIDIA driver capabilities before proceeding to FFmpeg tests
+if [ "$GPU_VENDOR" = "nvidia" ]; then
+    # Ensure environment variable is not empty
+    NVIDIA_DRIVER_CAPABILITIES="${NVIDIA_DRIVER_CAPABILITIES:-}"
+    for cap in video compute; do
+        if ! echo "$NVIDIA_DRIVER_CAPABILITIES" | tr ',' ' ' | grep -qw "$cap"; then
+            echo "❌ Required capability '$cap' missing from NVIDIA_DRIVER_CAPABILITIES ($NVIDIA_DRIVER_CAPABILITIES)."
+            echo "   Please add '$cap' to the variable, e.g. NVIDIA_DRIVER_CAPABILITIES=compute,utility,video"
+            exit 1
+        fi
+    done
+    echo "✅ Required NVIDIA driver capabilities present: $NVIDIA_DRIVER_CAPABILITIES"
+fi
+
 echo "🔍 DEBUG: About to start FFMPEG configuration..."
 echo "🔍 DEBUG: Current GPU_VENDOR: ${GPU_VENDOR}"
 echo "🔍 DEBUG: Current HARDWARE_ACCELERATION_AVAILABLE: ${HARDWARE_ACCELERATION_AVAILABLE}"
@@ -257,6 +271,32 @@ if [ "$GPU_VENDOR" = "nvidia" ] && [ "$FFMPEG_HWACCEL_METHOD" != "nvenc" ]; then
     echo "❌ Detected NVIDIA GPU but NVENC encoders are missing in FFmpeg. Aborting startup to avoid CPU-only fallback."
     echo "   Please verify that the container is started with --runtime=nvidia and that host driver & plugin versions are up to date."
     exit 1
+fi
+
+# Perform a quick GPU transcoding validation by encoding a 2-second HLS stream
+if [ "$HARDWARE_ACCELERATION_AVAILABLE" = "true" ] && [ "$FFMPEG_HWACCEL_METHOD" != "cpu" ]; then
+    echo "=== GPU Transcoding Validation ==="
+    TEST_HLS_DIR="/tmp/gpu_hls_test"
+    rm -rf "$TEST_HLS_DIR" && mkdir -p "$TEST_HLS_DIR"
+    if [ "$FFMPEG_HWACCEL_METHOD" = "nvenc" ]; then
+        $FFMPEG_PATH -hide_banner -loglevel error -y \
+            -f lavfi -i testsrc2=duration=2:size=640x360:rate=30 \
+            -c:v h264_nvenc -preset p4 -tune hq \
+            -f hls -hls_time 1 -hls_list_size 2 -hls_flags omit_endlist "$TEST_HLS_DIR/index.m3u8" || GPU_TEST_FAILED=true
+    elif [ "$FFMPEG_HWACCEL_METHOD" = "vaapi" ]; then
+        $FFMPEG_PATH -hide_banner -loglevel error -y \
+            -init_hw_device vaapi=va:/dev/dri/renderD128 \
+            -f lavfi -i testsrc2=duration=2:size=640x360:rate=30 \
+            -vf 'format=nv12,hwupload' -c:v h264_vaapi \
+            -f hls -hls_time 1 -hls_list_size 2 -hls_flags omit_endlist "$TEST_HLS_DIR/index.m3u8" || GPU_TEST_FAILED=true
+    fi
+    if [ "$GPU_TEST_FAILED" = "true" ] || [ ! -f "$TEST_HLS_DIR/index.m3u8" ]; then
+        echo "❌ GPU transcoding validation failed. Aborting startup."
+        exit 1
+    else
+        echo "✅ GPU transcoding validation succeeded."
+        rm -rf "$TEST_HLS_DIR"
+    fi
 fi
 
 # Re-enable strict error handling for the rest of the script
