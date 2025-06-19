@@ -52,6 +52,8 @@ export default function Sidebar() {
       className={`
         flex flex-col h-full bg-background border-r transition-all duration-300 ease-in-out
         ${isCollapsed ? "w-16" : "w-64"}
+        lg:${isCollapsed ? "w-16" : "w-64"}
+        md:${isCollapsed ? "w-16" : "w-56"}
       `}
     >
       {/* Header with logo and collapse toggle */}
@@ -62,20 +64,26 @@ export default function Sidebar() {
               <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
                 <Rocket className="w-5 h-5 text-white" />
               </div>
-              TwentyFour/Seven
+              <span className="hidden lg:inline">TwentyFour/Seven</span>
+              <span className="lg:hidden">24/7</span>
             </Link>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-2 shrink-0"
+              className="p-2 shrink-0 hover:bg-accent touch-manipulation"
+              aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
           </>
         ) : (
           <>
-            <Link href="/" className="flex items-center justify-center">
+            <Link 
+              href="/" 
+              className="flex items-center justify-center touch-manipulation"
+              aria-label="Home"
+            >
               <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
                 <Rocket className="w-5 h-5 text-white" />
               </div>
@@ -84,7 +92,8 @@ export default function Sidebar() {
               variant="ghost"
               size="sm"
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-2"
+              className="p-2 hover:bg-accent touch-manipulation"
+              aria-label="Expand sidebar"
             >
               <ChevronRight className="w-4 h-4" />
             </Button>
@@ -93,7 +102,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 p-2">
+      <nav className="flex-1 p-2" role="navigation" aria-label="Main navigation">
         <ul className="space-y-1">
           {navigationLinks.map(({ to, label, icon: Icon }) => {
             const isActive = pathname === to || (to !== "/" && pathname.startsWith(to));
@@ -102,8 +111,9 @@ export default function Sidebar() {
                 <Link
                   href={to}
                   className={`
-                    flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors
-                    hover:bg-accent hover:text-accent-foreground
+                    flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors
+                    hover:bg-accent hover:text-accent-foreground touch-manipulation
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                     ${isActive 
                       ? "bg-accent text-accent-foreground" 
                       : "text-muted-foreground"
@@ -111,6 +121,7 @@ export default function Sidebar() {
                     ${isCollapsed ? "justify-center" : ""}
                   `}
                   title={isCollapsed ? label : undefined}
+                  aria-current={isActive ? "page" : undefined}
                 >
                   <Icon className="w-5 h-5 shrink-0" />
                   {!isCollapsed && <span>{label}</span>}
@@ -148,17 +159,18 @@ export default function Sidebar() {
               variant="ghost"
               size="sm"
               onClick={handleSignOut}
-              className={`w-full justify-start text-muted-foreground hover:text-foreground hover:bg-accent ${
+              className={`w-full justify-start text-muted-foreground hover:text-foreground hover:bg-accent touch-manipulation ${
                 isCollapsed ? "px-2" : ""
               }`}
               title={isCollapsed ? "Sign Out" : undefined}
+              aria-label="Sign out"
             >
               <LogOut className="w-4 h-4 shrink-0" />
               {!isCollapsed && <span className="ml-2">Sign Out</span>}
             </Button>
           </div>
         ) : (
-          <Button variant="outline" className="w-full" asChild>
+          <Button variant="outline" className="w-full touch-manipulation" asChild>
             <Link href="/login">
               <User className="w-4 h-4 mr-2" />
               {!isCollapsed ? "Sign In" : ""}
