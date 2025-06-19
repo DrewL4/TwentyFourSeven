@@ -118,9 +118,8 @@ if [ "$GPU_VENDOR" = "nvidia" ]; then
     NVIDIA_DRIVER_CAPABILITIES="${NVIDIA_DRIVER_CAPABILITIES:-}"
     for cap in video compute; do
         if ! echo "$NVIDIA_DRIVER_CAPABILITIES" | tr ',' ' ' | grep -qw "$cap"; then
-            echo "❌ Required capability '$cap' missing from NVIDIA_DRIVER_CAPABILITIES ($NVIDIA_DRIVER_CAPABILITIES)."
-            echo "   Please add '$cap' to the variable, e.g. NVIDIA_DRIVER_CAPABILITIES=compute,utility,video"
-            exit 1
+            echo "⚠️  Required capability '$cap' missing from NVIDIA_DRIVER_CAPABILITIES ($NVIDIA_DRIVER_CAPABILITIES). Continuing in CPU mode."
+            CAP_MISSING=true
         fi
     done
     echo "✅ Required NVIDIA driver capabilities present: $NVIDIA_DRIVER_CAPABILITIES"
@@ -268,9 +267,7 @@ fi
 
 # Fail fast if NVIDIA GPU detected but NVENC still unavailable
 if [ "$GPU_VENDOR" = "nvidia" ] && [ "$FFMPEG_HWACCEL_METHOD" != "nvenc" ]; then
-    echo "❌ Detected NVIDIA GPU but NVENC encoders are missing in FFmpeg. Aborting startup to avoid CPU-only fallback."
-    echo "   Please verify that the container is started with --runtime=nvidia and that host driver & plugin versions are up to date."
-    exit 1
+    echo "⚠️  Detected NVIDIA GPU but NVENC encoders are missing in FFmpeg. Falling back to CPU mode."
 fi
 
 # Perform a quick GPU transcoding validation by encoding a 2-second HLS stream
@@ -291,8 +288,7 @@ if [ "$HARDWARE_ACCELERATION_AVAILABLE" = "true" ] && [ "$FFMPEG_HWACCEL_METHOD"
             -f hls -hls_time 1 -hls_list_size 2 -hls_flags omit_endlist "$TEST_HLS_DIR/index.m3u8" || GPU_TEST_FAILED=true
     fi
     if [ "$GPU_TEST_FAILED" = "true" ] || [ ! -f "$TEST_HLS_DIR/index.m3u8" ]; then
-        echo "❌ GPU transcoding validation failed. Aborting startup."
-        exit 1
+        echo "⚠️  GPU transcoding validation failed. Continuing with CPU transcoding."
     else
         echo "✅ GPU transcoding validation succeeded."
         rm -rf "$TEST_HLS_DIR"
