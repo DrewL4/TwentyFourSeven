@@ -1,12 +1,42 @@
-# Multi-stage build for production
-FROM node:20-alpine AS base
+# ---------- BASE IMAGE (Debian) ----------
+# Use Debian-based Node image so the final layer is glibc-based (required for CUDA libs)
+FROM node:20-bookworm AS base
+
+# ---------- FFMPEG BUILD STAGE (NVENC) ----------
+FROM nvidia/cuda:12.5.0-devel-ubuntu22.04 AS ffmpeg-builder
+
+# Build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential pkg-config git curl ca-certificates \
+    yasm nasm ninja-build meson \
+    libdrm-dev libssl-dev libfreetype6-dev libass-dev \
+    libx264-dev libx265-dev libvpx-dev libopus-dev libfdk-aac-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+RUN git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+WORKDIR /src/ffmpeg
+
+# Configure & compile FFmpeg with NVENC support
+RUN ./configure \
+      --prefix=/opt/ffmpeg \
+      --pkg-config-flags="--static" \
+      --extra-cflags="-I/usr/local/cuda/include" \
+      --extra-ldflags="-L/usr/local/cuda/lib64" \
+      --enable-cuda-nvcc --enable-cuvid --enable-nvenc --enable-libdrm \
+      --enable-libx264 --enable-libx265 --enable-libvpx \
+      --enable-libfdk-aac --enable-libopus --enable-libass --enable-libfreetype \
+      --enable-gpl --enable-nonfree --enable-version3 && \
+    make -j$(nproc) && make install && \
+    strip /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe
 
 # Build stage - install and build in one stage
 FROM base AS builder
 WORKDIR /app
 
-# Install system dependencies and enable corepack
-RUN apk add --no-cache libc6-compat && \
+# Install system dependencies and enable corepack (Debian)
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/* && \
     corepack enable
 
 # Copy package files
@@ -37,32 +67,19 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install system dependencies and GPU utilities (Alpine compatible)
-RUN apk add --no-cache \
-    curl \
-    openssl \
-    nginx \
-    wget \
-    # GPU detection and hardware utilities
-    pciutils \
-    udev \
-    # Video libraries available in Alpine
-    mesa-dri-gallium \
-    mesa-va-gallium \
-    # Build tools for potential native modules
-    build-base \
-    python3 && \
-    # Install enhanced ffmpeg with hardware acceleration support
-    wget -O /tmp/ffmpeg.tar.xz "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" && \
-    cd /tmp && \
-    tar xf ffmpeg.tar.xz && \
-    cp ffmpeg-*-amd64-static/ffmpeg /usr/local/bin/ && \
-    cp ffmpeg-*-amd64-static/ffprobe /usr/local/bin/ && \
-    chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe && \
-    # Verify ffmpeg installation and show capabilities
-    /usr/local/bin/ffmpeg -version && \
-    # Clean up
-    rm -rf /tmp/ffmpeg* && \
+# Install system dependencies and GPU utilities (Debian)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl openssl nginx pciutils udev python3 ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && \
+    # Copy NVENC-enabled FFmpeg from build stage
+    true
+
+# Copy NVENC-enabled ffmpeg and ffprobe
+COPY --from=ffmpeg-builder /opt/ffmpeg/bin/ffmpeg /usr/local/bin/ffmpeg
+COPY --from=ffmpeg-builder /opt/ffmpeg/bin/ffprobe /usr/local/bin/ffprobe
+
+# Make sure they're executable
+RUN chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe && \
     # Create user and groups following Plex/Unraid best practices (abc user pattern)
     # Check if users group exists, create if not
     (getent group users || addgroup --system --gid 100 users) && \
