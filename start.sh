@@ -252,6 +252,13 @@ else
     echo "💡 For Intel/AMD: ensure --device=/dev/dri:/dev/dri"
 fi
 
+# Fail fast if NVIDIA GPU detected but NVENC still unavailable
+if [ "$GPU_VENDOR" = "nvidia" ] && [ "$FFMPEG_HWACCEL_METHOD" != "nvenc" ]; then
+    echo "❌ Detected NVIDIA GPU but NVENC encoders are missing in FFmpeg. Aborting startup to avoid CPU-only fallback."
+    echo "   Please verify that the container is started with --runtime=nvidia and that host driver & plugin versions are up to date."
+    exit 1
+fi
+
 # Re-enable strict error handling for the rest of the script
 echo "🔍 DEBUG: Hardware acceleration detection complete, enabling strict error handling"
 set -e

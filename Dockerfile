@@ -103,6 +103,15 @@ COPY --from=builder --chown=abc:users /app/apps/server/package.json ./apps/serve
 COPY --from=builder --chown=abc:users /app/apps/server/prisma ./apps/server/prisma
 COPY --from=builder --chown=abc:users /app/apps/server/prisma.config.ts ./apps/server/
 
+# Verify that the bundled FFmpeg contains NVENC support – fallback to Alpine ffmpeg if not
+RUN /usr/local/bin/ffmpeg -encoders 2>/dev/null | grep -q nvenc || \
+    (echo "⚠️  NVENC encoders not found in current FFmpeg build. Installing Alpine ffmpeg package as fallback…" && \
+     apk add --no-cache ffmpeg && \
+     ln -sf /usr/bin/ffmpeg /usr/local/bin/ffmpeg && \
+     ln -sf /usr/bin/ffprobe /usr/local/bin/ffprobe && \
+     /usr/local/bin/ffmpeg -encoders 2>/dev/null | grep -q nvenc || \
+     (echo "❌ NVENC still unavailable after fallback install – hardware acceleration may not work." || true))
+
 # Copy nginx configuration
 COPY --chown=abc:users nginx.conf /etc/nginx/nginx.conf
 
