@@ -53,6 +53,9 @@ export class StartupService {
       // Initialize WatchTower sync scheduler
       await this.initializeWatchTowerSync();
 
+      // Initialize programming maintenance to ensure channels never end
+      await this.initializeProgrammingMaintenance();
+
       console.log('✅ TwentyFour/Seven server initialized successfully');
     } catch (error) {
       console.error('❌ Error during server initialization:', error);
@@ -153,6 +156,18 @@ export class StartupService {
   }
 
   /**
+   * Initialize programming maintenance to ensure channels never end
+   */
+  private static async initializeProgrammingMaintenance() {
+    try {
+      await scheduler.startProgrammingMaintenance();
+      console.log('📺 Programming maintenance initialized - channels will never end!');
+    } catch (error) {
+      console.error('❌ Error initializing programming maintenance:', error);
+    }
+  }
+
+  /**
    * Cleanup on shutdown
    */
   static cleanup() {
@@ -162,8 +177,8 @@ export class StartupService {
     }
     this.syncIntervals.clear();
     
-    // Cleanup WatchTower scheduler
-    scheduler.stopWatchTowerSync();
+    // Cleanup all scheduled tasks
+    scheduler.stopAll();
   }
 }
 

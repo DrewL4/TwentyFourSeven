@@ -1,20 +1,26 @@
-# my-app
+# TwentyFour/Seven
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Next, ORPC, and more.
+A modern, self-hosted IPTV server that creates virtual TV channels from your media library. Stream your Plex content as traditional TV channels with continuous programming, channel automation, and seamless playback.
 
 ## Features
 
-- **TypeScript** - For type safety and improved developer experience
-- **Next.js** - Full-stack React framework
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **shadcn/ui** - Reusable UI components
-- **Next.js** - Full-stack React framework
-- **oRPC** - End-to-end type-safe APIs with OpenAPI integration
-- **Node.js** - Runtime environment
-- **Prisma** - TypeScript-first ORM
-- **SQLite/Turso** - Database engine
-- **Authentication** - Email & password authentication with Better Auth
-- **Turborepo** - Optimized monorepo build system
+- **Virtual TV Channels** - Create custom channels from your Plex media
+- **Continuous Programming** - Channels never end with automatic schedule maintenance
+- **Channel Automation** - Auto-populate channels based on genres, actors, years, and more
+- **Live Streaming** - Stream channels via M3U playlists compatible with any IPTV client
+- **XMLTV Guide** - Full electronic program guide (EPG) support
+- **Smart Scheduling** - Respect episode order, shuffle options, and block programming
+- **Hardware Transcoding** - Support for NVIDIA, Intel QuickSync, VAAPI, and more
+- **Multi-User Support** - Integration with WatchTower for user management
+- **Beautiful UI** - Modern, responsive interface built with Next.js and Tailwind CSS
+- **API-First** - Full API access with oRPC for custom integrations
+
+## Key Benefits
+
+- **Never-Ending Channels** - Automatic programming maintenance ensures your channels always have content scheduled for the configured guide days
+- **Set It and Forget It** - Once configured, channels run continuously without manual intervention
+- **Smart Content Rotation** - Content loops seamlessly when reaching the end of your library
+- **Automated Content Discovery** - Channels can automatically add new content based on your filter criteria
 
 ## Getting Started
 

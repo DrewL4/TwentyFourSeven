@@ -523,6 +523,23 @@ export class ProgrammingService {
 
   /**
    * Auto-regenerate programs as needed (should be called periodically)
+   * 
+   * This is the core method that ensures channels never end. It:
+   * 1. Checks each channel's last scheduled program
+   * 2. Ensures programming extends to at least 'guideDays' into the future
+   * 3. Appends new programs seamlessly from where the schedule ends
+   * 4. Maintains content rotation order across extensions
+   * 
+   * This method is called:
+   * - On server startup (if programs exist)
+   * - Every hour via the scheduler
+   * - Manually via API endpoints
+   * 
+   * The algorithm ensures:
+   * - No gaps between programs
+   * - Content continues in the same rotation order
+   * - Currently playing programs are never affected
+   * - Database efficiency through targeted updates
    */
   async maintainPrograms() {
     const guideDays = await this.getGuideDays();
