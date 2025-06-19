@@ -254,7 +254,24 @@ export class FfmpegService {
           }
         }
       } catch (error) {
-        // NVIDIA not available
+        // NVIDIA not available via nvidia-smi; attempt fallback detection via lspci
+        try {
+          const { stdout: lspciNvidia } = await execAsync('lspci | grep -i nvidia');
+          const lspciLines = lspciNvidia.trim().split('\n');
+          for (const line of lspciLines) {
+            if (line.toLowerCase().includes('nvidia')) {
+              // Extract a readable model name (everything after the VGA/3D controller text)
+              const modelMatch = line.match(/NVIDIA.*?(?=\s*\(|$)/i);
+              const model = modelMatch ? modelMatch[0].replace(/NVIDIA\s*/i, '').trim() : 'NVIDIA GPU';
+              gpus.push({
+                vendor: 'nvidia',
+                model
+              });
+            }
+          }
+        } catch {
+          // Fallback also failed – ignore
+        }
       }
 
       // Intel GPU detection
