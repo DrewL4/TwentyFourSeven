@@ -2492,26 +2492,128 @@ function ChannelsPageContent() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-6 max-w-7xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Radio className="w-8 h-8 text-green-600" />
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+            <Radio className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
             TV Channels
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Manage your live TV channels and their programming
           </p>
         </div>
         
-        <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" asChild>
             <Link href="/media.m3u">
-              Export M3U
+              <span className="hidden sm:inline">Export M3U</span>
+              <span className="sm:hidden">M3U</span>
             </Link>
           </Button>
         </div>
+      </div>
+
+      {/* Mobile Channel Selector */}
+      <div className="md:hidden mb-6">
+        {channelsQuery.data && channelsQuery.data.length > 0 ? (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Select Channel</CardTitle>
+                <Button 
+                  size="sm"
+                  onClick={() => {
+                    setNewChannel(prev => ({ ...prev, number: getNextChannelNumber() }));
+                    setShowCreateForm(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <Select 
+                value={selectedChannelId || ""} 
+                onValueChange={(value) => {
+                  setSelectedChannelId(value);
+                  updateChannelInUrl(value);
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a channel">
+                    {selectedChannelId && channelsQuery.data ? (
+                      (() => {
+                        const channel = (channelsQuery.data as any[]).find(ch => ch.id === selectedChannelId);
+                        return channel ? (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs px-2 py-1">
+                              {channel.number}
+                            </Badge>
+                            {channel.icon && (
+                              <img 
+                                src={channel.icon} 
+                                alt=""
+                                className="w-4 h-4 rounded object-cover"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            )}
+                            <span className="truncate">{channel.name}</span>
+                          </div>
+                        ) : "Select channel";
+                      })()
+                    ) : "Select channel"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {(channelsQuery.data as any[]).map((channel: any) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      <div className="flex items-center gap-2 w-full">
+                        <Badge variant="outline" className="text-xs px-2 py-1">
+                          {channel.number}
+                        </Badge>
+                        {channel.icon && (
+                          <img 
+                            src={channel.icon} 
+                            alt=""
+                            className="w-4 h-4 rounded object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        )}
+                        <span className="truncate">{channel.name}</span>
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {(channel.channelShows?.length || 0) + (channel.channelMovies?.length || 0)} items
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <Radio className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <h3 className="font-semibold mb-2">No channels yet</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Create your first channel to get started
+              </p>
+              <Button 
+                size="sm"
+                onClick={() => {
+                  setNewChannel(prev => ({ ...prev, number: 1 }));
+                  setShowCreateForm(true);
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create Channel
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Create Channel Form */}
@@ -2522,7 +2624,7 @@ function ChannelsPageContent() {
             <CardDescription>Configure a new TV channel</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="number">Channel Number</Label>
                 <Input
@@ -2530,6 +2632,7 @@ function ChannelsPageContent() {
                   type="number"
                   value={newChannel.number}
                   onChange={(e) => setNewChannel(prev => ({ ...prev, number: parseInt(e.target.value) || 1 }))}
+                  className="touch-manipulation"
                 />
               </div>
               <div className="space-y-2">
@@ -2539,18 +2642,20 @@ function ChannelsPageContent() {
                   value={newChannel.name}
                   onChange={(e) => setNewChannel(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="My TV Channel"
+                  className="touch-manipulation"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="icon">Icon URL (optional)</Label>
                 <Input
                   id="icon"
                   value={newChannel.icon}
                   onChange={(e) => setNewChannel(prev => ({ ...prev, icon: e.target.value }))}
                   placeholder="https://example.com/icon.png"
+                  className="touch-manipulation"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="groupTitle">Group Title (optional)</Label>
                 {existingGroups.length > 0 ? (
                   <Select 
@@ -2563,7 +2668,7 @@ function ChannelsPageContent() {
                       }
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="touch-manipulation">
                       <SelectValue placeholder="Select existing group or create new" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2583,6 +2688,7 @@ function ChannelsPageContent() {
                     value={newChannel.groupTitle}
                     onChange={(e) => setNewChannel(prev => ({ ...prev, groupTitle: e.target.value }))}
                     placeholder="Entertainment"
+                    className="touch-manipulation"
                   />
                 )}
                 {existingGroups.length > 0 && (newChannel.groupTitle === "" || !existingGroups.includes(newChannel.groupTitle)) && (
@@ -2590,19 +2696,20 @@ function ChannelsPageContent() {
                     placeholder="Enter custom group name"
                     value={newChannel.groupTitle}
                     onChange={(e) => setNewChannel(prev => ({ ...prev, groupTitle: e.target.value }))}
-                    className="mt-2"
+                    className="mt-2 touch-manipulation"
                   />
                 )}
               </div>
             </div>
             
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowCreateForm(false)}>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowCreateForm(false)} className="touch-manipulation">
                 Cancel
               </Button>
               <Button 
                 onClick={handleCreateChannel}
                 disabled={!newChannel.name || createChannelMutation.isPending}
+                className="touch-manipulation"
               >
                 {createChannelMutation.isPending ? "Creating..." : "Create Channel"}
               </Button>
@@ -2619,7 +2726,7 @@ function ChannelsPageContent() {
             <CardDescription>Update channel information</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-number">Channel Number</Label>
                 <Input
@@ -2627,6 +2734,7 @@ function ChannelsPageContent() {
                   type="number"
                   value={editChannel.number}
                   onChange={(e) => setEditChannel(prev => ({ ...prev, number: parseInt(e.target.value) || 1 }))}
+                  className="touch-manipulation"
                 />
               </div>
               <div className="space-y-2">
@@ -2636,18 +2744,20 @@ function ChannelsPageContent() {
                   value={editChannel.name}
                   onChange={(e) => setEditChannel(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="My TV Channel"
+                  className="touch-manipulation"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="edit-icon">Icon URL (optional)</Label>
                 <Input
                   id="edit-icon"
                   value={editChannel.icon}
                   onChange={(e) => setEditChannel(prev => ({ ...prev, icon: e.target.value }))}
                   placeholder="https://example.com/icon.png"
+                  className="touch-manipulation"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="edit-groupTitle">Group Title (optional)</Label>
                 {existingGroups.length > 0 ? (
                   <Select 
@@ -2660,7 +2770,7 @@ function ChannelsPageContent() {
                       }
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="touch-manipulation">
                       <SelectValue placeholder="Select existing group or create new" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2680,6 +2790,7 @@ function ChannelsPageContent() {
                     value={editChannel.groupTitle}
                     onChange={(e) => setEditChannel(prev => ({ ...prev, groupTitle: e.target.value }))}
                     placeholder="Entertainment"
+                    className="touch-manipulation"
                   />
                 )}
                 {existingGroups.length > 0 && (editChannel.groupTitle === "" || !existingGroups.includes(editChannel.groupTitle)) && (
@@ -2687,19 +2798,20 @@ function ChannelsPageContent() {
                     placeholder="Enter custom group name"
                     value={editChannel.groupTitle}
                     onChange={(e) => setEditChannel(prev => ({ ...prev, groupTitle: e.target.value }))}
-                    className="mt-2"
+                    className="mt-2 touch-manipulation"
                   />
                 )}
               </div>
             </div>
             
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditingChannelId(null)}>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditingChannelId(null)} className="touch-manipulation">
                 Cancel
               </Button>
               <Button 
                 onClick={handleUpdateChannel}
                 disabled={!editChannel.name || updateChannelMutation.isPending}
+                className="touch-manipulation"
               >
                 {updateChannelMutation.isPending ? "Updating..." : "Update Channel"}
               </Button>
@@ -2709,8 +2821,8 @@ function ChannelsPageContent() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Channels List - Left Side */}
-        <div className="lg:col-span-1">
+        {/* Desktop Channels List - Left Side */}
+        <div className="hidden md:block lg:col-span-1">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -2721,6 +2833,7 @@ function ChannelsPageContent() {
                     setNewChannel(prev => ({ ...prev, number: getNextChannelNumber() }));
                     setShowCreateForm(true);
                   }}
+                  className="touch-manipulation"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Channel
@@ -2753,17 +2866,18 @@ function ChannelsPageContent() {
                       setNewChannel(prev => ({ ...prev, number: 1 }));
                       setShowCreateForm(true);
                     }}
+                    className="touch-manipulation"
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Create Channel
                   </Button>
                 </div>
               ) : (
-                                                 <div className="space-y-1">
+                <div className="space-y-1">
                   {(channelsQuery.data as any[]).map((channel: any) => (
                    <div
                      key={channel.id}
-                     className={`group p-3 border-l-4 transition-colors ${
+                     className={`group p-3 border-l-4 transition-colors touch-manipulation ${
                        selectedChannelId === channel.id
                          ? 'bg-accent border-l-primary'
                          : 'hover:bg-muted border-l-transparent'
@@ -2796,7 +2910,7 @@ function ChannelsPageContent() {
                        <Button
                          variant="ghost"
                          size="sm"
-                         className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                         className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 hover:opacity-100 touch-manipulation"
                          onClick={(e) => {
                            e.stopPropagation();
                            setEditChannel({
@@ -2810,7 +2924,7 @@ function ChannelsPageContent() {
                          }}
                          title="Edit Channel"
                        >
-                         <Edit className="w-3 h-3" />
+                         <Edit className="w-4 h-4" />
                        </Button>
                      </div>
                    </div>
@@ -2825,10 +2939,10 @@ function ChannelsPageContent() {
         <div className="lg:col-span-2">
           {!selectedChannelId ? (
             <Card>
-              <CardContent className="p-12 text-center">
-                <Radio className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Select a channel</h3>
-                <p className="text-muted-foreground">
+              <CardContent className="p-8 sm:p-12 text-center">
+                <Radio className="w-12 h-12 sm:w-16 sm:h-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg sm:text-xl font-semibold mb-2">Select a channel</h3>
+                <p className="text-muted-foreground text-sm sm:text-base">
                   Choose a channel from the list to view and manage its programming
                 </p>
               </CardContent>
@@ -2848,12 +2962,15 @@ function ChannelsPageContent() {
             </Card>
           ) : !selectedChannelQuery.data ? (
             <Card>
-              <CardContent className="p-12 text-center">
-                <h3 className="text-xl font-semibold mb-2">Channel not found</h3>
-                <Button onClick={() => {
-                  setSelectedChannelId(null);
-                  router.replace('/channels', { scroll: false });
-                }}>
+              <CardContent className="p-8 sm:p-12 text-center">
+                <h3 className="text-lg sm:text-xl font-semibold mb-2">Channel not found</h3>
+                <Button 
+                  onClick={() => {
+                    setSelectedChannelId(null);
+                    router.replace('/channels', { scroll: false });
+                  }}
+                  className="touch-manipulation"
+                >
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to Channels
                 </Button>
@@ -2864,7 +2981,7 @@ function ChannelsPageContent() {
               {/* Channel Header */}
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <Badge variant="outline" className="text-lg px-3 py-1">
                         {selectedChannelQuery.data.number}
@@ -2896,8 +3013,8 @@ function ChannelsPageContent() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" asChild>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button variant="ghost" size="sm" asChild className="touch-manipulation">
                         <Link href={`/player?channel=${selectedChannelQuery.data.number}`}>
                           <Play className="w-4 h-4 mr-1" />
                           Watch
@@ -2906,10 +3023,12 @@ function ChannelsPageContent() {
                       <Button 
                         variant="destructive" 
                         size="sm"
-                                                 onClick={() => deleteChannelMutation.mutate({ id: selectedChannelQuery.data!.id })}
+                        onClick={() => deleteChannelMutation.mutate({ id: selectedChannelQuery.data!.id })}
                         disabled={deleteChannelMutation.isPending}
+                        className="touch-manipulation"
                       >
                         <Trash2 className="w-4 h-4" />
+                        <span className="hidden sm:inline ml-1">Delete</span>
                       </Button>
                     </div>
                   </div>
@@ -2919,28 +3038,38 @@ function ChannelsPageContent() {
                             {/* Programming Content - DizqueTV Style */}
               <Tabs defaultValue="programming" className="space-y-6">
                 <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="programming">Programming</TabsTrigger>
-                  <TabsTrigger value="schedule">Schedule</TabsTrigger>
-                  <TabsTrigger value="filler">Filler</TabsTrigger>
+                  <TabsTrigger value="programming" className="touch-manipulation">Programming</TabsTrigger>
+                  <TabsTrigger value="schedule" className="touch-manipulation">Schedule</TabsTrigger>
+                  <TabsTrigger value="filler" className="touch-manipulation">Filler</TabsTrigger>
                 </TabsList>
 
                 {/* Programming Tab */}
                 <TabsContent value="programming">
                   <Card>
                     <CardHeader>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <CardTitle className="flex items-center gap-2">
                           <Video className="w-5 h-5" />
                           Channel Configuration
                         </CardTitle>
-                        <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={handleShuffleAllContent}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleShuffleAllContent}
+                            className="touch-manipulation"
+                          >
                             <Shuffle className="w-4 h-4 mr-1" />
-                            Shuffle All
+                            <span className="hidden sm:inline">Shuffle All</span>
+                            <span className="sm:hidden">Shuffle</span>
                           </Button>
-                          <Button onClick={() => setShowAddDialog(true)}>
+                          <Button 
+                            onClick={() => setShowAddDialog(true)}
+                            className="touch-manipulation"
+                          >
                             <Plus className="w-4 h-4 mr-2" />
-                            Add Content
+                            <span className="hidden sm:inline">Add Content</span>
+                            <span className="sm:hidden">Add</span>
                           </Button>
                         </div>
                       </div>
@@ -2955,14 +3084,17 @@ function ChannelsPageContent() {
                           </div>
                         </div>
                       ) : getAllPrograms().length === 0 ? (
-                        <div className="text-center py-12">
-                          <Video className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                          <h3 className="text-xl font-semibold mb-2">No content in channel</h3>
-                          <p className="text-muted-foreground mb-4">
+                        <div className="text-center py-8 sm:py-12">
+                          <Video className="w-12 h-12 sm:w-16 sm:h-16 text-muted-foreground mx-auto mb-4" />
+                          <h3 className="text-lg sm:text-xl font-semibold mb-2">No content in channel</h3>
+                          <p className="text-muted-foreground mb-4 text-sm sm:text-base">
                             Add TV shows and movies to your channel configuration. Programs will be auto-generated for the guide.
                           </p>
                           <div className="flex items-center gap-2 justify-center">
-                            <Button onClick={() => setShowAddDialog(true)}>
+                            <Button 
+                              onClick={() => setShowAddDialog(true)}
+                              className="touch-manipulation"
+                            >
                               <Plus className="w-4 h-4 mr-2" />
                               Add Content
                             </Button>
@@ -2972,177 +3104,288 @@ function ChannelsPageContent() {
                         <div className="space-y-4">
                           {/* Program Duration Summary */}
                           <div className="bg-muted/30 p-4 rounded-lg">
-                            <div className="grid grid-cols-4 gap-4 text-center">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
                               <div>
                                 <p className="text-sm text-muted-foreground">Shows</p>
-                                <p className="text-2xl font-bold">
+                                <p className="text-xl sm:text-2xl font-bold">
                                   {getAllPrograms().filter(item => item.type === 'show').length}
                                 </p>
                               </div>
                               <div>
                                 <p className="text-sm text-muted-foreground">Movies</p>
-                                <p className="text-2xl font-bold">
+                                <p className="text-xl sm:text-2xl font-bold">
                                   {getAllPrograms().filter(item => item.type === 'movie').length}
                                 </p>
                               </div>
                               <div>
                                 <p className="text-sm text-muted-foreground">Total Items</p>
-                                <p className="text-2xl font-bold">{getAllPrograms().length}</p>
+                                <p className="text-xl sm:text-2xl font-bold">{getAllPrograms().length}</p>
                               </div>
                               <div>
                                 <p className="text-sm text-muted-foreground">Generated Programs</p>
-                                <p className="text-2xl font-bold text-primary">
+                                <p className="text-xl sm:text-2xl font-bold text-primary">
                                   {channelProgramsQuery.data?.length || 0}
                                 </p>
                               </div>
                             </div>
                           </div>
 
-                          {/* Channel Configuration List */}
-                          <DragDropContext onDragEnd={onDragEnd}>
-                            <Droppable droppableId="programs">
-                              {(provided) => (
-                                <div
-                                  {...provided.droppableProps}
-                                  ref={provided.innerRef}
-                                  className="space-y-1"
-                                >
-                                  {getAllPrograms().map((item: any, index) => (
-                                    <Draggable key={item.id} draggableId={item.id} index={index}>
-                                      {(provided, snapshot) => (
-                                        <div
-                                          ref={provided.innerRef}
-                                          {...provided.draggableProps}
-                                          className={`bg-background border rounded-lg overflow-hidden transition-all ${
-                                            snapshot.isDragging 
-                                              ? 'shadow-lg ring-2 ring-primary/20 rotate-1' 
-                                              : 'hover:shadow-sm'
-                                          }`}
-                                        >
-                                          <div className="flex items-center p-2">
-                                            {/* Drag Handle */}
-                                            <div 
-                                              {...provided.dragHandleProps}
-                                              className="w-6 flex justify-center mr-2 cursor-grab active:cursor-grabbing"
-                                              title="Drag to reorder"
-                                            >
-                                              <Move className="w-3 h-3 text-muted-foreground" />
-                                            </div>
+                          {/* Mobile-Optimized Content List */}
+                          <div className="md:hidden space-y-2">
+                            {getAllPrograms().map((item: any, index) => (
+                              <div
+                                key={item.id}
+                                className="bg-background border rounded-lg p-4 space-y-3 touch-manipulation"
+                              >
+                                {/* Content Header */}
+                                <div className="flex items-start gap-3">
+                                  <Badge variant="outline" className="text-xs px-2 py-1 flex-shrink-0">
+                                    {index + 1}
+                                  </Badge>
+                                  
+                                  <img 
+                                    src={item.poster || "/placeholder.png"} 
+                                    alt={item.title}
+                                    className="w-12 h-16 object-cover rounded flex-shrink-0 border"
+                                  />
+                                  
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0 flex-1">
+                                        <h4 className="font-medium text-sm leading-tight">{item.title}</h4>
+                                        {item.type === 'episode' && item.episodeTitle && (
+                                          <p className="text-xs text-muted-foreground mt-1 leading-tight">
+                                            {item.episodeTitle}
+                                          </p>
+                                        )}
+                                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                          {item.type === 'episode' ? (
+                                            <Badge variant="secondary" className="text-xs">
+                                              <Video className="w-3 h-3 mr-1" />
+                                              S{item.seasonNumber}E{item.episodeNumber}
+                                            </Badge>
+                                          ) : (
+                                            <Badge variant="secondary" className="text-xs">
+                                              <Film className="w-3 h-3 mr-1" />
+                                              {item.year && `${item.year}`}
+                                            </Badge>
+                                          )}
+                                          <span className="text-xs text-muted-foreground">
+                                            {item.duration > 0 ? (
+                                              `${Math.floor(item.duration / 3600000)}:${String(Math.floor((item.duration % 3600000) / 60000)).padStart(2, '0')}`
+                                            ) : (
+                                              '--:--'
+                                            )}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Mobile Actions */}
+                                <div className="flex items-center justify-between pt-2 border-t">
+                                  <div className="flex items-center gap-2">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      className="h-8 px-3 touch-manipulation"
+                                      disabled={index === 0}
+                                      onClick={() => {
+                                        // Move up logic for mobile
+                                        const newOrder = [...getAllPrograms()];
+                                        const temp = newOrder[index];
+                                        newOrder[index] = newOrder[index - 1];
+                                        newOrder[index - 1] = temp;
+                                        // Handle reorder mutation here
+                                      }}
+                                    >
+                                      ↑
+                                    </Button>
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      className="h-8 px-3 touch-manipulation"
+                                      disabled={index === getAllPrograms().length - 1}
+                                      onClick={() => {
+                                        // Move down logic for mobile
+                                        const newOrder = [...getAllPrograms()];
+                                        const temp = newOrder[index];
+                                        newOrder[index] = newOrder[index + 1];
+                                        newOrder[index + 1] = temp;
+                                        // Handle reorder mutation here
+                                      }}
+                                    >
+                                      ↓
+                                    </Button>
+                                  </div>
+                                  
+                                  <Button 
+                                    variant="destructive" 
+                                    size="sm"
+                                    className="h-8 px-3 touch-manipulation"
+                                    onClick={() => {
+                                      if (item.type === 'movie' && item.channelMovieId) {
+                                        handleRemoveMovie(item.movieId);
+                                      } else if ((item.type === 'episode' || item.type === 'show') && item.channelShowId) {
+                                        handleRemoveShow(item.showId);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
 
-                                            {/* Order Number */}
-                                            <div className="w-6 text-center mr-2">
-                                              <Badge variant="outline" className="text-xs w-5 h-5 p-0 flex items-center justify-center">
-                                                {index + 1}
-                                              </Badge>
-                                            </div>
-
-                                            {/* Content Type Icon */}
-                                            <div className="w-6 flex justify-center mr-2">
-                                              {item.type === 'episode' ? (
-                                                <Video className="w-3 h-3 text-blue-500" />
-                                              ) : item.type === 'movie' ? (
-                                                <Film className="w-3 h-3 text-orange-500" />
-                                              ) : (
-                                                <Video className="w-3 h-3 text-green-500" />
-                                              )}
-                                            </div>
-
-                                            {/* Poster */}
-                                            <img 
-                                              src={item.poster || "/placeholder.png"} 
-                                              alt={item.title}
-                                              className="w-8 h-10 object-cover rounded mr-3 border flex-shrink-0"
-                                            />
-
-                                            {/* Content Info */}
-                                            <div className="flex-1 min-w-0">
-                                              <div className="flex items-center gap-2 mb-1">
-                                                <h4 className="font-medium truncate text-sm">{item.title}</h4>
-                                                {item.type === 'episode' && (
-                                                  <Badge variant="secondary" className="text-xs px-1 py-0 h-4 flex-shrink-0">
-                                                    S{item.seasonNumber}E{item.episodeNumber}
-                                                  </Badge>
-                                                )}
-                                                {item.type === 'movie' && item.year && (
-                                                  <Badge variant="secondary" className="text-xs px-1 py-0 h-4 flex-shrink-0">
-                                                    {item.year}
-                                                  </Badge>
-                                                )}
-                                              </div>
-                                              
-                                              {item.type === 'episode' && item.episodeTitle && (
-                                                <p className="text-xs text-muted-foreground truncate">
-                                                  {item.episodeTitle}
-                                                </p>
-                                              )}
-                                            </div>
-
-                                            {/* Duration */}
-                                            <div className="text-right text-xs mr-3 flex-shrink-0">
-                                              <div className="font-mono font-medium">
-                                                {item.duration > 0 ? (
-                                                  `${Math.floor(item.duration / 3600000)}:${String(Math.floor((item.duration % 3600000) / 60000)).padStart(2, '0')}`
-                                                ) : (
-                                                  '--:--'
-                                                )}
-                                              </div>
-                                            </div>
-
-                                            {/* Actions */}
-                                            <div className="flex items-center gap-1 flex-shrink-0">
-                                              {(item.type === 'movie' && item.channelMovieId) && (
-                                                <Button 
-                                                  variant="ghost" 
-                                                  size="sm"
-                                                  className="h-6 w-6 p-0"
-                                                  title="Remove Movie from Channel"
-                                                  onClick={() => handleRemoveMovie(item.movieId)}
-                                                >
-                                                  <Trash2 className="w-3 h-3 text-destructive" />
-                                                </Button>
-                                              )}
-                                              {(item.type === 'episode' && item.channelShowId) && (
-                                                <Button 
-                                                  variant="ghost" 
-                                                  size="sm"
-                                                  className="h-6 w-6 p-0"
-                                                  title="Remove Show from Channel"
-                                                  onClick={() => handleRemoveShow(item.showId)}
-                                                >
-                                                  <Trash2 className="w-3 h-3 text-destructive" />
-                                                </Button>
-                                              )}
-                                              {(item.type === 'show' && item.channelShowId) && (
-                                                <Button 
-                                                  variant="ghost" 
-                                                  size="sm"
-                                                  className="h-6 w-6 p-0"
-                                                  title="Remove Show from Channel"
-                                                  onClick={() => handleRemoveShow(item.showId)}
-                                                >
-                                                  <Trash2 className="w-3 h-3 text-destructive" />
-                                                </Button>
-                                              )}
-                                              <Button 
-                                                variant="ghost" 
-                                                size="sm"
-                                                className="h-6 w-6 p-0"
-                                                title="View Details"
-                                                disabled
+                          {/* Desktop Drag-and-Drop List */}
+                          <div className="hidden md:block">
+                            <DragDropContext onDragEnd={onDragEnd}>
+                              <Droppable droppableId="programs">
+                                {(provided) => (
+                                  <div
+                                    {...provided.droppableProps}
+                                    ref={provided.innerRef}
+                                    className="space-y-1"
+                                  >
+                                    {getAllPrograms().map((item: any, index) => (
+                                      <Draggable key={item.id} draggableId={item.id} index={index}>
+                                        {(provided, snapshot) => (
+                                          <div
+                                            ref={provided.innerRef}
+                                            {...provided.draggableProps}
+                                            className={`bg-background border rounded-lg overflow-hidden transition-all ${
+                                              snapshot.isDragging 
+                                                ? 'shadow-lg ring-2 ring-primary/20 rotate-1' 
+                                                : 'hover:shadow-sm'
+                                            }`}
+                                          >
+                                            <div className="flex items-center p-2">
+                                              {/* Drag Handle */}
+                                              <div 
+                                                {...provided.dragHandleProps}
+                                                className="w-6 flex justify-center mr-2 cursor-grab active:cursor-grabbing"
+                                                title="Drag to reorder"
                                               >
-                                                <Settings className="w-3 h-3" />
-                                              </Button>
+                                                <Move className="w-3 h-3 text-muted-foreground" />
+                                              </div>
+
+                                              {/* Order Number */}
+                                              <div className="w-6 text-center mr-2">
+                                                <Badge variant="outline" className="text-xs w-5 h-5 p-0 flex items-center justify-center">
+                                                  {index + 1}
+                                                </Badge>
+                                              </div>
+
+                                              {/* Content Type Icon */}
+                                              <div className="w-6 flex justify-center mr-2">
+                                                {item.type === 'episode' ? (
+                                                  <Video className="w-3 h-3 text-blue-500" />
+                                                ) : item.type === 'movie' ? (
+                                                  <Film className="w-3 h-3 text-orange-500" />
+                                                ) : (
+                                                  <Video className="w-3 h-3 text-green-500" />
+                                                )}
+                                              </div>
+
+                                              {/* Poster */}
+                                              <img 
+                                                src={item.poster || "/placeholder.png"} 
+                                                alt={item.title}
+                                                className="w-8 h-10 object-cover rounded mr-3 border flex-shrink-0"
+                                              />
+
+                                              {/* Content Info */}
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                  <h4 className="font-medium truncate text-sm">{item.title}</h4>
+                                                  {item.type === 'episode' && (
+                                                    <Badge variant="secondary" className="text-xs px-1 py-0 h-4 flex-shrink-0">
+                                                      S{item.seasonNumber}E{item.episodeNumber}
+                                                    </Badge>
+                                                  )}
+                                                  {item.type === 'movie' && item.year && (
+                                                    <Badge variant="secondary" className="text-xs px-1 py-0 h-4 flex-shrink-0">
+                                                      {item.year}
+                                                    </Badge>
+                                                  )}
+                                                </div>
+                                                
+                                                {item.type === 'episode' && item.episodeTitle && (
+                                                  <p className="text-xs text-muted-foreground truncate">
+                                                    {item.episodeTitle}
+                                                  </p>
+                                                )}
+                                              </div>
+
+                                              {/* Duration */}
+                                              <div className="text-right text-xs mr-3 flex-shrink-0">
+                                                <div className="font-mono font-medium">
+                                                  {item.duration > 0 ? (
+                                                    `${Math.floor(item.duration / 3600000)}:${String(Math.floor((item.duration % 3600000) / 60000)).padStart(2, '0')}`
+                                                  ) : (
+                                                    '--:--'
+                                                  )}
+                                                </div>
+                                              </div>
+
+                                              {/* Actions */}
+                                              <div className="flex items-center gap-1 flex-shrink-0">
+                                                {(item.type === 'movie' && item.channelMovieId) && (
+                                                  <Button 
+                                                    variant="ghost" 
+                                                    size="sm"
+                                                    className="h-6 w-6 p-0"
+                                                    title="Remove Movie from Channel"
+                                                    onClick={() => handleRemoveMovie(item.movieId)}
+                                                  >
+                                                    <Trash2 className="w-3 h-3 text-destructive" />
+                                                  </Button>
+                                                )}
+                                                {(item.type === 'episode' && item.channelShowId) && (
+                                                  <Button 
+                                                    variant="ghost" 
+                                                    size="sm"
+                                                    className="h-6 w-6 p-0"
+                                                    title="Remove Show from Channel"
+                                                    onClick={() => handleRemoveShow(item.showId)}
+                                                  >
+                                                    <Trash2 className="w-3 h-3 text-destructive" />
+                                                  </Button>
+                                                )}
+                                                {(item.type === 'show' && item.channelShowId) && (
+                                                  <Button 
+                                                    variant="ghost" 
+                                                    size="sm"
+                                                    className="h-6 w-6 p-0"
+                                                    title="Remove Show from Channel"
+                                                    onClick={() => handleRemoveShow(item.showId)}
+                                                  >
+                                                    <Trash2 className="w-3 h-3 text-destructive" />
+                                                  </Button>
+                                                )}
+                                                <Button 
+                                                  variant="ghost" 
+                                                  size="sm"
+                                                  className="h-6 w-6 p-0"
+                                                  title="View Details"
+                                                  disabled
+                                                >
+                                                  <Settings className="w-3 h-3" />
+                                                </Button>
+                                              </div>
                                             </div>
                                           </div>
-                                        </div>
-                                      )}
-                                    </Draggable>
-                                  ))}
-                                  {provided.placeholder}
-                                </div>
-                              )}
-                            </Droppable>
-                          </DragDropContext>
+                                        )}
+                                      </Draggable>
+                                    ))}
+                                    {provided.placeholder}
+                                  </div>
+                                )}
+                              </Droppable>
+                            </DragDropContext>
+                          </div>
                         </div>
                       )}
                     </CardContent>
@@ -3159,13 +3402,13 @@ function ChannelsPageContent() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-center py-12">
-                        <Clock className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold mb-2">Schedule View</h3>
-                        <p className="text-muted-foreground mb-4">
+                      <div className="text-center py-8 sm:py-12">
+                        <Clock className="w-12 h-12 sm:w-16 sm:h-16 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-lg sm:text-xl font-semibold mb-2">Schedule View</h3>
+                        <p className="text-muted-foreground mb-4 text-sm sm:text-base">
                           Visual timeline of your channel programming (Coming Soon)
                         </p>
-                        <Button variant="outline" disabled>
+                        <Button variant="outline" disabled className="touch-manipulation">
                           <RotateCcw className="w-4 h-4 mr-2" />
                           Generate Schedule
                         </Button>
@@ -3178,25 +3421,25 @@ function ChannelsPageContent() {
                 <TabsContent value="filler">
                   <Card>
                     <CardHeader>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <CardTitle className="flex items-center gap-2">
                           <Music className="w-5 h-5" />
                           Filler Content
                         </CardTitle>
-                        <Button variant="outline" disabled>
+                        <Button variant="outline" disabled className="touch-manipulation">
                           <Plus className="w-4 h-4 mr-2" />
                           Add Filler
                         </Button>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-center py-12">
-                        <Music className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold mb-2">No filler content</h3>
-                        <p className="text-muted-foreground mb-4">
+                      <div className="text-center py-8 sm:py-12">
+                        <Music className="w-12 h-12 sm:w-16 sm:h-16 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-lg sm:text-xl font-semibold mb-2">No filler content</h3>
+                        <p className="text-muted-foreground mb-4 text-sm sm:text-base">
                           Add commercials, bumpers, and other filler content to enhance your channel
                         </p>
-                        <Button variant="outline" disabled>
+                        <Button variant="outline" disabled className="touch-manipulation">
                           <Plus className="w-4 h-4 mr-2" />
                           Add Filler Content
                         </Button>
@@ -3212,283 +3455,318 @@ function ChannelsPageContent() {
         {/* Sidebar - Programming Tools */}
         {selectedChannelId && selectedChannelQuery.data && (
           <div className="lg:col-span-1 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5" />
-                  Schedule Info
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Shows</p>
-                    <p className="text-2xl font-bold">{selectedChannelQuery.data.channelShows?.length || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Movies</p>
-                    <p className="text-2xl font-bold">{selectedChannelQuery.data.channelMovies?.length || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Filler</p>
-                    <p className="text-2xl font-bold">{(selectedChannelQuery.data as any).fillerContent?.length || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Total Items</p>
-                    <p className="text-2xl font-bold text-primary">
-                      {(selectedChannelQuery.data.channelShows?.length || 0) + 
-                       (selectedChannelQuery.data.channelMovies?.length || 0) + 
-                       ((selectedChannelQuery.data as any).fillerContent?.length || 0)}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button 
-                  className="w-full" 
-                  variant="outline"
-                  onClick={handleRegenerateSchedule}
-                  disabled={regenerateScheduleMutation.isPending}
-                >
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  {regenerateScheduleMutation.isPending ? "Regenerating..." : "Regenerate Schedule"}
-                </Button>
-                
-                                {/* Quick Shuffle Button */}
-                <Button 
-                  className="w-full" 
-                  variant="outline"
-                  onClick={() => handleSmartShuffle('shuffle-all')}
-                  disabled={reorderContentMutation.isPending || getAllPrograms().length === 0}
-                >
-                  <Shuffle className="w-4 h-4 mr-2" />
-                  {reorderContentMutation.isPending ? "Shuffling..." : "Quick Shuffle"}
-                </Button>
-                
-                {/* Smart Shuffle/Sort Dropdown */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">Advanced Reorder</Label>
-                    {getAllPrograms().length > 0 && (
-                      <Badge variant="outline" className="text-xs">
-                        {getAllPrograms().length} items
-                      </Badge>
-                    )}
-                  </div>
-                  <Select 
-                    value={selectedChannelQuery.data?.autoSortMethod || ""}
-                    onValueChange={(value) => {
-                      if (value && value !== 'placeholder') {
-                        handleSmartShuffle(value);
-                      }
-                    }}
+            {/* Mobile Collapsible Quick Actions */}
+            <div className="md:hidden">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button 
+                    className="w-full touch-manipulation" 
+                    variant="outline"
+                    onClick={handleRegenerateSchedule}
+                    disabled={regenerateScheduleMutation.isPending}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    {regenerateScheduleMutation.isPending ? "Regenerating..." : "Regenerate Schedule"}
+                  </Button>
+                  
+                  <Button 
+                    className="w-full touch-manipulation" 
+                    variant="outline"
+                    onClick={() => handleSmartShuffle('shuffle-all')}
                     disabled={reorderContentMutation.isPending || getAllPrograms().length === 0}
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder={
-                        reorderContentMutation.isPending 
-                          ? "Reordering..." 
-                          : getAllPrograms().length === 0
-                          ? "No content to sort"
-                          : selectedChannelQuery.data?.autoSortMethod 
-                          ? `Auto: ${getAutoSortDisplayName(selectedChannelQuery.data.autoSortMethod)}`
-                          : "Choose advanced option"
-                      } />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {/* Current Auto-Sort Status */}
-                      {selectedChannelQuery.data?.autoSortMethod && (
-                        <>
-                          <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            Current Auto-Sort
-                          </div>
-                          <SelectItem value="clear-auto-sort">
-                            <div className="flex items-center gap-2">
-                              <X className="w-4 h-4" />
-                              <span>Clear Auto-Sort ({getAutoSortDisplayName(selectedChannelQuery.data.autoSortMethod)})</span>
-                            </div>
-                          </SelectItem>
-                          <div className="border-t my-1"></div>
-                        </>
-                      )}
-                      
-                      {/* Smart Shuffle Options */}
-                      <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Smart Shuffle
-                      </div>
-                      <SelectItem value="shuffle-by-year">
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="w-4 h-4" />
-                          <span>Shuffle by Year</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="shuffle-by-type">
-                        <div className="flex items-center gap-2">
-                          <Video className="w-4 h-4" />
-                          <span>Shuffle by Type</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="shuffle-by-show">
-                        <div className="flex items-center gap-2">
-                          <Film className="w-4 h-4" />
-                          <span>Shuffle by Show</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="shuffle-by-duration">
-                        <div className="flex items-center gap-2">
-                          <Timer className="w-4 h-4" />
-                          <span>Shuffle by Duration</span>
-                        </div>
-                      </SelectItem>
-                      
-                      {/* Sort Options */}
-                      <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-2">
-                        Sort
-                      </div>
-                      <SelectItem value="sort-title-asc">
-                        <div className="flex items-center gap-2">
-                          <SortAsc className="w-4 h-4" />
-                          <span>Title A → Z</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="sort-title-desc">
-                        <div className="flex items-center gap-2">
-                          <SortDesc className="w-4 h-4" />
-                          <span>Title Z → A</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="sort-episode-title-asc">
-                        <div className="flex items-center gap-2">
-                          <SortAsc className="w-4 h-4" />
-                          <span>Episode Title A → Z</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="sort-episode-title-desc">
-                        <div className="flex items-center gap-2">
-                          <SortDesc className="w-4 h-4" />
-                          <span>Episode Title Z → A</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="sort-season-episode">
-                        <div className="flex items-center gap-2">
-                          <Video className="w-4 h-4" />
-                          <span>Season & Episode Order</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="sort-year-newest">
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="w-4 h-4" />
-                          <span>Newest First</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="sort-year-oldest">
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="w-4 h-4" />
-                          <span>Oldest First</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="sort-duration-longest">
-                        <div className="flex items-center gap-2">
-                          <Timer className="w-4 h-4" />
-                          <span>Longest First</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="sort-duration-shortest">
-                        <div className="flex items-center gap-2">
-                          <Timer className="w-4 h-4" />
-                          <span>Shortest First</span>
-                        </div>
-                      </SelectItem>
-                      
-                      {/* Utility Options */}
-                      <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-2">
-                        Utility
-                      </div>
-                      <SelectItem value="reverse">
-                        <div className="flex items-center gap-2">
-                          <RotateCcw className="w-4 h-4" />
-                          <span>Reverse Order</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  
-                  {reorderContentMutation.isPending && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <RotateCcw className="w-3 h-3 animate-spin" />
-                      <span>Saving new order...</span>
+                    <Shuffle className="w-4 h-4 mr-2" />
+                    {reorderContentMutation.isPending ? "Shuffling..." : "Quick Shuffle"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Desktop Sidebar */}
+            <div className="hidden md:block space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="w-5 h-5" />
+                    Schedule Info
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Shows</p>
+                      <p className="text-2xl font-bold">{selectedChannelQuery.data.channelShows?.length || 0}</p>
                     </div>
-                  )}
-                </div>
-                
-                <Button 
-                  className="w-full" 
-                  variant="outline"
-                  onClick={handleViewGrid}
-                  disabled
-                  title="Grid view coming soon"
-                >
-                  <Grid3X3 className="w-4 h-4 mr-2" />
-                  View Grid
-                </Button>
-              </CardContent>
-            </Card>
+                    <div>
+                      <p className="text-muted-foreground">Movies</p>
+                      <p className="text-2xl font-bold">{selectedChannelQuery.data.channelMovies?.length || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Filler</p>
+                      <p className="text-2xl font-bold">{(selectedChannelQuery.data as any).fillerContent?.length || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Total Items</p>
+                      <p className="text-2xl font-bold text-primary">
+                        {(selectedChannelQuery.data.channelShows?.length || 0) + 
+                         (selectedChannelQuery.data.channelMovies?.length || 0) + 
+                         ((selectedChannelQuery.data as any).fillerContent?.length || 0)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Programming Rules</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    Default Episode Order
-                    {updateChannelSettingsMutation.isPending && (
-                      <RotateCcw className="w-3 h-3 animate-spin" />
-                    )}
-                  </Label>
-                  <Select 
-                    value={defaultEpisodeOrder} 
-                    onValueChange={handleEpisodeOrderChange}
-                    disabled={updateChannelSettingsMutation.isPending}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button 
+                    className="w-full touch-manipulation" 
+                    variant="outline"
+                    onClick={handleRegenerateSchedule}
+                    disabled={regenerateScheduleMutation.isPending}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sequential">Sequential</SelectItem>
-                      <SelectItem value="random">Random</SelectItem>
-                      <SelectItem value="shuffle">Shuffle</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    {regenerateScheduleMutation.isPending ? "Regenerating..." : "Regenerate Schedule"}
+                  </Button>
+                  
+                  {/* Quick Shuffle Button */}
+                  <Button 
+                    className="w-full touch-manipulation" 
+                    variant="outline"
+                    onClick={() => handleSmartShuffle('shuffle-all')}
+                    disabled={reorderContentMutation.isPending || getAllPrograms().length === 0}
+                  >
+                    <Shuffle className="w-4 h-4 mr-2" />
+                    {reorderContentMutation.isPending ? "Shuffling..." : "Quick Shuffle"}
+                  </Button>
+                  
+                  {/* Smart Shuffle/Sort Dropdown */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">Advanced Reorder</Label>
+                      {getAllPrograms().length > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {getAllPrograms().length} items
+                        </Badge>
+                      )}
+                    </div>
+                    <Select 
+                      value={selectedChannelQuery.data?.autoSortMethod || ""}
+                      onValueChange={(value) => {
+                        if (value && value !== 'placeholder') {
+                          handleSmartShuffle(value);
+                        }
+                      }}
+                      disabled={reorderContentMutation.isPending || getAllPrograms().length === 0}
+                    >
+                      <SelectTrigger className="w-full touch-manipulation">
+                        <SelectValue placeholder={
+                          reorderContentMutation.isPending 
+                            ? "Reordering..." 
+                            : getAllPrograms().length === 0
+                            ? "No content to sort"
+                            : selectedChannelQuery.data?.autoSortMethod 
+                            ? `Auto: ${getAutoSortDisplayName(selectedChannelQuery.data.autoSortMethod)}`
+                            : "Choose advanced option"
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {/* Current Auto-Sort Status */}
+                        {selectedChannelQuery.data?.autoSortMethod && (
+                          <>
+                            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                              Current Auto-Sort
+                            </div>
+                            <SelectItem value="clear-auto-sort">
+                              <div className="flex items-center gap-2">
+                                <X className="w-4 h-4" />
+                                <span>Clear Auto-Sort ({getAutoSortDisplayName(selectedChannelQuery.data.autoSortMethod)})</span>
+                              </div>
+                            </SelectItem>
+                            <div className="border-t my-1"></div>
+                          </>
+                        )}
+                        
+                        {/* Smart Shuffle Options */}
+                        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Smart Shuffle
+                        </div>
+                        <SelectItem value="shuffle-by-year">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays className="w-4 h-4" />
+                            <span>Shuffle by Year</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="shuffle-by-type">
+                          <div className="flex items-center gap-2">
+                            <Video className="w-4 h-4" />
+                            <span>Shuffle by Type</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="shuffle-by-show">
+                          <div className="flex items-center gap-2">
+                            <Film className="w-4 h-4" />
+                            <span>Shuffle by Show</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="shuffle-by-duration">
+                          <div className="flex items-center gap-2">
+                            <Timer className="w-4 h-4" />
+                            <span>Shuffle by Duration</span>
+                          </div>
+                        </SelectItem>
+                        
+                        {/* Sort Options */}
+                        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-2">
+                          Sort
+                        </div>
+                        <SelectItem value="sort-title-asc">
+                          <div className="flex items-center gap-2">
+                            <SortAsc className="w-4 h-4" />
+                            <span>Title A → Z</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="sort-title-desc">
+                          <div className="flex items-center gap-2">
+                            <SortDesc className="w-4 h-4" />
+                            <span>Title Z → A</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="sort-episode-title-asc">
+                          <div className="flex items-center gap-2">
+                            <SortAsc className="w-4 h-4" />
+                            <span>Episode Title A → Z</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="sort-episode-title-desc">
+                          <div className="flex items-center gap-2">
+                            <SortDesc className="w-4 h-4" />
+                            <span>Episode Title Z → A</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="sort-season-episode">
+                          <div className="flex items-center gap-2">
+                            <Video className="w-4 h-4" />
+                            <span>Season & Episode Order</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="sort-year-newest">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays className="w-4 h-4" />
+                            <span>Newest First</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="sort-year-oldest">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays className="w-4 h-4" />
+                            <span>Oldest First</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="sort-duration-longest">
+                          <div className="flex items-center gap-2">
+                            <Timer className="w-4 h-4" />
+                            <span>Longest First</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="sort-duration-shortest">
+                          <div className="flex items-center gap-2">
+                            <Timer className="w-4 h-4" />
+                            <span>Shortest First</span>
+                          </div>
+                        </SelectItem>
+                        
+                        {/* Utility Options */}
+                        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-2">
+                          Utility
+                        </div>
+                        <SelectItem value="reverse">
+                          <div className="flex items-center gap-2">
+                            <RotateCcw className="w-4 h-4" />
+                            <span>Reverse Order</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    {reorderContentMutation.isPending && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <RotateCcw className="w-3 h-3 animate-spin" />
+                        <span>Saving new order...</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <Button 
+                    className="w-full touch-manipulation" 
+                    variant="outline"
+                    onClick={handleViewGrid}
+                    disabled
+                    title="Grid view coming soon"
+                  >
+                    <Grid3X3 className="w-4 h-4 mr-2" />
+                    View Grid
+                  </Button>
+                </CardContent>
+              </Card>
 
-                <div className="flex items-center space-x-2">
-                  <Switch 
-                    id="respect-order" 
-                    checked={respectEpisodeOrder}
-                    onCheckedChange={handleRespectEpisodeOrderChange}
-                    disabled={updateChannelSettingsMutation.isPending}
-                  />
-                  <Label htmlFor="respect-order">Respect Episode Order</Label>
-                </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Programming Rules</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      Default Episode Order
+                      {updateChannelSettingsMutation.isPending && (
+                        <RotateCcw className="w-3 h-3 animate-spin" />
+                      )}
+                    </Label>
+                    <Select 
+                      value={defaultEpisodeOrder} 
+                      onValueChange={handleEpisodeOrderChange}
+                      disabled={updateChannelSettingsMutation.isPending}
+                    >
+                      <SelectTrigger className="touch-manipulation">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sequential">Sequential</SelectItem>
+                        <SelectItem value="random">Random</SelectItem>
+                        <SelectItem value="shuffle">Shuffle</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="flex items-center space-x-2">
-                  <Switch 
-                    id="block-shuffle" 
-                    checked={blockShuffle}
-                    onCheckedChange={handleBlockShuffleChange}
-                    disabled={updateChannelSettingsMutation.isPending}
-                  />
-                  <Label htmlFor="block-shuffle">Block Shuffle</Label>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex items-center space-x-2">
+                    <Switch 
+                      id="respect-order" 
+                      checked={respectEpisodeOrder}
+                      onCheckedChange={handleRespectEpisodeOrderChange}
+                      disabled={updateChannelSettingsMutation.isPending}
+                      className="touch-manipulation"
+                    />
+                    <Label htmlFor="respect-order">Respect Episode Order</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Switch 
+                      id="block-shuffle" 
+                      checked={blockShuffle}
+                      onCheckedChange={handleBlockShuffleChange}
+                      disabled={updateChannelSettingsMutation.isPending}
+                      className="touch-manipulation"
+                    />
+                    <Label htmlFor="block-shuffle">Block Shuffle</Label>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         )}
       </div>
@@ -3507,7 +3785,6 @@ function ChannelsPageContent() {
           onSaveAutomation={handleSaveAutomation}
         />
       )}
-
 
     </div>
   );

@@ -545,11 +545,11 @@ export default function FfmpegSettingsPage() {
         </div>
       ) : (
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="transcoding">Transcoding & Quality</TabsTrigger>
-            <TabsTrigger value="hardware">Hardware Acceleration</TabsTrigger>
-            <TabsTrigger value="advanced">Advanced</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 gap-2 md:gap-0 h-auto md:h-10 p-1">
+            <TabsTrigger value="general" className="text-xs sm:text-sm">General</TabsTrigger>
+            <TabsTrigger value="transcoding" className="text-xs sm:text-sm">Transcoding & Quality</TabsTrigger>
+            <TabsTrigger value="hardware" className="text-xs sm:text-sm">Hardware Acceleration</TabsTrigger>
+            <TabsTrigger value="advanced" className="text-xs sm:text-sm">Advanced</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general">
