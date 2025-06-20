@@ -139,7 +139,7 @@ interface AddContentDialogProps {
   existingShows: any[];
   existingMovies: any[];
   existingChannelData?: any; // Add existing channel data
-  onAddShows: (showId: string, selections?: { seasons?: number[], episodes?: string[] }) => void;
+  onAddShows: (showId: string, selections?: { seasons?: number[], episodes?: string[] }, keepUp?: boolean) => void;
   onAddMovies: (movieId: string) => void;
   onSaveAutomation?: (filters: any) => void;
 }
@@ -172,6 +172,7 @@ function AddContentDialog({
   const [ratingFilter, setRatingFilter] = useState("");
   const [autoFilterEnabled, setAutoFilterEnabled] = useState(false);
   const [smartFilteringEnabled, setSmartFilteringEnabled] = useState(false);
+  const [keepUpToDate, setKeepUpToDate] = useState(false);
   
   // TV Show episode selection
   const [expandedShows, setExpandedShows] = useState<Set<string>>(new Set());
@@ -443,10 +444,10 @@ function AddContentDialog({
         onAddShows(showId, {
           seasons: Array.from(selectedShowSeasons),
           episodes: Array.from(selectedShowEpisodes)
-        });
+        }, keepUpToDate);
       } else {
         // Add entire show
-        onAddShows(showId);
+        onAddShows(showId, undefined, keepUpToDate);
       }
     });
     
@@ -475,6 +476,7 @@ function AddContentDialog({
     setSelectedShows(new Set());
     setSelectedSeasons({});
     setSelectedEpisodes({});
+    setKeepUpToDate(false);
   };
 
   const handleBulkAddMovies = () => {
@@ -1053,9 +1055,9 @@ function AddContentDialog({
                                  onAddShows(show.id, {
                                    seasons: Array.from(selectedShowSeasons),
                                    episodes: Array.from(selectedShowEpisodes)
-                                 });
+                                 }, keepUpToDate);
                                } else {
-                                 onAddShows(show.id);
+                                 onAddShows(show.id, undefined, keepUpToDate);
                                }
                                
                                toggleShowSelection(show.id);
@@ -1160,7 +1162,7 @@ function AddContentDialog({
                                    onAddShows(show.id, {
                                      seasons: Array.from(selectedShowSeasons),
                                      episodes: Array.from(selectedShowEpisodes)
-                                   });
+                                   }, keepUpToDate);
                                    // Clear selections for this show
                                    setSelectedSeasons(prev => {
                                      const updated = { ...prev };
@@ -1723,7 +1725,7 @@ function ChannelsPageContent() {
     });
   };
 
-  const handleAddShow = (showId: string, selections?: { seasons?: number[], episodes?: string[] }) => {
+  const handleAddShow = (showId: string, selections?: { seasons?: number[], episodes?: string[] }, keepUp?: boolean) => {
     if (!selectedChannelId) return;
     const allContent = getChannelConfiguration();
     const nextOrder = allContent.length;
@@ -1733,8 +1735,9 @@ function ChannelsPageContent() {
     addShowMutation.mutate({
       channelId: selectedChannelId,
       showId,
-      order: nextOrder
-    });
+      order: nextOrder,
+      autoAddNewEpisodes: !!keepUp
+    } as any);
   };
 
   const handleAddMovie = (movieId: string) => {

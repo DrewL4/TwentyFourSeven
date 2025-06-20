@@ -50,6 +50,7 @@ model MediaShow {
   writers     String? // JSON string of writer names
   actors      String? // JSON string of actor names
   countries   String? // JSON string of country names
+  collections String? // JSON string of collection names from Plex
   
   libraryId   String
   library     MediaLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
@@ -104,6 +105,7 @@ model MediaMovie {
   writers     String? // JSON string of writer names
   actors      String? // JSON string of actor names
   countries   String? // JSON string of country names
+  collections String? // JSON string of collection names from Plex
   
   libraryId   String
   library     MediaLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)

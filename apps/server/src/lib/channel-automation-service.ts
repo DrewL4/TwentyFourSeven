@@ -171,19 +171,28 @@ export class ChannelAutomationService {
    */
   private async getMatchingShows(channel: any): Promise<MediaShow[]> {
     // If franchiseAutomation is requested and we have a reference show, derive matches
-    if (channel.franchiseAutomation && channel.channelShows.length > 0) {
-      const baseShow = channel.channelShows[0].show;
+    const baseShow = channel.channelShows[0].show;
 
-      if (baseShow) {
-        const keyword = baseShow.title.split(" ")[0]; // naive first-word heuristic
+    if (baseShow && baseShow.collections) {
+      let baseCollections: string[] = [];
+      try {
+        baseCollections = JSON.parse(baseShow.collections);
+      } catch {}
 
-        const franchiseCandidates = await prisma.mediaShow.findMany({
-          where: {
-            title: { contains: keyword, mode: 'insensitive' }
-          } as any // cast for query mode typing compatibility
+      if (baseCollections.length > 0) {
+        // Fetch all shows that share at least one collection tag
+        const allShows = await prisma.mediaShow.findMany({} as any);
+
+        return allShows.filter(s => {
+          const collectionsStr = (s as any).collections;
+          if (!collectionsStr) return false;
+          try {
+            const colls: string[] = JSON.parse(collectionsStr);
+            return colls.some(c => baseCollections.includes(c));
+          } catch {
+            return false;
+          }
         });
-
-        return franchiseCandidates;
       }
     }
 

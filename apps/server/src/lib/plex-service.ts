@@ -326,7 +326,8 @@ export class PlexService {
             directors: JSON.stringify(movie.Director?.map(d => d.tag) || []),
             writers: JSON.stringify(movie.Writer?.map(w => w.tag) || []),
             actors: JSON.stringify(movie.Role?.map(r => r.tag) || []),
-            countries: JSON.stringify(movie.Country?.map(c => c.tag) || [])
+            countries: JSON.stringify(movie.Country?.map(c => c.tag) || []),
+            collections: JSON.stringify(((movie as any).Collection?.map((co:any) => co.tag)) || [])
           },
           create: {
             libraryId: library.id,
@@ -344,7 +345,8 @@ export class PlexService {
             directors: JSON.stringify(movie.Director?.map(d => d.tag) || []),
             writers: JSON.stringify(movie.Writer?.map(w => w.tag) || []),
             actors: JSON.stringify(movie.Role?.map(r => r.tag) || []),
-            countries: JSON.stringify(movie.Country?.map(c => c.tag) || [])
+            countries: JSON.stringify(movie.Country?.map(c => c.tag) || []),
+            collections: JSON.stringify(((movie as any).Collection?.map((co:any) => co.tag)) || [])
           }
         })
       );
@@ -404,7 +406,8 @@ export class PlexService {
             directors: JSON.stringify(show.Director?.map(d => d.tag) || []),
             writers: JSON.stringify(show.Writer?.map(w => w.tag) || []),
             actors: JSON.stringify(show.Role?.map(r => r.tag) || []),
-            countries: JSON.stringify(show.Country?.map(c => c.tag) || [])
+            countries: JSON.stringify(show.Country?.map(c => c.tag) || []),
+            collections: JSON.stringify(((show as any).Collection?.map((co:any) => co.tag)) || [])
           },
           create: {
             libraryId: library.id,
@@ -421,7 +424,8 @@ export class PlexService {
             directors: JSON.stringify(show.Director?.map(d => d.tag) || []),
             writers: JSON.stringify(show.Writer?.map(w => w.tag) || []),
             actors: JSON.stringify(show.Role?.map(r => r.tag) || []),
-            countries: JSON.stringify(show.Country?.map(c => c.tag) || [])
+            countries: JSON.stringify(show.Country?.map(c => c.tag) || []),
+            collections: JSON.stringify(((show as any).Collection?.map((co:any) => co.tag)) || [])
           }
         });
 

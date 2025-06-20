@@ -168,11 +168,13 @@ export const appRouter = {
       .input(z.object({
         channelId: z.string(),
         showId: z.string(),
-        order: z.number().default(0)
+        order: z.number().default(0),
+        autoAddNewEpisodes: z.boolean().optional()
       }))
       .handler(async ({ input }) => {
+        const { autoAddNewEpisodes = false, ...data } = input;
         const result = await prisma.channelShow.create({
-          data: input
+          data: { ...data, autoAddNewEpisodes } as any
         });
         
         // Auto-generate programs for this channel starting from current time
@@ -346,7 +348,8 @@ export const appRouter = {
         respectEpisodeOrder: z.boolean().optional(),
         blockShuffle: z.boolean().optional(),
         blockShuffleSize: z.number().optional(),
-        autoSortMethod: z.string().nullable().optional()
+        autoSortMethod: z.string().nullable().optional(),
+        franchiseAutomation: z.boolean().optional()
       }))
       .handler(async ({ input }) => {
         const { id, ...filters } = input;
