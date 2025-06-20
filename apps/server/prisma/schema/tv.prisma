@@ -168,6 +168,9 @@ model Channel {
   blockShuffleSize Int @default(1)
   autoSortMethod String? // "title-asc", "title-desc", "year-newest", "year-oldest", etc.
   
+  // Franchise automation – automatically add sibling shows in same franchise
+  franchiseAutomation Boolean @default(false)
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
@@ -222,6 +225,9 @@ model ChannelShow {
   // Episode ordering constraints
   respectOrder Boolean @default(true)
   maxConsecutiveEpisodes Int @default(0) // 0 = unlimited
+  
+  // Automation: automatically add new episodes when discovered
+  autoAddNewEpisodes Boolean @default(false)
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
