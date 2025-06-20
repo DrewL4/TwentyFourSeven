@@ -35,15 +35,18 @@ export class ChannelAutomationService {
   async processChannelAutomation(channel: any): Promise<void> {
     try {
       const { filterType } = channel;
+      let contentAdded = false;
 
       // Process movies if enabled
       if (filterType === 'movies' || filterType === 'both') {
-        await this.processMovieAutomation(channel);
+        const moviesAdded = await this.processMovieAutomation(channel);
+        contentAdded = contentAdded || moviesAdded;
       }
 
       // Process shows if enabled
       if (filterType === 'shows' || filterType === 'both') {
-        await this.processShowAutomation(channel);
+        const showsAdded = await this.processShowAutomation(channel);
+        contentAdded = contentAdded || showsAdded;
       }
 
       // Update last scan time
@@ -52,15 +55,23 @@ export class ChannelAutomationService {
         data: { lastAutoScanAt: new Date() }
       });
 
+      // Only regenerate programs if content was actually added
+      if (contentAdded) {
+        console.log(`Content was added to channel ${channel.name}, regenerating programs`);
+        const { programmingService } = await import('@/lib/programming-service');
+        await programmingService.generateProgramsForChannel(channel.id);
+      }
+
     } catch (error) {
       console.error(`Error processing automation for channel ${channel.id}:`, error);
+      throw error;
     }
   }
 
   /**
    * Process movie automation for a channel
    */
-  private async processMovieAutomation(channel: any): Promise<void> {
+  private async processMovieAutomation(channel: any): Promise<boolean> {
     // Get all movies that match the filter criteria
     const matchingMovies = await this.getMatchingMovies(channel);
 
@@ -69,34 +80,65 @@ export class ChannelAutomationService {
       channel.channelMovies.map((cm: any) => cm.movieId)
     );
 
+    let moviesAdded = false;
+
     // Add new matching movies to the channel
     for (const movie of matchingMovies) {
       if (!existingMovieIds.has(movie.id)) {
-        await this.addMovieToChannel(channel.id, movie.id);
-        console.log(`Auto-added movie "${movie.title}" to channel "${channel.name}"`);
+        try {
+          await this.addMovieToChannel(channel.id, movie.id);
+          console.log(`Auto-added movie "${movie.title}" to channel "${channel.name}"`);
+          moviesAdded = true;
+        } catch (error) {
+          console.error(`Error adding movie ${movie.id} to channel ${channel.id}:`, error);
+          // Continue with other movies instead of breaking the entire process
+        }
       }
     }
+
+    return moviesAdded;
   }
 
   /**
    * Process show automation for a channel
    */
-  private async processShowAutomation(channel: any): Promise<void> {
+  private async processShowAutomation(channel: any): Promise<boolean> {
+    console.log(`Processing show automation for channel "${channel.name}" with filters:`, {
+      filterGenres: channel.filterGenres,
+      filterActors: channel.filterActors,
+      filterDirectors: channel.filterDirectors,
+      filterStudios: channel.filterStudios,
+      filterYearStart: channel.filterYearStart,
+      filterYearEnd: channel.filterYearEnd,
+      filterRating: channel.filterRating
+    });
+
     // Get all shows that match the filter criteria
     const matchingShows = await this.getMatchingShows(channel);
+    console.log(`Found ${matchingShows.length} shows matching filters for channel "${channel.name}"`);
 
     // Get shows already in the channel
     const existingShowIds = new Set(
       channel.channelShows.map((cs: any) => cs.showId)
     );
 
+    let showsAdded = false;
+
     // Add new matching shows to the channel
     for (const show of matchingShows) {
       if (!existingShowIds.has(show.id)) {
-        await this.addShowToChannel(channel.id, show.id);
-        console.log(`Auto-added show "${show.title}" to channel "${channel.name}"`);
+        try {
+          await this.addShowToChannel(channel.id, show.id);
+          console.log(`Auto-added show "${show.title}" to channel "${channel.name}"`);
+          showsAdded = true;
+        } catch (error) {
+          console.error(`Error adding show ${show.id} to channel ${channel.id}:`, error);
+          // Continue with other shows instead of breaking the entire process
+        }
       }
     }
+
+    return showsAdded;
   }
 
   /**
@@ -179,6 +221,22 @@ export class ChannelAutomationService {
       }
     }
 
+    // CONSERVATIVE APPROACH: Only auto-find content if explicit filters are set OR franchise automation is enabled
+    const hasExplicitFilters = channel.filterYearStart || channel.filterYearEnd || 
+                              channel.filterRating || channel.filterStudios || 
+                              channel.filterGenres || channel.filterActors || channel.filterDirectors;
+
+    if (!hasExplicitFilters) {
+      // Only look for franchise-related shows if franchise automation is explicitly enabled
+      if (channel.franchiseAutomation) {
+        console.log(`No explicit filters set for channel "${channel.name}", but franchise automation enabled - looking for franchise content`);
+        return await this.findFranchiseRelatedShows(channel.channelShows);
+      } else {
+        console.log(`No explicit filters set and franchise automation disabled for channel "${channel.name}" - skipping content discovery`);
+        return [];
+      }
+    }
+
     const shows = await prisma.mediaShow.findMany({
       where: whereClause
     });
@@ -187,6 +245,227 @@ export class ChannelAutomationService {
     return shows.filter(show => {
       return this.matchesFilters(show, channel);
     });
+  }
+
+  /**
+   * Find shows similar to those already in the channel
+   */
+  private async findSimilarShows(channel: any): Promise<MediaShow[]> {
+    // Get existing shows in the channel
+    const existingShows = channel.channelShows;
+    
+    if (existingShows.length === 0) {
+      console.log(`No existing shows in channel "${channel.name}" to base similarity on`);
+      return [];
+    }
+
+    // If there's only one show, don't auto-add anything - too risky for false matches
+    if (existingShows.length === 1) {
+      console.log(`Only one show in channel "${channel.name}", skipping automation to prevent false matches`);
+      return [];
+    }
+
+    // For channels with multiple shows, try franchise first then similarity
+    const franchiseShows = await this.findFranchiseRelatedShows(existingShows);
+    if (franchiseShows.length > 0) {
+      console.log(`Found ${franchiseShows.length} franchise-related shows for channel "${channel.name}"`);
+      return franchiseShows;
+    }
+
+    // If no franchise content found, fall back to similarity matching
+    console.log(`No franchise content found, using similarity matching for channel "${channel.name}"`);
+    const similarityData = await this.extractSimilarityData(existingShows);
+    
+    if (similarityData.genres.length === 0 && similarityData.actors.length === 0 && similarityData.directors.length === 0) {
+      console.log(`No similarity data found for channel "${channel.name}"`);
+      return [];
+    }
+
+    // Find shows that match the similarity criteria
+    const allShows = await prisma.mediaShow.findMany();
+    
+    return allShows.filter(show => {
+      return this.isSimilarShow(show, similarityData, existingShows);
+    }).slice(0, 5); // Limit to 5 similar shows when using fallback method
+  }
+
+  /**
+   * Find shows that are part of the same franchise/series as existing shows
+   */
+  private async findFranchiseRelatedShows(existingShows: any[]): Promise<MediaShow[]> {
+    const franchiseShows: MediaShow[] = [];
+    const existingShowIds = existingShows.map(cs => cs.showId);
+
+    for (const channelShow of existingShows) {
+      const show = channelShow.show;
+      const showTitle = show.title.toLowerCase();
+
+      // Find shows with similar titles (franchise/sequel/prequel patterns)
+      const allShows = await prisma.mediaShow.findMany();
+      
+      const relatedShows = allShows.filter(otherShow => {
+        if (existingShowIds.includes(otherShow.id)) {
+          return false; // Skip shows already in channel
+        }
+
+        const otherTitle = otherShow.title.toLowerCase();
+        
+        // Check for franchise relationships
+        return this.isFranchiseRelated(showTitle, otherTitle);
+      });
+
+      franchiseShows.push(...relatedShows);
+    }
+
+    // Remove duplicates
+    const uniqueShows = franchiseShows.filter((show, index, self) => 
+      index === self.findIndex(s => s.id === show.id)
+    );
+
+    return uniqueShows.slice(0, 10); // Limit franchise results
+  }
+
+  /**
+   * Check if two show titles are franchise-related
+   */
+  private isFranchiseRelated(title1: string, title2: string): boolean {
+    // Remove common words and normalize
+    const normalize = (title: string) => title
+      .replace(/\(.*?\)/g, '') // Remove years and parenthetical content
+      .replace(/[^\w\s]/g, ' ') // Remove special characters
+      .replace(/\s+/g, ' ')     // Normalize spaces
+      .trim()
+      .toLowerCase();
+
+    const norm1 = normalize(title1);
+    const norm2 = normalize(title2);
+
+    // Very conservative matching - only exact substring matches with significant overlap
+    const getSignificantWords = (title: string) => {
+      return title.split(' ').filter(word => 
+        word.length > 3 && 
+        !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'].includes(word)
+      );
+    };
+
+    const words1 = getSignificantWords(norm1);
+    const words2 = getSignificantWords(norm2);
+
+    // Need at least 3 significant words in common and high overlap percentage
+    const commonWords = words1.filter(word => words2.includes(word));
+    const minWords = Math.min(words1.length, words2.length);
+    
+    // Very strict: need 3+ common words AND 80%+ overlap
+    if (commonWords.length >= 3 && commonWords.length >= (minWords * 0.8)) {
+      console.log(`Potential franchise match: "${title1}" <-> "${title2}" (${commonWords.length} common words: ${commonWords.join(', ')})`);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Extract similarity data from existing shows
+   */
+  private async extractSimilarityData(existingShows: any[]): Promise<{genres: string[], actors: string[], directors: string[]}> {
+    const genres = new Set<string>();
+    const actors = new Set<string>();
+    const directors = new Set<string>();
+
+    for (const channelShow of existingShows) {
+      const show = channelShow.show;
+      
+      // Extract genres
+      if (show.genres) {
+        try {
+          const showGenres = JSON.parse(show.genres);
+          showGenres.forEach((genre: string) => genres.add(genre.toLowerCase()));
+        } catch (e) {
+          // Skip invalid JSON
+        }
+      }
+
+      // Extract actors
+      if (show.actors) {
+        try {
+          const showActors = JSON.parse(show.actors);
+          showActors.forEach((actor: string) => actors.add(actor.toLowerCase()));
+        } catch (e) {
+          // Skip invalid JSON
+        }
+      }
+
+      // Extract directors
+      if (show.directors) {
+        try {
+          const showDirectors = JSON.parse(show.directors);
+          showDirectors.forEach((director: string) => directors.add(director.toLowerCase()));
+        } catch (e) {
+          // Skip invalid JSON
+        }
+      }
+    }
+
+    return {
+      genres: Array.from(genres),
+      actors: Array.from(actors),
+      directors: Array.from(directors)
+    };
+  }
+
+  /**
+   * Check if a show is similar to existing shows in the channel
+   */
+  private isSimilarShow(show: any, similarityData: {genres: string[], actors: string[], directors: string[]}, existingShows: any[]): boolean {
+    // Don't add shows that are already in the channel
+    const existingShowIds = existingShows.map(cs => cs.showId);
+    if (existingShowIds.includes(show.id)) {
+      return false;
+    }
+
+    let matchScore = 0;
+
+    // Check genre matches
+    if (show.genres && similarityData.genres.length > 0) {
+      try {
+        const showGenres = JSON.parse(show.genres);
+        const genreMatches = showGenres.filter((genre: string) => 
+          similarityData.genres.includes(genre.toLowerCase())
+        ).length;
+        matchScore += genreMatches * 3; // Weight genres heavily
+      } catch (e) {
+        // Skip invalid JSON
+      }
+    }
+
+    // Check actor matches
+    if (show.actors && similarityData.actors.length > 0) {
+      try {
+        const showActors = JSON.parse(show.actors);
+        const actorMatches = showActors.filter((actor: string) => 
+          similarityData.actors.includes(actor.toLowerCase())
+        ).length;
+        matchScore += actorMatches * 2; // Weight actors moderately
+      } catch (e) {
+        // Skip invalid JSON
+      }
+    }
+
+    // Check director matches
+    if (show.directors && similarityData.directors.length > 0) {
+      try {
+        const showDirectors = JSON.parse(show.directors);
+        const directorMatches = showDirectors.filter((director: string) => 
+          similarityData.directors.includes(director.toLowerCase())
+        ).length;
+        matchScore += directorMatches * 2; // Weight directors moderately
+      } catch (e) {
+        // Skip invalid JSON
+      }
+    }
+
+    // Require at least 2 points to be considered similar
+    return matchScore >= 2;
   }
 
   /**
@@ -347,6 +626,21 @@ export class ChannelAutomationService {
    */
   private async addMovieToChannel(channelId: string, movieId: string): Promise<void> {
     try {
+      // Check if movie is already in channel first to prevent duplicates
+      const existingChannelMovie = await prisma.channelMovie.findUnique({
+        where: {
+          channelId_movieId: {
+            channelId,
+            movieId
+          }
+        }
+      });
+
+      if (existingChannelMovie) {
+        console.log(`Movie ${movieId} already exists in channel ${channelId}, skipping`);
+        return;
+      }
+
       // Get channel settings to apply reorder options
       const channel = await prisma.channel.findUnique({
         where: { id: channelId },
@@ -384,11 +678,11 @@ export class ChannelAutomationService {
         await this.applySortMethod(channelId, channel.autoSortMethod);
       }
 
-      // Auto-generate programs for this channel
-      const { programmingService } = await import('@/lib/programming-service');
-      await programmingService.generateProgramsForChannel(channelId);
+      // DO NOT auto-generate programs here - this causes infinite loops
+      // Program generation should be triggered manually or on a schedule
     } catch (error) {
       console.error(`Error adding movie ${movieId} to channel ${channelId}:`, error);
+      throw error; // Re-throw to let caller handle
     }
   }
 
@@ -397,6 +691,21 @@ export class ChannelAutomationService {
    */
   private async addShowToChannel(channelId: string, showId: string): Promise<void> {
     try {
+      // Check if show is already in channel first to prevent duplicates
+      const existingChannelShow = await prisma.channelShow.findUnique({
+        where: {
+          channelId_showId: {
+            channelId,
+            showId
+          }
+        }
+      });
+
+      if (existingChannelShow) {
+        console.log(`Show ${showId} already exists in channel ${channelId}, skipping`);
+        return;
+      }
+
       // Get channel settings to apply reorder options
       const channel = await prisma.channel.findUnique({
         where: { id: channelId },
@@ -437,11 +746,11 @@ export class ChannelAutomationService {
         await this.applySortMethod(channelId, channel.autoSortMethod);
       }
 
-      // Auto-generate programs for this channel
-      const { programmingService } = await import('@/lib/programming-service');
-      await programmingService.generateProgramsForChannel(channelId);
+      // DO NOT auto-generate programs here - this causes infinite loops
+      // Program generation should be triggered manually or on a schedule
     } catch (error) {
       console.error(`Error adding show ${showId} to channel ${channelId}:`, error);
+      throw error; // Re-throw to let caller handle
     }
   }
 

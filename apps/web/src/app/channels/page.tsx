@@ -139,7 +139,7 @@ interface AddContentDialogProps {
   existingShows: any[];
   existingMovies: any[];
   existingChannelData?: any; // Add existing channel data
-  onAddShows: (showId: string, selections?: { seasons?: number[], episodes?: string[] }) => void;
+  onAddShows: (showId: string, selections?: { seasons?: number[], episodes?: string[] }, keepUp?: boolean) => void;
   onAddMovies: (movieId: string) => void;
   onSaveAutomation?: (filters: any) => void;
 }
@@ -172,6 +172,7 @@ function AddContentDialog({
   const [ratingFilter, setRatingFilter] = useState("");
   const [autoFilterEnabled, setAutoFilterEnabled] = useState(false);
   const [smartFilteringEnabled, setSmartFilteringEnabled] = useState(false);
+  const [keepUpToDate, setKeepUpToDate] = useState(false);
   
   // TV Show episode selection
   const [expandedShows, setExpandedShows] = useState<Set<string>>(new Set());
@@ -438,15 +439,21 @@ function AddContentDialog({
       const selectedShowSeasons = selectedSeasons[showId] || new Set();
       const selectedShowEpisodes = selectedEpisodes[showId] || new Set();
       
+      // Determine if we should auto-add new episodes:
+      // - If automation is enabled AND adding entire shows (not specific episodes) → autoAddNewEpisodes = true
+      // - If automation is disabled OR adding specific episodes → autoAddNewEpisodes = false
+      const isAddingEntireShow = selectedShowSeasons.size === 0 && selectedShowEpisodes.size === 0;
+      const shouldAutoAddNewEpisodes = autoFilterEnabled && isAddingEntireShow;
+      
       if (selectedShowSeasons.size > 0 || selectedShowEpisodes.size > 0) {
-        // Add with specific seasons/episodes
+        // Add with specific seasons/episodes (no auto-add)
         onAddShows(showId, {
           seasons: Array.from(selectedShowSeasons),
           episodes: Array.from(selectedShowEpisodes)
-        });
+        }, false);
       } else {
-        // Add entire show
-        onAddShows(showId);
+        // Add entire show (use automation setting)
+        onAddShows(showId, undefined, shouldAutoAddNewEpisodes);
       }
     });
     
@@ -475,6 +482,7 @@ function AddContentDialog({
     setSelectedShows(new Set());
     setSelectedSeasons({});
     setSelectedEpisodes({});
+    setKeepUpToDate(false);
   };
 
   const handleBulkAddMovies = () => {
@@ -761,6 +769,60 @@ function AddContentDialog({
                </Button>
              </div>
 
+             {/* Channel Automation Section */}
+             <div className="bg-muted/30 p-3 rounded-lg border">
+               <div className="flex items-start gap-3">
+                 <div className="flex items-center space-x-2">
+                   <Checkbox 
+                     id="automation-enabled" 
+                     checked={autoFilterEnabled}
+                     onCheckedChange={(checked) => setAutoFilterEnabled(checked === true)}
+                   />
+                   <Label htmlFor="automation-enabled" className="text-sm font-medium flex items-center gap-1">
+                     <Zap className="w-4 h-4 text-blue-600" />
+                     Enable Channel Automation
+                   </Label>
+                 </div>
+                 <Tooltip>
+                   <TooltipTrigger asChild>
+                     <Info className="w-4 h-4 text-muted-foreground cursor-help mt-0.5" />
+                   </TooltipTrigger>
+                   <TooltipContent side="top" className="max-w-md">
+                     <div className="space-y-2">
+                       <p className="font-medium">How Automation Works:</p>
+                       <p>• <strong>Auto-Update Shows:</strong> Entire shows will automatically get new episodes when they're added to your library</p>
+                       <p>• <strong>Find Similar Content:</strong> Finds franchise content and similar shows (e.g., "Young Sheldon" for "Big Bang Theory")</p>
+                       <p>• <strong>Filter Matching:</strong> Adds content matching your genre, actor, studio, and year criteria</p>
+                       <p>• <strong>Ongoing Sync:</strong> Automatically adds matching content when new media is synced to your library</p>
+                       <p className="text-yellow-600 font-medium">Note: Selected episodes/seasons will NOT auto-update</p>
+                     </div>
+                   </TooltipContent>
+                 </Tooltip>
+               </div>
+               {autoFilterEnabled && (
+                 <div className="mt-3 space-y-3">
+                   <div className="text-xs text-muted-foreground space-y-1">
+                     <p className="flex items-center gap-1">
+                       <Info className="w-3 h-3" />
+                       <strong>Shows added as "entire show" will automatically get new episodes</strong>
+                     </p>
+                     {selectedShows.size > 0 || selectedMovies.size > 0 ? (
+                       <p className="flex items-center gap-1">
+                         <Info className="w-3 h-3" />
+                         Will also find franchise content and similar shows/movies based on your selections
+                       </p>
+                     ) : (
+                       <p className="flex items-center gap-1">
+                         <Info className="w-3 h-3" />
+                         Will use your Advanced Filters to find matching content
+                       </p>
+                     )}
+                   </div>
+
+                 </div>
+               )}
+             </div>
+
              {/* Advanced Filters Panel */}
              {showFilters && (
                <div className="bg-muted/50 p-4 rounded-lg space-y-4">
@@ -907,45 +969,24 @@ function AddContentDialog({
                    </div>
                  </div>
                  <div className="flex items-center justify-between mt-4">
-                   <div className="flex items-center gap-4">
-                     <div className="flex items-center space-x-2">
-                       <Checkbox 
-                         id="automation-enabled" 
-                         checked={autoFilterEnabled}
-                         onCheckedChange={(checked) => setAutoFilterEnabled(checked === true)}
-                       />
-                       <Label htmlFor="automation-enabled" className="text-sm font-medium flex items-center gap-1">
-                         <Zap className="w-3 h-3" />
-                         Enable Channel Automation
-                         <Tooltip>
-                           <TooltipTrigger asChild>
-                             <Info className="w-3 h-3 text-muted-foreground cursor-help" />
-                           </TooltipTrigger>
-                           <TooltipContent side="top" className="max-w-xs">
-                             <p>When enabled, new content matching these filters will be automatically added to this channel when synced from your Plex server.</p>
-                           </TooltipContent>
-                         </Tooltip>
-                       </Label>
-                     </div>
-                     <div className="flex items-center space-x-2">
-                       <Checkbox 
-                         id="smart-filtering" 
-                         checked={smartFilteringEnabled}
-                         onCheckedChange={(checked) => setSmartFilteringEnabled(checked === true)}
-                       />
-                       <Label htmlFor="smart-filtering" className="text-sm font-medium flex items-center gap-1">
-                         <Filter className="w-3 h-3" />
-                         Smart Filtering
-                         <Tooltip>
-                           <TooltipTrigger asChild>
-                             <Info className="w-3 h-3 text-muted-foreground cursor-help" />
-                           </TooltipTrigger>
-                           <TooltipContent side="top" className="max-w-xs">
-                             <p>When enabled, filter options adapt based on your current selections to show only realistic combinations that exist in your library.</p>
-                           </TooltipContent>
-                         </Tooltip>
-                       </Label>
-                     </div>
+                   <div className="flex items-center space-x-2">
+                     <Checkbox 
+                       id="smart-filtering" 
+                       checked={smartFilteringEnabled}
+                       onCheckedChange={(checked) => setSmartFilteringEnabled(checked === true)}
+                     />
+                     <Label htmlFor="smart-filtering" className="text-sm font-medium flex items-center gap-1">
+                       <Filter className="w-3 h-3" />
+                       Smart Filtering
+                       <Tooltip>
+                         <TooltipTrigger asChild>
+                           <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                         </TooltipTrigger>
+                         <TooltipContent side="top" className="max-w-xs">
+                           <p>When enabled, filter options adapt based on your current selections to show only realistic combinations that exist in your library.</p>
+                         </TooltipContent>
+                       </Tooltip>
+                     </Label>
                    </div>
                    <Button variant="outline" size="sm" onClick={clearAllFilters}>
                      Clear All Filters
@@ -990,7 +1031,17 @@ function AddContentDialog({
                   </Button>
                   {selectedShows.size > 0 && (
                     <Button onClick={handleBulkAddShows}>
-                      Add {selectedShows.size} Shows
+                      Add {selectedShows.size} Show{selectedShows.size > 1 ? 's' : ''}
+                      {autoFilterEnabled && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="w-4 h-4 ml-2 text-blue-400" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-sm">
+                            <p>✨ <strong>Auto-Update Enabled:</strong> These shows will automatically get new episodes when synced</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </Button>
                   )}
                 </div>
@@ -1041,46 +1092,6 @@ function AddContentDialog({
                            >
                              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                              Episodes
-                           </Button>
-                           <Button
-                             size="sm"
-                             variant="outline"
-                             onClick={() => {
-                               const selectedShowSeasons = selectedSeasons[show.id] || new Set();
-                               const selectedShowEpisodes = selectedEpisodes[show.id] || new Set();
-                               
-                               if (selectedShowSeasons.size > 0 || selectedShowEpisodes.size > 0) {
-                                 onAddShows(show.id, {
-                                   seasons: Array.from(selectedShowSeasons),
-                                   episodes: Array.from(selectedShowEpisodes)
-                                 });
-                               } else {
-                                 onAddShows(show.id);
-                               }
-                               
-                               toggleShowSelection(show.id);
-                               // Clear selections for this show
-                               setSelectedSeasons(prev => {
-                                 const updated = { ...prev };
-                                 delete updated[show.id];
-                                 return updated;
-                               });
-                               setSelectedEpisodes(prev => {
-                                 const updated = { ...prev };
-                                 delete updated[show.id];
-                                 return updated;
-                               });
-                             }}
-                           >
-                             {(() => {
-                               const selectedShowSeasons = selectedSeasons[show.id] || new Set();
-                               const selectedShowEpisodes = selectedEpisodes[show.id] || new Set();
-                               
-                               if (selectedShowSeasons.size > 0 || selectedShowEpisodes.size > 0) {
-                                 return `Add Selected (${selectedShowSeasons.size}S, ${selectedShowEpisodes.size}E)`;
-                               }
-                               return "Add All";
-                             })()}
                            </Button>
                          </div>
                        </div>
@@ -1157,10 +1168,11 @@ function AddContentDialog({
                                <Button 
                                  size="sm"
                                  onClick={() => {
+                                   // Selected episodes/seasons never auto-update
                                    onAddShows(show.id, {
                                      seasons: Array.from(selectedShowSeasons),
                                      episodes: Array.from(selectedShowEpisodes)
-                                   });
+                                   }, false);
                                    // Clear selections for this show
                                    setSelectedSeasons(prev => {
                                      const updated = { ...prev };
@@ -1175,6 +1187,14 @@ function AddContentDialog({
                                  }}
                                >
                                  Add Selected ({selectedShowSeasons.size} seasons, {selectedShowEpisodes.size} episodes)
+                                 <Tooltip>
+                                   <TooltipTrigger asChild>
+                                     <Info className="w-4 h-4 ml-2 text-muted-foreground" />
+                                   </TooltipTrigger>
+                                   <TooltipContent side="top" className="max-w-sm">
+                                     <p><strong>Note:</strong> Selected episodes/seasons will NOT auto-update with new content</p>
+                                   </TooltipContent>
+                                 </Tooltip>
                                </Button>
                              </div>
                            )}
@@ -1261,6 +1281,8 @@ function AddContentDialog({
               </div>
             </TabsContent>
           </Tabs>
+
+
         </CardContent>
 
         <div className="border-t p-6">
@@ -1723,7 +1745,7 @@ function ChannelsPageContent() {
     });
   };
 
-  const handleAddShow = (showId: string, selections?: { seasons?: number[], episodes?: string[] }) => {
+  const handleAddShow = (showId: string, selections?: { seasons?: number[], episodes?: string[] }, keepUp?: boolean) => {
     if (!selectedChannelId) return;
     const allContent = getChannelConfiguration();
     const nextOrder = allContent.length;
@@ -1733,8 +1755,9 @@ function ChannelsPageContent() {
     addShowMutation.mutate({
       channelId: selectedChannelId,
       showId,
-      order: nextOrder
-    });
+      order: nextOrder,
+      autoAddNewEpisodes: !!keepUp
+    } as any);
   };
 
   const handleAddMovie = (movieId: string) => {
@@ -3764,6 +3787,9 @@ function ChannelsPageContent() {
                     />
                     <Label htmlFor="block-shuffle">Block Shuffle</Label>
                   </div>
+
+
+
                 </CardContent>
               </Card>
             </div>

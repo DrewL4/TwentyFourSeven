@@ -50,6 +50,7 @@ model MediaShow {
   writers     String? // JSON string of writer names
   actors      String? // JSON string of actor names
   countries   String? // JSON string of country names
+  collections String? // JSON string of collection names from Plex
   
   libraryId   String
   library     MediaLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
@@ -104,6 +105,7 @@ model MediaMovie {
   writers     String? // JSON string of writer names
   actors      String? // JSON string of actor names
   countries   String? // JSON string of country names
+  collections String? // JSON string of collection names from Plex
   
   libraryId   String
   library     MediaLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
@@ -168,6 +170,9 @@ model Channel {
   blockShuffleSize Int @default(1)
   autoSortMethod String? // "title-asc", "title-desc", "year-newest", "year-oldest", etc.
   
+  // Franchise automation – automatically add sibling shows in same franchise
+  franchiseAutomation Boolean @default(false)
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
@@ -222,6 +227,9 @@ model ChannelShow {
   // Episode ordering constraints
   respectOrder Boolean @default(true)
   maxConsecutiveEpisodes Int @default(0) // 0 = unlimited
+  
+  // Automation: automatically add new episodes when discovered
+  autoAddNewEpisodes Boolean @default(false)
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

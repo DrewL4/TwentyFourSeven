@@ -1825,6 +1825,7 @@ export const MediaShowScalarFieldEnum = {
   writers: 'writers',
   actors: 'actors',
   countries: 'countries',
+  collections: 'collections',
   libraryId: 'libraryId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -1866,6 +1867,7 @@ export const MediaMovieScalarFieldEnum = {
   writers: 'writers',
   actors: 'actors',
   countries: 'countries',
+  collections: 'collections',
   libraryId: 'libraryId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -1905,6 +1907,7 @@ export const ChannelScalarFieldEnum = {
   blockShuffle: 'blockShuffle',
   blockShuffleSize: 'blockShuffleSize',
   autoSortMethod: 'autoSortMethod',
+  franchiseAutomation: 'franchiseAutomation',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -1940,6 +1943,7 @@ export const ChannelShowScalarFieldEnum = {
   lastPlayedAt: 'lastPlayedAt',
   respectOrder: 'respectOrder',
   maxConsecutiveEpisodes: 'maxConsecutiveEpisodes',
+  autoAddNewEpisodes: 'autoAddNewEpisodes',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

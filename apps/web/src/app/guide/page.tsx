@@ -95,11 +95,11 @@ export default function GuidePage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Update current time every minute
+  // Update current time every 30 seconds for smoother real-time updates
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
-    }, 60000);
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -726,16 +726,35 @@ export default function GuidePage() {
                                           isCurrentSlot ? 'bg-blue-50 dark:bg-blue-950/30' : ''
                                         }`}
                                       >
-                                        {/* Current time indicator */}
-                                        {isCurrentSlot && (
-                                          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-px h-full bg-blue-500 z-20">
-                                            <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-blue-500 rounded-full"></div>
-                                          </div>
-                                        )}
                                       </div>
                                     );
                                   })}
                                 </div>
+                                
+                                {/* Current time indicator - positioned precisely */}
+                                {(() => {
+                                  const guideEnd = new Date(guideStartTime.getTime() + (6 * 60 * 60 * 1000));
+                                  const isWithinGuideWindow = currentTime >= guideStartTime && currentTime <= guideEnd;
+                                  
+                                  if (isWithinGuideWindow) {
+                                    const timeOffset = currentTime.getTime() - guideStartTime.getTime();
+                                    const totalDuration = 6 * 60 * 60 * 1000; // 6 hours
+                                    const leftPercent = (timeOffset / totalDuration) * 100;
+                                    
+                                    return (
+                                      <div
+                                        className="absolute top-0 w-px h-full bg-blue-500 z-30"
+                                        style={{ left: `${leftPercent}%` }}
+                                      >
+                                        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-blue-500 rounded-full"></div>
+                                        <div className="absolute top-6 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-1 py-0.5 rounded whitespace-nowrap">
+                                          {formatTime(currentTime)}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                                 
                                 {/* Programs */}
                                 <div className="absolute inset-0 flex">
@@ -756,25 +775,44 @@ export default function GuidePage() {
                                     const widthPercent = ((endOffset - startOffset) / totalDuration) * 100;
                                     
                                     const isCurrentProgram = isCurrentlyPlaying(program.startTime, program.duration);
+                                    const isShortProgram = program.duration <= (30 * 60 * 1000); // 30 minutes or less
+                                    const hourDuration = 60 * 60 * 1000; // 1 hour in milliseconds
+                                    
+                                    // Calculate expanded width for short programs (make them as wide as 1 hour show)
+                                    const expandedWidthPercent = isShortProgram ? 
+                                      (hourDuration / (6 * 60 * 60 * 1000)) * 100 : widthPercent;
                                     
                                     return (
                                       <div
                                         key={program.id}
-                                        className={`absolute top-1 bottom-1 mx-0.5 rounded text-xs overflow-hidden cursor-pointer transition-all hover:z-10 hover:shadow-lg ${
+                                        className={`absolute top-1 bottom-1 mx-0.5 rounded text-xs overflow-visible cursor-pointer transition-all duration-300 hover:z-50 hover:shadow-2xl group ${
                                           isCurrentProgram 
                                             ? 'bg-blue-500 text-white border-2 border-blue-600' 
                                             : 'bg-accent text-accent-foreground border border-border'
                                         }`}
                                         style={{
                                           left: `${leftPercent}%`,
-                                          width: `${widthPercent}%`
-                                        }}
+                                          width: `${widthPercent}%`,
+                                          transformOrigin: 'left center',
+                                          '--expanded-width': `${expandedWidthPercent}%`
+                                        } as React.CSSProperties & { '--expanded-width': string }}
                                         title={`${program.episode ? 
                                           `${program.episode.show.title} - S${program.episode.seasonNumber}E${program.episode.episodeNumber}: ${program.episode.title}` :
                                           program.movie?.title
                                         } (${formatTime(program.startTime)} - ${formatTime(programEnd)})`}
+                                        onMouseEnter={(e) => {
+                                          if (isShortProgram) {
+                                            e.currentTarget.style.width = `${expandedWidthPercent}%`;
+                                          }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          if (isShortProgram) {
+                                            e.currentTarget.style.width = `${widthPercent}%`;
+                                          }
+                                        }}
                                       >
-                                        <div className="p-1.5 h-full overflow-hidden">
+                                        {/* Regular content - visible by default */}
+                                        <div className={`p-1.5 h-full overflow-hidden ${isShortProgram ? 'group-hover:hidden' : ''}`}>
                                           <div className="font-medium leading-tight line-clamp-1">
                                             {program.episode ? program.episode.show.title : program.movie?.title}
                                           </div>
@@ -795,6 +833,53 @@ export default function GuidePage() {
                                             </div>
                                           )}
                                         </div>
+
+                                        {/* Expanded hover content - only visible on hover for short programs */}
+                                        {isShortProgram && (
+                                          <div className="absolute inset-0 p-2 hidden group-hover:flex bg-inherit rounded border-2 border-primary/20 shadow-lg">
+                                            <div className="flex flex-col justify-center space-y-1 w-full text-center">
+                                              <div className="font-bold text-sm leading-tight">
+                                                {program.episode ? program.episode.show.title : program.movie?.title}
+                                              </div>
+                                              {program.episode && (
+                                                <>
+                                                  <div className="text-xs opacity-90 font-medium">
+                                                    S{program.episode.seasonNumber}E{program.episode.episodeNumber}
+                                                  </div>
+                                                  {program.episode.title && (
+                                                    <div className="text-xs opacity-85 font-medium leading-tight">
+                                                      "{program.episode.title}"
+                                                    </div>
+                                                  )}
+                                                </>
+                                              )}
+                                              {program.movie?.year && (
+                                                <div className="text-xs opacity-90 font-medium">
+                                                  ({program.movie.year})
+                                                </div>
+                                              )}
+                                              <div className="text-xs opacity-80 font-medium">
+                                                {formatTime(program.startTime)} - {formatTime(programEnd)}
+                                              </div>
+                                              <div className="text-xs opacity-80 font-medium">
+                                                {formatDuration(program.duration)}
+                                              </div>
+                                              {isCurrentProgram && (
+                                                <div className="mt-1">
+                                                  <div className="h-1.5 bg-black/20 dark:bg-white/20 rounded-full overflow-hidden mx-2">
+                                                    <div 
+                                                      className="h-full bg-white dark:bg-white transition-all duration-1000"
+                                                      style={{ width: `${getProgressPercentage(program.startTime, program.duration)}%` }}
+                                                    />
+                                                  </div>
+                                                  <div className="text-[10px] text-center mt-1 opacity-80 font-medium">
+                                                    {Math.round(getProgressPercentage(program.startTime, program.duration))}% complete
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })}

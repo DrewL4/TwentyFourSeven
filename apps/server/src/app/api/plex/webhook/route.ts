@@ -105,6 +105,8 @@ export async function POST(request: NextRequest) {
       // Handle library content addition/update events
       if (webhookData.event === 'library.new' || webhookData.event === 'library.update') {
         await handleLibraryEvent(webhookData);
+      } else if (webhookData.event === 'library.delete') {
+        await handleLibraryDeleteEvent(webhookData);
       }
 
       // Update webhook activity status to processed
@@ -368,5 +370,96 @@ async function syncSingleEpisode(plexServer: any, metadata: any) {
     console.log(`✅ Episode synced: ${metadata.grandparentTitle} - ${metadata.title}`);
   } catch (error) {
     console.error(`❌ Error syncing episode ${metadata.title}:`, error);
+  }
+}
+
+async function handleLibraryDeleteEvent(webhookData: PlexWebhookPayload) {
+  try {
+    const { Metadata, Server } = webhookData;
+
+    // Find the matching Plex server in our database
+    const plexServer = await prisma.mediaServer.findFirst({
+      where: {
+        type: 'PLEX',
+        OR: [
+          { name: Server.title },
+        ]
+      }
+    });
+
+    if (!plexServer) {
+      console.log(`⚠️ Webhook from unknown Plex server: ${Server.title}`);
+      return;
+    }
+
+    console.log(`🗑️ Processing library.delete for ${Metadata.title} (${Metadata.type}) on server ${Server.title}`);
+
+    // Identify corresponding library (only needed for movie/show deletes)
+    let library: any = null;
+    if (Metadata.librarySectionID) {
+      library = await prisma.mediaLibrary.findFirst({
+        where: {
+          serverId: plexServer.id,
+          key: Metadata.librarySectionID.toString()
+        }
+      });
+    }
+
+    // Delete based on content type
+    if (Metadata.librarySectionType === 'movie' && Metadata.type === 'movie') {
+      if (!library) return;
+      await prisma.mediaMovie.deleteMany({
+        where: {
+          libraryId: library.id,
+          ratingKey: Metadata.ratingKey
+        }
+      });
+      console.log(`✅ Movie removed: ${Metadata.title}`);
+    } else if (Metadata.librarySectionType === 'show') {
+      if (Metadata.type === 'show') {
+        if (!library) return;
+        await prisma.mediaShow.deleteMany({
+          where: {
+            libraryId: library.id,
+            ratingKey: Metadata.ratingKey
+          }
+        });
+        console.log(`✅ Show removed: ${Metadata.title}`);
+      } else if (Metadata.type === 'episode') {
+        // Episode deletion – need parent show first
+        const parentShow = await prisma.mediaShow.findFirst({
+          where: {
+            ratingKey: Metadata.grandparentRatingKey
+          }
+        });
+        if (parentShow) {
+          await prisma.mediaEpisode.deleteMany({
+            where: {
+              showId: parentShow.id,
+              ratingKey: Metadata.ratingKey
+            }
+          });
+          console.log(`✅ Episode removed: ${Metadata.grandparentTitle} - ${Metadata.title}`);
+        }
+      }
+    }
+
+    // Trigger channel automation after deletion
+    try {
+      const { channelAutomationService } = await import('@/lib/channel-automation-service');
+      await channelAutomationService.processAutomatedChannels();
+    } catch (err) {
+      console.error('Failed to run channel automation after deletion:', err);
+    }
+
+    // Run programming maintenance to fill any gaps caused by deletion
+    try {
+      const { programmingService } = await import('@/lib/programming-service');
+      await programmingService.maintainPrograms();
+    } catch (err) {
+      console.error('Failed to run programming maintenance after deletion:', err);
+    }
+  } catch (error) {
+    console.error('❌ Error handling library.delete event:', error);
   }
 } 

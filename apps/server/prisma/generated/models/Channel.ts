@@ -78,6 +78,7 @@ export type ChannelMinAggregateOutputType = {
   blockShuffle: boolean | null
   blockShuffleSize: number | null
   autoSortMethod: string | null
+  franchiseAutomation: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -113,6 +114,7 @@ export type ChannelMaxAggregateOutputType = {
   blockShuffle: boolean | null
   blockShuffleSize: number | null
   autoSortMethod: string | null
+  franchiseAutomation: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -148,6 +150,7 @@ export type ChannelCountAggregateOutputType = {
   blockShuffle: number
   blockShuffleSize: number
   autoSortMethod: number
+  franchiseAutomation: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -207,6 +210,7 @@ export type ChannelMinAggregateInputType = {
   blockShuffle?: true
   blockShuffleSize?: true
   autoSortMethod?: true
+  franchiseAutomation?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -242,6 +246,7 @@ export type ChannelMaxAggregateInputType = {
   blockShuffle?: true
   blockShuffleSize?: true
   autoSortMethod?: true
+  franchiseAutomation?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -277,6 +282,7 @@ export type ChannelCountAggregateInputType = {
   blockShuffle?: true
   blockShuffleSize?: true
   autoSortMethod?: true
+  franchiseAutomation?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -399,6 +405,7 @@ export type ChannelGroupByOutputType = {
   blockShuffle: boolean
   blockShuffleSize: number
   autoSortMethod: string | null
+  franchiseAutomation: boolean
   createdAt: Date
   updatedAt: Date
   _count: ChannelCountAggregateOutputType | null
@@ -457,6 +464,7 @@ export type ChannelWhereInput = {
   blockShuffle?: Prisma.BoolFilter<"Channel"> | boolean
   blockShuffleSize?: Prisma.IntFilter<"Channel"> | number
   autoSortMethod?: Prisma.StringNullableFilter<"Channel"> | string | null
+  franchiseAutomation?: Prisma.BoolFilter<"Channel"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Channel"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Channel"> | Date | string
   programs?: Prisma.ProgramListRelationFilter
@@ -495,6 +503,7 @@ export type ChannelOrderByWithRelationInput = {
   blockShuffle?: Prisma.SortOrder
   blockShuffleSize?: Prisma.SortOrder
   autoSortMethod?: Prisma.SortOrderInput | Prisma.SortOrder
+  franchiseAutomation?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   programs?: Prisma.ProgramOrderByRelationAggregateInput
@@ -536,6 +545,7 @@ export type ChannelWhereUniqueInput = Prisma.AtLeast<{
   blockShuffle?: Prisma.BoolFilter<"Channel"> | boolean
   blockShuffleSize?: Prisma.IntFilter<"Channel"> | number
   autoSortMethod?: Prisma.StringNullableFilter<"Channel"> | string | null
+  franchiseAutomation?: Prisma.BoolFilter<"Channel"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Channel"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Channel"> | Date | string
   programs?: Prisma.ProgramListRelationFilter
@@ -574,6 +584,7 @@ export type ChannelOrderByWithAggregationInput = {
   blockShuffle?: Prisma.SortOrder
   blockShuffleSize?: Prisma.SortOrder
   autoSortMethod?: Prisma.SortOrderInput | Prisma.SortOrder
+  franchiseAutomation?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.ChannelCountOrderByAggregateInput
@@ -617,6 +628,7 @@ export type ChannelScalarWhereWithAggregatesInput = {
   blockShuffle?: Prisma.BoolWithAggregatesFilter<"Channel"> | boolean
   blockShuffleSize?: Prisma.IntWithAggregatesFilter<"Channel"> | number
   autoSortMethod?: Prisma.StringNullableWithAggregatesFilter<"Channel"> | string | null
+  franchiseAutomation?: Prisma.BoolWithAggregatesFilter<"Channel"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Channel"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Channel"> | Date | string
 }
@@ -652,6 +664,7 @@ export type ChannelCreateInput = {
   blockShuffle?: boolean
   blockShuffleSize?: number
   autoSortMethod?: string | null
+  franchiseAutomation?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   programs?: Prisma.ProgramCreateNestedManyWithoutChannelInput
@@ -690,6 +703,7 @@ export type ChannelUncheckedCreateInput = {
   blockShuffle?: boolean
   blockShuffleSize?: number
   autoSortMethod?: string | null
+  franchiseAutomation?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   programs?: Prisma.ProgramUncheckedCreateNestedManyWithoutChannelInput
@@ -728,6 +742,7 @@ export type ChannelUpdateInput = {
   blockShuffle?: Prisma.BoolFieldUpdateOperationsInput | boolean
   blockShuffleSize?: Prisma.IntFieldUpdateOperationsInput | number
   autoSortMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  franchiseAutomation?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   programs?: Prisma.ProgramUpdateManyWithoutChannelNestedInput
@@ -766,6 +781,7 @@ export type ChannelUncheckedUpdateInput = {
   blockShuffle?: Prisma.BoolFieldUpdateOperationsInput | boolean
   blockShuffleSize?: Prisma.IntFieldUpdateOperationsInput | number
   autoSortMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  franchiseAutomation?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   programs?: Prisma.ProgramUncheckedUpdateManyWithoutChannelNestedInput
@@ -804,6 +820,7 @@ export type ChannelCreateManyInput = {
   blockShuffle?: boolean
   blockShuffleSize?: number
   autoSortMethod?: string | null
+  franchiseAutomation?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -839,6 +856,7 @@ export type ChannelUpdateManyMutationInput = {
   blockShuffle?: Prisma.BoolFieldUpdateOperationsInput | boolean
   blockShuffleSize?: Prisma.IntFieldUpdateOperationsInput | number
   autoSortMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  franchiseAutomation?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -874,6 +892,7 @@ export type ChannelUncheckedUpdateManyInput = {
   blockShuffle?: Prisma.BoolFieldUpdateOperationsInput | boolean
   blockShuffleSize?: Prisma.IntFieldUpdateOperationsInput | number
   autoSortMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  franchiseAutomation?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -909,6 +928,7 @@ export type ChannelCountOrderByAggregateInput = {
   blockShuffle?: Prisma.SortOrder
   blockShuffleSize?: Prisma.SortOrder
   autoSortMethod?: Prisma.SortOrder
+  franchiseAutomation?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -955,6 +975,7 @@ export type ChannelMaxOrderByAggregateInput = {
   blockShuffle?: Prisma.SortOrder
   blockShuffleSize?: Prisma.SortOrder
   autoSortMethod?: Prisma.SortOrder
+  franchiseAutomation?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -990,6 +1011,7 @@ export type ChannelMinOrderByAggregateInput = {
   blockShuffle?: Prisma.SortOrder
   blockShuffleSize?: Prisma.SortOrder
   autoSortMethod?: Prisma.SortOrder
+  franchiseAutomation?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -1083,6 +1105,7 @@ export type ChannelCreateWithoutProgramsInput = {
   blockShuffle?: boolean
   blockShuffleSize?: number
   autoSortMethod?: string | null
+  franchiseAutomation?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   channelShows?: Prisma.ChannelShowCreateNestedManyWithoutChannelInput
@@ -1120,6 +1143,7 @@ export type ChannelUncheckedCreateWithoutProgramsInput = {
   blockShuffle?: boolean
   blockShuffleSize?: number
   autoSortMethod?: string | null
+  franchiseAutomation?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   channelShows?: Prisma.ChannelShowUncheckedCreateNestedManyWithoutChannelInput
@@ -1173,6 +1197,7 @@ export type ChannelUpdateWithoutProgramsInput = {
   blockShuffle?: Prisma.BoolFieldUpdateOperationsInput | boolean
   blockShuffleSize?: Prisma.IntFieldUpdateOperationsInput | number
   autoSortMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  franchiseAutomation?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   channelShows?: Prisma.ChannelShowUpdateManyWithoutChannelNestedInput
@@ -1210,6 +1235,7 @@ export type ChannelUncheckedUpdateWithoutProgramsInput = {
   blockShuffle?: Prisma.BoolFieldUpdateOperationsInput | boolean
   blockShuffleSize?: Prisma.IntFieldUpdateOperationsInput | number
   autoSortMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  franchiseAutomation?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   channelShows?: Prisma.ChannelShowUncheckedUpdateManyWithoutChannelNestedInput
@@ -1247,6 +1273,7 @@ export type ChannelCreateWithoutChannelShowsInput = {
   blockShuffle?: boolean
   blockShuffleSize?: number
   autoSortMethod?: string | null
+  franchiseAutomation?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   programs?: Prisma.ProgramCreateNestedManyWithoutChannelInput
@@ -1284,6 +1311,7 @@ export type ChannelUncheckedCreateWithoutChannelShowsInput = {
   blockShuffle?: boolean
   blockShuffleSize?: number
   autoSortMethod?: string | null
+  franchiseAutomation?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   programs?: Prisma.ProgramUncheckedCreateNestedManyWithoutChannelInput
@@ -1337,6 +1365,7 @@ export type ChannelUpdateWithoutChannelShowsInput = {
   blockShuffle?: Prisma.BoolFieldUpdateOperationsInput | boolean
   blockShuffleSize?: Prisma.IntFieldUpdateOperationsInput | number
   autoSortMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  franchiseAutomation?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   programs?: Prisma.ProgramUpdateManyWithoutChannelNestedInput
@@ -1374,6 +1403,7 @@ export type ChannelUncheckedUpdateWithoutChannelShowsInput = {
   blockShuffle?: Prisma.BoolFieldUpdateOperationsInput | boolean
   blockShuffleSize?: Prisma.IntFieldUpdateOperationsInput | number
   autoSortMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  franchiseAutomation?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   programs?: Prisma.ProgramUncheckedUpdateManyWithoutChannelNestedInput
@@ -1411,6 +1441,7 @@ export type ChannelCreateWithoutChannelMoviesInput = {
   blockShuffle?: boolean
   blockShuffleSize?: number
   autoSortMethod?: string | null
+  franchiseAutomation?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   programs?: Prisma.ProgramCreateNestedManyWithoutChannelInput
@@ -1448,6 +1479,7 @@ export type ChannelUncheckedCreateWithoutChannelMoviesInput = {
   blockShuffle?: boolean
   blockShuffleSize?: number
   autoSortMethod?: string | null
+  franchiseAutomation?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   programs?: Prisma.ProgramUncheckedCreateNestedManyWithoutChannelInput
@@ -1501,6 +1533,7 @@ export type ChannelUpdateWithoutChannelMoviesInput = {
   blockShuffle?: Prisma.BoolFieldUpdateOperationsInput | boolean
   blockShuffleSize?: Prisma.IntFieldUpdateOperationsInput | number
   autoSortMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  franchiseAutomation?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   programs?: Prisma.ProgramUpdateManyWithoutChannelNestedInput
@@ -1538,6 +1571,7 @@ export type ChannelUncheckedUpdateWithoutChannelMoviesInput = {
   blockShuffle?: Prisma.BoolFieldUpdateOperationsInput | boolean
   blockShuffleSize?: Prisma.IntFieldUpdateOperationsInput | number
   autoSortMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  franchiseAutomation?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   programs?: Prisma.ProgramUncheckedUpdateManyWithoutChannelNestedInput
@@ -1624,6 +1658,7 @@ export type ChannelSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   blockShuffle?: boolean
   blockShuffleSize?: boolean
   autoSortMethod?: boolean
+  franchiseAutomation?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   programs?: boolean | Prisma.Channel$programsArgs<ExtArgs>
@@ -1663,6 +1698,7 @@ export type ChannelSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   blockShuffle?: boolean
   blockShuffleSize?: boolean
   autoSortMethod?: boolean
+  franchiseAutomation?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["channel"]>
@@ -1698,6 +1734,7 @@ export type ChannelSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   blockShuffle?: boolean
   blockShuffleSize?: boolean
   autoSortMethod?: boolean
+  franchiseAutomation?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["channel"]>
@@ -1733,11 +1770,12 @@ export type ChannelSelectScalar = {
   blockShuffle?: boolean
   blockShuffleSize?: boolean
   autoSortMethod?: boolean
+  franchiseAutomation?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type ChannelOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "number" | "name" | "icon" | "stealth" | "groupTitle" | "startTime" | "iconWidth" | "iconDuration" | "iconPosition" | "guideFlexPlaceholder" | "guideMinimumDurationSeconds" | "isOnDemand" | "onDemandModulo" | "episodeMemoryEnabled" | "autoFilterEnabled" | "filterGenres" | "filterActors" | "filterDirectors" | "filterStudios" | "filterYearStart" | "filterYearEnd" | "filterRating" | "filterType" | "lastAutoScanAt" | "defaultEpisodeOrder" | "respectEpisodeOrder" | "blockShuffle" | "blockShuffleSize" | "autoSortMethod" | "createdAt" | "updatedAt", ExtArgs["result"]["channel"]>
+export type ChannelOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "number" | "name" | "icon" | "stealth" | "groupTitle" | "startTime" | "iconWidth" | "iconDuration" | "iconPosition" | "guideFlexPlaceholder" | "guideMinimumDurationSeconds" | "isOnDemand" | "onDemandModulo" | "episodeMemoryEnabled" | "autoFilterEnabled" | "filterGenres" | "filterActors" | "filterDirectors" | "filterStudios" | "filterYearStart" | "filterYearEnd" | "filterRating" | "filterType" | "lastAutoScanAt" | "defaultEpisodeOrder" | "respectEpisodeOrder" | "blockShuffle" | "blockShuffleSize" | "autoSortMethod" | "franchiseAutomation" | "createdAt" | "updatedAt", ExtArgs["result"]["channel"]>
 export type ChannelInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   programs?: boolean | Prisma.Channel$programsArgs<ExtArgs>
   channelShows?: boolean | Prisma.Channel$channelShowsArgs<ExtArgs>
@@ -1785,6 +1823,7 @@ export type $ChannelPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     blockShuffle: boolean
     blockShuffleSize: number
     autoSortMethod: string | null
+    franchiseAutomation: boolean
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["channel"]>
@@ -2243,6 +2282,7 @@ export interface ChannelFieldRefs {
   readonly blockShuffle: Prisma.FieldRef<"Channel", 'Boolean'>
   readonly blockShuffleSize: Prisma.FieldRef<"Channel", 'Int'>
   readonly autoSortMethod: Prisma.FieldRef<"Channel", 'String'>
+  readonly franchiseAutomation: Prisma.FieldRef<"Channel", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"Channel", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Channel", 'DateTime'>
 }

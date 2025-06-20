@@ -326,7 +326,8 @@ export class PlexService {
             directors: JSON.stringify(movie.Director?.map(d => d.tag) || []),
             writers: JSON.stringify(movie.Writer?.map(w => w.tag) || []),
             actors: JSON.stringify(movie.Role?.map(r => r.tag) || []),
-            countries: JSON.stringify(movie.Country?.map(c => c.tag) || [])
+            countries: JSON.stringify(movie.Country?.map(c => c.tag) || []),
+            collections: JSON.stringify(((movie as any).Collection?.map((co:any) => co.tag)) || [])
           },
           create: {
             libraryId: library.id,
@@ -344,7 +345,8 @@ export class PlexService {
             directors: JSON.stringify(movie.Director?.map(d => d.tag) || []),
             writers: JSON.stringify(movie.Writer?.map(w => w.tag) || []),
             actors: JSON.stringify(movie.Role?.map(r => r.tag) || []),
-            countries: JSON.stringify(movie.Country?.map(c => c.tag) || [])
+            countries: JSON.stringify(movie.Country?.map(c => c.tag) || []),
+            collections: JSON.stringify(((movie as any).Collection?.map((co:any) => co.tag)) || [])
           }
         })
       );
@@ -363,6 +365,21 @@ export class PlexService {
       await channelAutomationService.processAutomatedChannels();
     } catch (error) {
       console.error('Failed to process channel automation after movie sync:', error);
+    }
+
+    // Remove movies that no longer exist in the Plex library
+    try {
+      const plexRatingKeys = movies.map(m => m.ratingKey);
+      await prisma.mediaMovie.deleteMany({
+        where: {
+          libraryId: library.id,
+          ratingKey: {
+            notIn: plexRatingKeys.length > 0 ? plexRatingKeys : ['__none__'] // prevent empty array error
+          }
+        }
+      });
+    } catch (cleanupError) {
+      console.error(`Failed to remove deleted movies for library ${library.name}:`, cleanupError);
     }
   }
 
@@ -404,7 +421,8 @@ export class PlexService {
             directors: JSON.stringify(show.Director?.map(d => d.tag) || []),
             writers: JSON.stringify(show.Writer?.map(w => w.tag) || []),
             actors: JSON.stringify(show.Role?.map(r => r.tag) || []),
-            countries: JSON.stringify(show.Country?.map(c => c.tag) || [])
+            countries: JSON.stringify(show.Country?.map(c => c.tag) || []),
+            collections: JSON.stringify(((show as any).Collection?.map((co:any) => co.tag)) || [])
           },
           create: {
             libraryId: library.id,
@@ -421,7 +439,8 @@ export class PlexService {
             directors: JSON.stringify(show.Director?.map(d => d.tag) || []),
             writers: JSON.stringify(show.Writer?.map(w => w.tag) || []),
             actors: JSON.stringify(show.Role?.map(r => r.tag) || []),
-            countries: JSON.stringify(show.Country?.map(c => c.tag) || [])
+            countries: JSON.stringify(show.Country?.map(c => c.tag) || []),
+            collections: JSON.stringify(((show as any).Collection?.map((co:any) => co.tag)) || [])
           }
         });
 
@@ -441,6 +460,21 @@ export class PlexService {
       await channelAutomationService.processAutomatedChannels();
     } catch (error) {
       console.error('Failed to process channel automation after shows sync:', error);
+    }
+
+    // Remove shows that no longer exist in the Plex library (and cascade delete related episodes/programs)
+    try {
+      const plexRatingKeys = shows.map(s => s.ratingKey);
+      await prisma.mediaShow.deleteMany({
+        where: {
+          libraryId: library.id,
+          ratingKey: {
+            notIn: plexRatingKeys.length > 0 ? plexRatingKeys : ['__none__']
+          }
+        }
+      });
+    } catch (cleanupError) {
+      console.error(`Failed to remove deleted shows for library ${library.name}:`, cleanupError);
     }
   }
 
@@ -492,6 +526,24 @@ export class PlexService {
         );
 
         await Promise.all(upsertPromises);
+      }
+
+      // Cleanup: remove any episodes for this show that are no longer present (fast check using show episodes list)
+      try {
+        // Fetch the latest episode list for the show from Plex
+        const plexEpisodes = await plex.getShowEpisodes(server.url, server.token, show.ratingKey);
+        const plexRatingKeys = plexEpisodes.map((e: any) => e.ratingKey);
+
+        await prisma.mediaEpisode.deleteMany({
+          where: {
+            showId: show.id,
+            ratingKey: {
+              notIn: plexRatingKeys.length > 0 ? plexRatingKeys : ['__none__']
+            }
+          }
+        });
+      } catch (cleanupError) {
+        console.error(`Failed to remove deleted episodes for show ${show.title}:`, cleanupError);
       }
     } catch (error) {
       console.error(`Error syncing episodes for show ${show.title}:`, error);
