@@ -147,8 +147,20 @@ export WEB_PORT=${WEB_PORT:-3001}
 export DATABASE_URL=${DATABASE_URL:-"file:/app/database/production.db"}
 export BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-"$(openssl rand -hex 32)"}
 
-# Detect external HTTP port for nginx proxy
-if [ -n "$EXTERNAL_HTTP_PORT" ]; then
+# Handle external domain configuration (for Nginx Proxy Manager and reverse proxies)
+if [ -n "$EXTERNAL_DOMAIN" ]; then
+    # External domain provided (e.g., 247.midweststreams.us)
+    EXTERNAL_PROTOCOL=${EXTERNAL_PROTOCOL:-"https"}
+    export BETTER_AUTH_URL=${BETTER_AUTH_URL:-"${EXTERNAL_PROTOCOL}://${EXTERNAL_DOMAIN}"}
+    export CORS_ORIGIN=${CORS_ORIGIN:-"${EXTERNAL_PROTOCOL}://${EXTERNAL_DOMAIN}"}
+    export NEXT_PUBLIC_SERVER_URL=${NEXT_PUBLIC_SERVER_URL:-"${EXTERNAL_PROTOCOL}://${EXTERNAL_DOMAIN}"}
+    
+    if [ -z "$TRUSTED_ORIGINS" ]; then
+        export TRUSTED_ORIGINS="${EXTERNAL_PROTOCOL}://${EXTERNAL_DOMAIN},http://localhost:${PORT}"
+    fi
+    echo "🌐 External domain configured: ${EXTERNAL_DOMAIN}"
+elif [ -n "$EXTERNAL_HTTP_PORT" ]; then
+    # External HTTP port provided (for local access)
     export BETTER_AUTH_URL=${BETTER_AUTH_URL:-"http://localhost:${EXTERNAL_HTTP_PORT}"}
     export CORS_ORIGIN=${CORS_ORIGIN:-"http://localhost:${EXTERNAL_HTTP_PORT}"}
     export NEXT_PUBLIC_SERVER_URL=${NEXT_PUBLIC_SERVER_URL:-"http://localhost:${EXTERNAL_HTTP_PORT}"}
@@ -159,6 +171,7 @@ if [ -n "$EXTERNAL_HTTP_PORT" ]; then
         echo "   Example: TRUSTED_ORIGINS=\"http://localhost:${EXTERNAL_HTTP_PORT},http://YOUR_SERVER_IP:${EXTERNAL_HTTP_PORT}\""
     fi
 else
+    # Default local configuration
     export BETTER_AUTH_URL=${BETTER_AUTH_URL:-"http://localhost:${PORT}"}
     export CORS_ORIGIN=${CORS_ORIGIN:-"http://localhost:${WEB_PORT}"}
     export NEXT_PUBLIC_SERVER_URL=${NEXT_PUBLIC_SERVER_URL:-"http://localhost:${PORT}"}
@@ -242,9 +255,6 @@ else
 fi
 
 cd /app
-
-echo "=== Testing nginx configuration ==="
-nginx -t
 
 # Set up cleanup function
 cleanup() {

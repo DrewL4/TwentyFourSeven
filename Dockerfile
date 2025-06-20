@@ -62,7 +62,7 @@ RUN apt-get update && apt-get install -y \
     && mkdir -p /app/database /app/static /var/log/nginx /var/lib/nginx /run/nginx \
     && mkdir -p /var/lib/nginx/tmp/client_body /var/lib/nginx/tmp/proxy /var/lib/nginx/tmp/fastcgi /var/lib/nginx/tmp/uwsgi /var/lib/nginx/tmp/scgi \
     # Set proper ownership
-    && chown -R abc:users /app/database /app/static /var/log/nginx /var/lib/nginx /run/nginx \
+    && chown -R abc:users /app/database /app/static \
     # Ensure GPU device access permissions
     && mkdir -p /dev/dri
 
@@ -151,7 +151,9 @@ ENV FFPROBE_PATH=/usr/local/bin/ffprobe
 ENV PUID=99
 ENV PGID=100
 
-USER abc
+# Run as root to allow nginx to bind to port 80 and write PID files
+# Individual applications will drop privileges as needed
+# USER abc
 
 # Expose ports
 EXPOSE 80 3000 3001

@@ -8,7 +8,23 @@ export async function GET(request: NextRequest) {
       orderBy: { number: 'asc' }
     });
 
-    const baseUrl = process.env.BASE_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    // Auto-detect the correct base URL from the request
+    // Priority: X-Forwarded-Host (proxy) > Host header > fallback to environment
+    const forwardedHost = request.headers.get('x-forwarded-host');
+    const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+    const host = request.headers.get('host');
+    
+    let baseUrl: string;
+    if (forwardedHost) {
+      // Behind a proxy (like Nginx Proxy Manager)
+      baseUrl = `${forwardedProto}://${forwardedHost}`;
+    } else if (host) {
+      // Direct access
+      baseUrl = `${request.nextUrl.protocol}//${host}`;
+    } else {
+      // Fallback to environment or localhost
+      baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    }
     
     let m3u = '#EXTM3U\n';
     

@@ -52,7 +52,11 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number): Promise<
         where: { id: "singleton" },
     });
 
-    if (!ffmpegSettings || !ffmpegSettings.enableTranscoding) {
+    // Smart fallback: use environment detection if database settings not available
+    const useEnvironmentFallback = !ffmpegSettings;
+    const enableTranscoding = ffmpegSettings?.enableTranscoding ?? true; // Default to enabled
+
+    if (!enableTranscoding && !useEnvironmentFallback) {
         return [
             '-loglevel', 'error',
             '-ss', `${seekSeconds}`,
@@ -65,25 +69,35 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number): Promise<
 
     const args: string[] = [];
 
+    // Smart hardware acceleration detection
+    const enableHardwareAccel = useEnvironmentFallback ? 
+        (process.env.FFMPEG_HWACCEL_METHOD && process.env.FFMPEG_HWACCEL_METHOD !== 'none' && process.env.FFMPEG_HWACCEL_METHOD !== 'cpu') : 
+        (ffmpegSettings?.enableHardwareAccel && ffmpegSettings?.hardwareAccelType !== 'none');
+    
+    const hardwareAccelType = useEnvironmentFallback ? 
+        process.env.FFMPEG_HWACCEL_METHOD : 
+        ffmpegSettings?.hardwareAccelType;
+
     // Global options
-    if (ffmpegSettings.globalOptions) {
+    if (ffmpegSettings?.globalOptions) {
         args.push(...ffmpegSettings.globalOptions.split(' '));
     }
-    args.push('-loglevel', ffmpegSettings.logLevel || 'error');
+    args.push('-loglevel', ffmpegSettings?.logLevel || 'error');
 
     // Hardware acceleration input options
-    if (ffmpegSettings.enableHardwareAccel && ffmpegSettings.hardwareAccelType !== 'none') {
-        switch (ffmpegSettings.hardwareAccelType) {
+    if (enableHardwareAccel && hardwareAccelType !== 'none') {
+        switch (hardwareAccelType) {
             case 'nvenc':
-                args.push('-hwaccel', 'cuda'); // or 'cuvid' for older versions
+                args.push('-hwaccel', 'cuda');
                 break;
             case 'qsv':
                 args.push('-hwaccel', 'qsv');
                 break;
             case 'vaapi':
                 args.push('-hwaccel', 'vaapi');
-                if (ffmpegSettings.hardwareDevice) {
-                    args.push('-vaapi_device', ffmpegSettings.hardwareDevice);
+                const hardwareDevice = ffmpegSettings?.hardwareDevice || process.env.HARDWARE_ACCEL_DEVICE;
+                if (hardwareDevice) {
+                    args.push('-vaapi_device', hardwareDevice);
                 }
                 break;
             case 'videotoolbox':
@@ -94,58 +108,96 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number): Promise<
     
     // Input options
     args.push('-ss', `${seekSeconds}`);
-    if (ffmpegSettings.inputOptions) {
+    if (ffmpegSettings?.inputOptions) {
         args.push(...ffmpegSettings.inputOptions.split(' '));
     }
     args.push('-i', streamUrl);
 
-    // Video options
-    args.push('-c:v', ffmpegSettings.videoCodec || 'libx264');
-    if (ffmpegSettings.videoBitrate) {
+    // Video codec selection with smart fallbacks
+    let videoCodec: string;
+    if (useEnvironmentFallback) {
+        // Environment-based codec selection
+        switch (hardwareAccelType) {
+            case 'nvenc': videoCodec = 'h264_nvenc'; break;
+            case 'qsv': videoCodec = 'h264_qsv'; break;
+            case 'vaapi': videoCodec = 'h264_vaapi'; break;
+            case 'videotoolbox': videoCodec = 'h264_videotoolbox'; break;
+            default: videoCodec = 'libx264'; // CPU fallback
+        }
+    } else {
+        // Database settings
+        videoCodec = ffmpegSettings?.videoCodec || 'libx264';
+    }
+        
+    args.push('-c:v', videoCodec);
+    
+    if (ffmpegSettings?.videoBitrate) {
         args.push('-b:v', ffmpegSettings.videoBitrate);
+    } else if (useEnvironmentFallback) {
+        args.push('-b:v', '8000k'); // Default for hardware acceleration
     }
-    if (ffmpegSettings.videoBufSize) {
+    
+    if (ffmpegSettings?.videoBufSize) {
         args.push('-bufsize', ffmpegSettings.videoBufSize);
+    } else if (useEnvironmentFallback) {
+        args.push('-bufsize', '16000k'); // Default for hardware acceleration
     }
-    if (ffmpegSettings.videoPreset) {
+    
+    if (ffmpegSettings?.videoPreset) {
         args.push('-preset', ffmpegSettings.videoPreset);
+    } else if (useEnvironmentFallback) {
+        // Environment-based preset selection
+        switch (hardwareAccelType) {
+            case 'nvenc': args.push('-preset', 'p4'); break; // NVENC preset
+            case 'qsv': args.push('-preset', 'fast'); break; // QSV preset
+            case 'vaapi': args.push('-preset', 'fast'); break; // VAAPI preset
+            default: args.push('-preset', 'fast'); break; // CPU preset
+        }
     }
-    if (ffmpegSettings.videoCrf) {
+    
+    if (ffmpegSettings?.videoCrf) {
         args.push('-crf', `${ffmpegSettings.videoCrf}`);
     }
 
     // Video scaling/resolution
-    if (ffmpegSettings.targetResolution && ffmpegSettings.targetResolution !== 'original') {
+    if (ffmpegSettings?.targetResolution && ffmpegSettings.targetResolution !== 'original') {
         args.push('-vf', `scale=${ffmpegSettings.targetResolution}`);
     }
 
     // Audio options
-    args.push('-c:a', ffmpegSettings.audioCodec || 'aac');
-    if (ffmpegSettings.audioBitrate) {
+    args.push('-c:a', ffmpegSettings?.audioCodec || 'aac');
+    if (ffmpegSettings?.audioBitrate) {
         args.push('-b:a', ffmpegSettings.audioBitrate);
     }
-    if (ffmpegSettings.audioChannels) {
+    if (ffmpegSettings?.audioChannels) {
         args.push('-ac', `${ffmpegSettings.audioChannels}`);
     }
-     if (ffmpegSettings.audioSampleRate) {
+    if (ffmpegSettings?.audioSampleRate) {
         args.push('-ar', `${ffmpegSettings.audioSampleRate}`);
     }
 
     // Other options
-    if (ffmpegSettings.threads) {
+    if (ffmpegSettings?.threads) {
         args.push('-threads', `${ffmpegSettings.threads}`);
     }
-    if(ffmpegSettings.maxMuxingQueueSize) {
+    if (ffmpegSettings?.maxMuxingQueueSize) {
         args.push('-max_muxing_queue_size', `${ffmpegSettings.maxMuxingQueueSize}`);
     }
 
     // Output options
-    if (ffmpegSettings.outputOptions) {
+    if (ffmpegSettings?.outputOptions) {
         args.push(...ffmpegSettings.outputOptions.split(' '));
     }
 
-    args.push('-f', ffmpegSettings.outputFormat || 'mpegts');
+    args.push('-f', ffmpegSettings?.outputFormat || 'mpegts');
     args.push('-'); // Output to stdout
+
+    // Log the transcoding method being used
+    if (useEnvironmentFallback) {
+        console.log(`[FFmpeg] Using environment fallback - Hardware: ${hardwareAccelType || 'cpu'}, Codec: ${videoCodec}`);
+    } else {
+        console.log(`[FFmpeg] Using database settings - Hardware: ${ffmpegSettings?.enableHardwareAccel ? ffmpegSettings.hardwareAccelType : 'disabled'}, Codec: ${videoCodec}`);
+    }
 
     return args;
 }
