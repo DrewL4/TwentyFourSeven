@@ -1,18 +1,18 @@
-# NVIDIA GPU Setup Guide for Unraid (DizqueTV-Style Implementation)
+# NVIDIA GPU Setup Guide for Unraid (TwentyFourSeven-Style Implementation)
 
-This guide will walk you through setting up NVIDIA GPU hardware acceleration for TwentyFourSeven on Unraid, following the same proven patterns used by DizqueTV.
+This guide will walk you through setting up NVIDIA GPU hardware acceleration for TwentyFourSeven on Unraid, following the same proven patterns used by TwentyFourSeven.
 
-## Key Changes - DizqueTV-Style Implementation
+## Key Changes - TwentyFourSeven-Style Implementation
 
-We've completely rewritten the GPU detection and Docker configuration to match DizqueTV's proven approach:
+We've completely rewritten the GPU detection and Docker configuration to match TwentyFourSeven's proven approach:
 
 ### 🔄 **Major Changes Made**
 
-1. **Base Image**: Now uses `jrottenberg/ffmpeg:4.4-nvidia2004` (same as DizqueTV)
+1. **Base Image**: Now uses `jrottenberg/ffmpeg:4.4-nvidia2004` (same as TwentyFourSeven)
 2. **Simplified Runtime**: Uses `--runtime=nvidia` only (no `--gpus all`)
-3. **Environment Variables**: `NVIDIA_DRIVER_CAPABILITIES=all` (DizqueTV pattern)
+3. **Environment Variables**: `NVIDIA_DRIVER_CAPABILITIES=all` (TwentyFourSeven pattern)
 4. **Simplified Detection**: Direct nvidia-smi check instead of complex device probing
-5. **No Device Mapping**: Relies on NVIDIA runtime (like DizqueTV)
+5. **No Device Mapping**: Relies on NVIDIA runtime (like TwentyFourSeven)
 
 ## Prerequisites
 
@@ -49,7 +49,7 @@ You should see output like:
 
 ### Unraid Template Settings
 
-The template has been simplified to match DizqueTV's approach:
+The template has been simplified to match TwentyFourSeven's approach:
 
 #### **Required Settings:**
 - **ExtraParams**: `--restart=unless-stopped --runtime=nvidia`
@@ -187,16 +187,16 @@ NVIDIA_VISIBLE_DEVICES=0,2  # Use GPU 0 and 2 only
 - Fallback detection logic
 - Permission management scripts
 
-### ✅ **Added (DizqueTV Approach):**
+### ✅ **Added (TwentyFourSeven Approach):**
 - NVIDIA-enabled FFmpeg base image
 - Simple `--runtime=nvidia` only
 - `NVIDIA_DRIVER_CAPABILITIES=all`
 - Direct nvidia-smi detection
 - Simplified error handling
 
-## Comparison with DizqueTV
+## Comparison with TwentyFourSeven
 
-| Feature | DizqueTV | TwentyFourSeven |
+| Feature | TwentyFourSeven | TwentyFourSeven |
 |---------|----------|-----------------|
 | Base Image | `jrottenberg/ffmpeg:4.3-nvidia1804` | `jrottenberg/ffmpeg:4.4-nvidia2004` |
 | Runtime | `--runtime=nvidia` | `--runtime=nvidia` |
@@ -210,7 +210,7 @@ If you're still having issues:
 
 1. **Check Unraid System Log** for NVIDIA driver errors
 2. **Verify GPU Compatibility** with NVENC
-3. **Test with DizqueTV** - if DizqueTV works, TwentyFourSeven should too
+3. **Test with TwentyFourSeven** - if TwentyFourSeven works, TwentyFourSeven should too
 4. **Post Container Logs** showing the GPU detection section
 
-The new implementation follows DizqueTV's proven patterns exactly, so if DizqueTV works on your system, TwentyFourSeven should work identically. 
+The new implementation follows TwentyFourSeven's proven patterns exactly, so if TwentyFourSeven works on your system, TwentyFourSeven should work identically. 

@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
     const baseUrl = process.env.BASE_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
     
     const discovery = {
-      FriendlyName: "dizqueTV",
+      FriendlyName: "TwentyFourSeven",
       Manufacturer: "Silicondust",
       ModelNumber: "HDTC-2US",
       FirmwareName: "hdhomerun3_atsc",

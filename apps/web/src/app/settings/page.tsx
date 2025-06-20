@@ -18,7 +18,7 @@ export default function SettingsPage() {
     concurrentStreams: 1,
     hdhrActive: true,
     hdhrDeviceId: '12345678',
-    hdhrFriendlyName: 'My DizqueTV',
+    hdhrFriendlyName: 'My TwentyFourSeven',
     hdhrTunerCount: 2,
     guideDays: 3
   });
@@ -89,7 +89,7 @@ export default function SettingsPage() {
             Settings
           </h1>
           <p className="text-muted-foreground mt-1">
-            Configure your DizqueTV server and streaming settings
+            Configure your TwentyFourSeven server and streaming settings
           </p>
         </div>
         
@@ -318,7 +318,7 @@ export default function SettingsPage() {
                       id="hdhrFriendlyName"
                       value={settings.hdhrFriendlyName}
                       onChange={(e) => setSettings(prev => ({ ...prev, hdhrFriendlyName: e.target.value }))}
-                      placeholder="My DizqueTV"
+                      placeholder="My TwentyFourSeven"
                     />
                     <p className="text-xs text-muted-foreground">
                       Name shown in Plex and other applications

@@ -58,7 +58,7 @@ type Channel = {
   channelMovies?: ChannelMovie[];
   fillerContent?: any[];
   watermarks?: any[];
-  // DizqueTV features
+  // TwentyFourSeven features
   isOnDemand?: boolean;
   episodeMemoryEnabled?: boolean;
   transcodingEnabled?: boolean;
@@ -2340,7 +2340,7 @@ function ChannelsPageContent() {
     }
   };
 
-  // Get channel content for display (expanded episodes + movies like DizqueTV)
+  // Get channel content for display (expanded episodes + movies like TwentyFourSeven)
   const getChannelContent = () => {
     if (!selectedChannelQuery.data) return [];
     
@@ -3035,7 +3035,7 @@ function ChannelsPageContent() {
                 </CardHeader>
               </Card>
 
-                            {/* Programming Content - DizqueTV Style */}
+                            {/* Programming Content - TwentyFourSeven Style */}
               <Tabs defaultValue="programming" className="space-y-6">
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="programming" className="touch-manipulation">Programming</TabsTrigger>

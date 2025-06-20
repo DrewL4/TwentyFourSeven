@@ -30,7 +30,7 @@ ENV DISABLE_FONT_OPTIMIZATION=1
 # Build applications
 RUN npm run build
 
-# Production stage - use NVIDIA-enabled FFmpeg base (following DizqueTV pattern)
+# Production stage - use NVIDIA-enabled FFmpeg base (following TwentyFourSeven pattern)
 FROM jrottenberg/ffmpeg:4.4-nvidia2004 AS runner
 WORKDIR /app
 
@@ -66,7 +66,7 @@ RUN apt-get update && apt-get install -y \
     # Ensure GPU device access permissions
     && mkdir -p /dev/dri
 
-# Link ffmpeg to standard location (DizqueTV pattern)
+# Link ffmpeg to standard location (TwentyFourSeven pattern)
 RUN ln -sf /usr/local/bin/ffmpeg /usr/bin/ffmpeg \
     && ln -sf /usr/local/bin/ffprobe /usr/bin/ffprobe
 
@@ -106,7 +106,7 @@ RUN chmod +x /app/start.sh
 
 # Create GPU device permission script (simplified for NVIDIA base image)
 RUN echo '#!/bin/bash' > /app/init-gpu-permissions.sh && \
-    echo '# GPU Device Permission Handler (DizqueTV-style simplified approach)' >> /app/init-gpu-permissions.sh && \
+    echo '# GPU Device Permission Handler (TwentyFourSeven-style simplified approach)' >> /app/init-gpu-permissions.sh && \
     echo 'echo "🔧 Setting up GPU device permissions..."' >> /app/init-gpu-permissions.sh && \
     echo '' >> /app/init-gpu-permissions.sh && \
     echo '# Handle NVIDIA devices (should be available via NVIDIA runtime)' >> /app/init-gpu-permissions.sh && \
@@ -141,7 +141,7 @@ RUN echo '#!/bin/bash' > /app/init-gpu-permissions.sh && \
 # Ensure abc user owns all app directories
 RUN chown -R abc:users /app
 
-# Set hardware acceleration environment variables (DizqueTV pattern)
+# Set hardware acceleration environment variables (TwentyFourSeven pattern)
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=all
 ENV HARDWARE_ACCEL_DEVICE=/dev/nvidia0

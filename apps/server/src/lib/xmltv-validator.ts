@@ -182,7 +182,7 @@ export class XmltvValidator {
       warnings.push('Missing DTD declaration');
     }
 
-    if (!xmltv.includes('<tv generator-info-name="dizqueTV"')) {
+    if (!xmltv.includes('<tv generator-info-name="TwentyFourSeven"')) {
       errors.push('Missing or incorrect TV root element');
     }
 

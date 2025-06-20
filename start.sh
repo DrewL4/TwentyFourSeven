@@ -9,11 +9,11 @@ echo "Working directory: $(pwd)"
 echo "Environment: NODE_ENV=$NODE_ENV"
 echo "PUID: ${PUID:-99}, PGID: ${PGID:-100}"
 
-# Run GPU permissions setup (DizqueTV-style simplified)
+# Run GPU permissions setup (TwentyFourSeven-style simplified)
 echo "=== Setting up GPU permissions ==="
 /app/init-gpu-permissions.sh
 
-# Hardware Acceleration and GPU Detection (DizqueTV-style simplified)
+# Hardware Acceleration and GPU Detection (TwentyFourSeven-style simplified)
 echo "=== Hardware Acceleration & GPU Detection ==="
 
 # Set default values
@@ -23,9 +23,9 @@ export GPU_DEVICE_COUNT=0
 export FFMPEG_HWACCEL_METHOD="cpu"
 
 if [ "$GPU_DETECTION_ENABLED" != "false" ]; then
-    echo "🔍 Starting GPU detection (DizqueTV-style)..."
+    echo "🔍 Starting GPU detection (TwentyFourSeven-style)..."
     
-    # NVIDIA GPU Detection (DizqueTV pattern - simplified)
+    # NVIDIA GPU Detection (TwentyFourSeven pattern - simplified)
     echo "--- NVIDIA GPU Detection ---"
     echo "🔍 NVIDIA_VISIBLE_DEVICES: '$NVIDIA_VISIBLE_DEVICES'"
     echo "🔍 NVIDIA_DRIVER_CAPABILITIES: '$NVIDIA_DRIVER_CAPABILITIES'"
@@ -86,7 +86,7 @@ echo "   HARDWARE_ACCELERATION_AVAILABLE: ${HARDWARE_ACCELERATION_AVAILABLE}"
 echo "   GPU_DEVICE_COUNT: ${GPU_DEVICE_COUNT}"
 echo "   HARDWARE_ACCEL_DEVICE: ${HARDWARE_ACCEL_DEVICE}"
 
-# FFMPEG Configuration and Testing (DizqueTV-style simplified)
+# FFMPEG Configuration and Testing (TwentyFourSeven-style simplified)
 echo "=== FFMPEG Configuration ==="
 
 # Set FFMPEG paths

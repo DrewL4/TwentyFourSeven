@@ -764,8 +764,8 @@ export default function PlexSettingsPage() {
             </CardTitle>
             <CardDescription>
               {librarySelectionServer?.id 
-                ? `Manage which libraries from "${librarySelectionServer?.name}" are synced with DizqueTV.`
-                : `Choose which libraries from "${librarySelectionServer?.name}" you want to sync with DizqueTV. You can change this selection later.`
+                ? `Manage which libraries from "${librarySelectionServer?.name}" are synced with TwentyFourSeven.`
+                : `Choose which libraries from "${librarySelectionServer?.name}" you want to sync with TwentyFourSeven. You can change this selection later.`
               }
             </CardDescription>
           </CardHeader>
@@ -1079,7 +1079,7 @@ export default function PlexSettingsPage() {
         <AlertDescription>
           <strong>Getting Started:</strong> Sign in with your Plex account to automatically discover servers, 
           or add servers manually using their IP address and access token. Once connected, sync libraries 
-          to import your media for use in DizqueTV channels.
+          to import your media for use in TwentyFourSeven channels.
         </AlertDescription>
       </Alert>
 
@@ -1091,7 +1091,7 @@ export default function PlexSettingsPage() {
             Webhook Configuration
           </CardTitle>
           <CardDescription>
-            Real-time sync of new content from Plex to DizqueTV
+            Real-time sync of new content from Plex to TwentyFourSeven
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

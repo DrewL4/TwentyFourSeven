@@ -26,7 +26,7 @@
   <Config Name="Trusted Origins" Target="TRUSTED_ORIGINS" Default="" Mode="" Description="Comma-separated list of allowed origins for authentication. REQUIRED for external access! Example: http://localhost:[PORT:80],http://192.168.1.100:[PORT:80] (replace 192.168.1.100 with your Unraid server IP)" Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="Authentication Secret" Target="BETTER_AUTH_SECRET" Default="" Mode="" Description="Secret key for authentication. Leave empty to auto-generate a secure key. For production, set a strong custom secret (32+ characters)." Type="Variable" Display="always" Required="false" Mask="true"/>
   
-  <!-- GPU Configuration (DizqueTV-style simplified) -->
+  <!-- GPU Configuration (TwentyFourSeven-style simplified) -->
   <Config Name="Enable GPU Detection" Target="GPU_DETECTION_ENABLED" Default="true" Mode="" Description="Enable automatic GPU detection and hardware acceleration support." Type="Variable" Display="always" Required="false" Mask="false">true</Config>
   <Config Name="Enable Hardware Acceleration" Target="ENABLE_HARDWARE_ACCEL" Default="true" Mode="" Description="Enable hardware-accelerated video transcoding when supported GPU is detected." Type="Variable" Display="always" Required="false" Mask="false">true</Config>
   <Config Name="NVIDIA Visible Devices" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="Make NVIDIA GPUs visible to container. Set to 'all' for all GPUs or specific GPU IDs (e.g., '0,1'). If you have multiple GPUs and want to use specific ones, find GPU IDs with 'nvidia-smi -L' on your Unraid host." Type="Variable" Display="always" Required="false" Mask="false">all</Config>

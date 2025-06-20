@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     });
     let xmltv = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xmltv += '<!DOCTYPE tv SYSTEM "xmltv.dtd">\n';
-    xmltv += '<tv generator-info-name="dizqueTV" generator-info-url="https://github.com/vexorian/dizquetv" source-info-name="dizqueTV">\n';
+    xmltv += '<tv generator-info-name="TwentyFourSeven" generator-info-url="https://github.com/vexorian/TwentyFourSeven" source-info-name="TwentyFourSeven">\n';
     for (const channel of channels) {
       xmltv += `  <channel id="${escapeXml(channel.number.toString())}">\n`;
       xmltv += `    <display-name lang="en">${escapeXml(channel.name)}</display-name>\n`;

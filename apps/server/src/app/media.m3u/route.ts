@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(m3u, {
       headers: {
         'Content-Type': 'application/vnd.apple.mpegurl',
-        'Content-Disposition': 'attachment; filename="dizquetv.m3u"'
+        'Content-Disposition': 'attachment; filename="247.m3u"'
       }
     });
   } catch (error) {
