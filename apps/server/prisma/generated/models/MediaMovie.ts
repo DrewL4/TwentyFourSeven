@@ -51,6 +51,7 @@ export type MediaMovieMinAggregateOutputType = {
   writers: string | null
   actors: string | null
   countries: string | null
+  collections: string | null
   libraryId: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -72,6 +73,7 @@ export type MediaMovieMaxAggregateOutputType = {
   writers: string | null
   actors: string | null
   countries: string | null
+  collections: string | null
   libraryId: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -93,6 +95,7 @@ export type MediaMovieCountAggregateOutputType = {
   writers: number
   actors: number
   countries: number
+  collections: number
   libraryId: number
   createdAt: number
   updatedAt: number
@@ -126,6 +129,7 @@ export type MediaMovieMinAggregateInputType = {
   writers?: true
   actors?: true
   countries?: true
+  collections?: true
   libraryId?: true
   createdAt?: true
   updatedAt?: true
@@ -147,6 +151,7 @@ export type MediaMovieMaxAggregateInputType = {
   writers?: true
   actors?: true
   countries?: true
+  collections?: true
   libraryId?: true
   createdAt?: true
   updatedAt?: true
@@ -168,6 +173,7 @@ export type MediaMovieCountAggregateInputType = {
   writers?: true
   actors?: true
   countries?: true
+  collections?: true
   libraryId?: true
   createdAt?: true
   updatedAt?: true
@@ -276,6 +282,7 @@ export type MediaMovieGroupByOutputType = {
   writers: string | null
   actors: string | null
   countries: string | null
+  collections: string | null
   libraryId: string
   createdAt: Date
   updatedAt: Date
@@ -320,6 +327,7 @@ export type MediaMovieWhereInput = {
   writers?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
   actors?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
   countries?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
+  collections?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
   libraryId?: Prisma.StringFilter<"MediaMovie"> | string
   createdAt?: Prisma.DateTimeFilter<"MediaMovie"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MediaMovie"> | Date | string
@@ -344,6 +352,7 @@ export type MediaMovieOrderByWithRelationInput = {
   writers?: Prisma.SortOrderInput | Prisma.SortOrder
   actors?: Prisma.SortOrderInput | Prisma.SortOrder
   countries?: Prisma.SortOrderInput | Prisma.SortOrder
+  collections?: Prisma.SortOrderInput | Prisma.SortOrder
   libraryId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -372,6 +381,7 @@ export type MediaMovieWhereUniqueInput = Prisma.AtLeast<{
   writers?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
   actors?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
   countries?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
+  collections?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
   libraryId?: Prisma.StringFilter<"MediaMovie"> | string
   createdAt?: Prisma.DateTimeFilter<"MediaMovie"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MediaMovie"> | Date | string
@@ -396,6 +406,7 @@ export type MediaMovieOrderByWithAggregationInput = {
   writers?: Prisma.SortOrderInput | Prisma.SortOrder
   actors?: Prisma.SortOrderInput | Prisma.SortOrder
   countries?: Prisma.SortOrderInput | Prisma.SortOrder
+  collections?: Prisma.SortOrderInput | Prisma.SortOrder
   libraryId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -425,6 +436,7 @@ export type MediaMovieScalarWhereWithAggregatesInput = {
   writers?: Prisma.StringNullableWithAggregatesFilter<"MediaMovie"> | string | null
   actors?: Prisma.StringNullableWithAggregatesFilter<"MediaMovie"> | string | null
   countries?: Prisma.StringNullableWithAggregatesFilter<"MediaMovie"> | string | null
+  collections?: Prisma.StringNullableWithAggregatesFilter<"MediaMovie"> | string | null
   libraryId?: Prisma.StringWithAggregatesFilter<"MediaMovie"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"MediaMovie"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"MediaMovie"> | Date | string
@@ -446,6 +458,7 @@ export type MediaMovieCreateInput = {
   writers?: string | null
   actors?: string | null
   countries?: string | null
+  collections?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   library: Prisma.MediaLibraryCreateNestedOneWithoutMoviesInput
@@ -469,6 +482,7 @@ export type MediaMovieUncheckedCreateInput = {
   writers?: string | null
   actors?: string | null
   countries?: string | null
+  collections?: string | null
   libraryId: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -492,6 +506,7 @@ export type MediaMovieUpdateInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   library?: Prisma.MediaLibraryUpdateOneRequiredWithoutMoviesNestedInput
@@ -515,6 +530,7 @@ export type MediaMovieUncheckedUpdateInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   libraryId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -538,6 +554,7 @@ export type MediaMovieCreateManyInput = {
   writers?: string | null
   actors?: string | null
   countries?: string | null
+  collections?: string | null
   libraryId: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -559,6 +576,7 @@ export type MediaMovieUpdateManyMutationInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -579,6 +597,7 @@ export type MediaMovieUncheckedUpdateManyInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   libraryId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -615,6 +634,7 @@ export type MediaMovieCountOrderByAggregateInput = {
   writers?: Prisma.SortOrder
   actors?: Prisma.SortOrder
   countries?: Prisma.SortOrder
+  collections?: Prisma.SortOrder
   libraryId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -641,6 +661,7 @@ export type MediaMovieMaxOrderByAggregateInput = {
   writers?: Prisma.SortOrder
   actors?: Prisma.SortOrder
   countries?: Prisma.SortOrder
+  collections?: Prisma.SortOrder
   libraryId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -662,6 +683,7 @@ export type MediaMovieMinOrderByAggregateInput = {
   writers?: Prisma.SortOrder
   actors?: Prisma.SortOrder
   countries?: Prisma.SortOrder
+  collections?: Prisma.SortOrder
   libraryId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -770,6 +792,7 @@ export type MediaMovieCreateWithoutLibraryInput = {
   writers?: string | null
   actors?: string | null
   countries?: string | null
+  collections?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   programs?: Prisma.ProgramCreateNestedManyWithoutMovieInput
@@ -792,6 +815,7 @@ export type MediaMovieUncheckedCreateWithoutLibraryInput = {
   writers?: string | null
   actors?: string | null
   countries?: string | null
+  collections?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   programs?: Prisma.ProgramUncheckedCreateNestedManyWithoutMovieInput
@@ -842,6 +866,7 @@ export type MediaMovieScalarWhereInput = {
   writers?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
   actors?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
   countries?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
+  collections?: Prisma.StringNullableFilter<"MediaMovie"> | string | null
   libraryId?: Prisma.StringFilter<"MediaMovie"> | string
   createdAt?: Prisma.DateTimeFilter<"MediaMovie"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MediaMovie"> | Date | string
@@ -863,6 +888,7 @@ export type MediaMovieCreateWithoutProgramsInput = {
   writers?: string | null
   actors?: string | null
   countries?: string | null
+  collections?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   library: Prisma.MediaLibraryCreateNestedOneWithoutMoviesInput
@@ -885,6 +911,7 @@ export type MediaMovieUncheckedCreateWithoutProgramsInput = {
   writers?: string | null
   actors?: string | null
   countries?: string | null
+  collections?: string | null
   libraryId: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -923,6 +950,7 @@ export type MediaMovieUpdateWithoutProgramsInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   library?: Prisma.MediaLibraryUpdateOneRequiredWithoutMoviesNestedInput
@@ -945,6 +973,7 @@ export type MediaMovieUncheckedUpdateWithoutProgramsInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   libraryId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -967,6 +996,7 @@ export type MediaMovieCreateWithoutChannelMoviesInput = {
   writers?: string | null
   actors?: string | null
   countries?: string | null
+  collections?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   library: Prisma.MediaLibraryCreateNestedOneWithoutMoviesInput
@@ -989,6 +1019,7 @@ export type MediaMovieUncheckedCreateWithoutChannelMoviesInput = {
   writers?: string | null
   actors?: string | null
   countries?: string | null
+  collections?: string | null
   libraryId: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1027,6 +1058,7 @@ export type MediaMovieUpdateWithoutChannelMoviesInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   library?: Prisma.MediaLibraryUpdateOneRequiredWithoutMoviesNestedInput
@@ -1049,6 +1081,7 @@ export type MediaMovieUncheckedUpdateWithoutChannelMoviesInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   libraryId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1071,6 +1104,7 @@ export type MediaMovieCreateManyLibraryInput = {
   writers?: string | null
   actors?: string | null
   countries?: string | null
+  collections?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -1091,6 +1125,7 @@ export type MediaMovieUpdateWithoutLibraryInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   programs?: Prisma.ProgramUpdateManyWithoutMovieNestedInput
@@ -1113,6 +1148,7 @@ export type MediaMovieUncheckedUpdateWithoutLibraryInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   programs?: Prisma.ProgramUncheckedUpdateManyWithoutMovieNestedInput
@@ -1135,6 +1171,7 @@ export type MediaMovieUncheckedUpdateManyWithoutLibraryInput = {
   writers?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   actors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   countries?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  collections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -1195,6 +1232,7 @@ export type MediaMovieSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   writers?: boolean
   actors?: boolean
   countries?: boolean
+  collections?: boolean
   libraryId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -1220,6 +1258,7 @@ export type MediaMovieSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   writers?: boolean
   actors?: boolean
   countries?: boolean
+  collections?: boolean
   libraryId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -1242,6 +1281,7 @@ export type MediaMovieSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   writers?: boolean
   actors?: boolean
   countries?: boolean
+  collections?: boolean
   libraryId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -1264,12 +1304,13 @@ export type MediaMovieSelectScalar = {
   writers?: boolean
   actors?: boolean
   countries?: boolean
+  collections?: boolean
   libraryId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type MediaMovieOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "year" | "summary" | "poster" | "backdrop" | "duration" | "ratingKey" | "studio" | "contentRating" | "genres" | "directors" | "writers" | "actors" | "countries" | "libraryId" | "createdAt" | "updatedAt", ExtArgs["result"]["mediaMovie"]>
+export type MediaMovieOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "title" | "year" | "summary" | "poster" | "backdrop" | "duration" | "ratingKey" | "studio" | "contentRating" | "genres" | "directors" | "writers" | "actors" | "countries" | "collections" | "libraryId" | "createdAt" | "updatedAt", ExtArgs["result"]["mediaMovie"]>
 export type MediaMovieInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   library?: boolean | Prisma.MediaLibraryDefaultArgs<ExtArgs>
   programs?: boolean | Prisma.MediaMovie$programsArgs<ExtArgs>
@@ -1306,6 +1347,7 @@ export type $MediaMoviePayload<ExtArgs extends runtime.Types.Extensions.Internal
     writers: string | null
     actors: string | null
     countries: string | null
+    collections: string | null
     libraryId: string
     createdAt: Date
     updatedAt: Date
@@ -1750,6 +1792,7 @@ export interface MediaMovieFieldRefs {
   readonly writers: Prisma.FieldRef<"MediaMovie", 'String'>
   readonly actors: Prisma.FieldRef<"MediaMovie", 'String'>
   readonly countries: Prisma.FieldRef<"MediaMovie", 'String'>
+  readonly collections: Prisma.FieldRef<"MediaMovie", 'String'>
   readonly libraryId: Prisma.FieldRef<"MediaMovie", 'String'>
   readonly createdAt: Prisma.FieldRef<"MediaMovie", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"MediaMovie", 'DateTime'>

@@ -53,6 +53,7 @@ export type ChannelShowMinAggregateOutputType = {
   lastPlayedAt: Date | null
   respectOrder: boolean | null
   maxConsecutiveEpisodes: number | null
+  autoAddNewEpisodes: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -71,6 +72,7 @@ export type ChannelShowMaxAggregateOutputType = {
   lastPlayedAt: Date | null
   respectOrder: boolean | null
   maxConsecutiveEpisodes: number | null
+  autoAddNewEpisodes: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -89,6 +91,7 @@ export type ChannelShowCountAggregateOutputType = {
   lastPlayedAt: number
   respectOrder: number
   maxConsecutiveEpisodes: number
+  autoAddNewEpisodes: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -123,6 +126,7 @@ export type ChannelShowMinAggregateInputType = {
   lastPlayedAt?: true
   respectOrder?: true
   maxConsecutiveEpisodes?: true
+  autoAddNewEpisodes?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -141,6 +145,7 @@ export type ChannelShowMaxAggregateInputType = {
   lastPlayedAt?: true
   respectOrder?: true
   maxConsecutiveEpisodes?: true
+  autoAddNewEpisodes?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -159,6 +164,7 @@ export type ChannelShowCountAggregateInputType = {
   lastPlayedAt?: true
   respectOrder?: true
   maxConsecutiveEpisodes?: true
+  autoAddNewEpisodes?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -264,6 +270,7 @@ export type ChannelShowGroupByOutputType = {
   lastPlayedAt: Date | null
   respectOrder: boolean
   maxConsecutiveEpisodes: number
+  autoAddNewEpisodes: boolean
   createdAt: Date
   updatedAt: Date
   _count: ChannelShowCountAggregateOutputType | null
@@ -305,6 +312,7 @@ export type ChannelShowWhereInput = {
   lastPlayedAt?: Prisma.DateTimeNullableFilter<"ChannelShow"> | Date | string | null
   respectOrder?: Prisma.BoolFilter<"ChannelShow"> | boolean
   maxConsecutiveEpisodes?: Prisma.IntFilter<"ChannelShow"> | number
+  autoAddNewEpisodes?: Prisma.BoolFilter<"ChannelShow"> | boolean
   createdAt?: Prisma.DateTimeFilter<"ChannelShow"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"ChannelShow"> | Date | string
   channel?: Prisma.XOR<Prisma.ChannelScalarRelationFilter, Prisma.ChannelWhereInput>
@@ -325,6 +333,7 @@ export type ChannelShowOrderByWithRelationInput = {
   lastPlayedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   respectOrder?: Prisma.SortOrder
   maxConsecutiveEpisodes?: Prisma.SortOrder
+  autoAddNewEpisodes?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   channel?: Prisma.ChannelOrderByWithRelationInput
@@ -349,6 +358,7 @@ export type ChannelShowWhereUniqueInput = Prisma.AtLeast<{
   lastPlayedAt?: Prisma.DateTimeNullableFilter<"ChannelShow"> | Date | string | null
   respectOrder?: Prisma.BoolFilter<"ChannelShow"> | boolean
   maxConsecutiveEpisodes?: Prisma.IntFilter<"ChannelShow"> | number
+  autoAddNewEpisodes?: Prisma.BoolFilter<"ChannelShow"> | boolean
   createdAt?: Prisma.DateTimeFilter<"ChannelShow"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"ChannelShow"> | Date | string
   channel?: Prisma.XOR<Prisma.ChannelScalarRelationFilter, Prisma.ChannelWhereInput>
@@ -369,6 +379,7 @@ export type ChannelShowOrderByWithAggregationInput = {
   lastPlayedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   respectOrder?: Prisma.SortOrder
   maxConsecutiveEpisodes?: Prisma.SortOrder
+  autoAddNewEpisodes?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.ChannelShowCountOrderByAggregateInput
@@ -395,6 +406,7 @@ export type ChannelShowScalarWhereWithAggregatesInput = {
   lastPlayedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"ChannelShow"> | Date | string | null
   respectOrder?: Prisma.BoolWithAggregatesFilter<"ChannelShow"> | boolean
   maxConsecutiveEpisodes?: Prisma.IntWithAggregatesFilter<"ChannelShow"> | number
+  autoAddNewEpisodes?: Prisma.BoolWithAggregatesFilter<"ChannelShow"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"ChannelShow"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"ChannelShow"> | Date | string
 }
@@ -411,6 +423,7 @@ export type ChannelShowCreateInput = {
   lastPlayedAt?: Date | string | null
   respectOrder?: boolean
   maxConsecutiveEpisodes?: number
+  autoAddNewEpisodes?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   channel: Prisma.ChannelCreateNestedOneWithoutChannelShowsInput
@@ -431,6 +444,7 @@ export type ChannelShowUncheckedCreateInput = {
   lastPlayedAt?: Date | string | null
   respectOrder?: boolean
   maxConsecutiveEpisodes?: number
+  autoAddNewEpisodes?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -447,6 +461,7 @@ export type ChannelShowUpdateInput = {
   lastPlayedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   respectOrder?: Prisma.BoolFieldUpdateOperationsInput | boolean
   maxConsecutiveEpisodes?: Prisma.IntFieldUpdateOperationsInput | number
+  autoAddNewEpisodes?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   channel?: Prisma.ChannelUpdateOneRequiredWithoutChannelShowsNestedInput
@@ -467,6 +482,7 @@ export type ChannelShowUncheckedUpdateInput = {
   lastPlayedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   respectOrder?: Prisma.BoolFieldUpdateOperationsInput | boolean
   maxConsecutiveEpisodes?: Prisma.IntFieldUpdateOperationsInput | number
+  autoAddNewEpisodes?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -485,6 +501,7 @@ export type ChannelShowCreateManyInput = {
   lastPlayedAt?: Date | string | null
   respectOrder?: boolean
   maxConsecutiveEpisodes?: number
+  autoAddNewEpisodes?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -501,6 +518,7 @@ export type ChannelShowUpdateManyMutationInput = {
   lastPlayedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   respectOrder?: Prisma.BoolFieldUpdateOperationsInput | boolean
   maxConsecutiveEpisodes?: Prisma.IntFieldUpdateOperationsInput | number
+  autoAddNewEpisodes?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -519,6 +537,7 @@ export type ChannelShowUncheckedUpdateManyInput = {
   lastPlayedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   respectOrder?: Prisma.BoolFieldUpdateOperationsInput | boolean
   maxConsecutiveEpisodes?: Prisma.IntFieldUpdateOperationsInput | number
+  autoAddNewEpisodes?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -552,6 +571,7 @@ export type ChannelShowCountOrderByAggregateInput = {
   lastPlayedAt?: Prisma.SortOrder
   respectOrder?: Prisma.SortOrder
   maxConsecutiveEpisodes?: Prisma.SortOrder
+  autoAddNewEpisodes?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -577,6 +597,7 @@ export type ChannelShowMaxOrderByAggregateInput = {
   lastPlayedAt?: Prisma.SortOrder
   respectOrder?: Prisma.SortOrder
   maxConsecutiveEpisodes?: Prisma.SortOrder
+  autoAddNewEpisodes?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -595,6 +616,7 @@ export type ChannelShowMinOrderByAggregateInput = {
   lastPlayedAt?: Prisma.SortOrder
   respectOrder?: Prisma.SortOrder
   maxConsecutiveEpisodes?: Prisma.SortOrder
+  autoAddNewEpisodes?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -702,6 +724,7 @@ export type ChannelShowCreateWithoutShowInput = {
   lastPlayedAt?: Date | string | null
   respectOrder?: boolean
   maxConsecutiveEpisodes?: number
+  autoAddNewEpisodes?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   channel: Prisma.ChannelCreateNestedOneWithoutChannelShowsInput
@@ -720,6 +743,7 @@ export type ChannelShowUncheckedCreateWithoutShowInput = {
   lastPlayedAt?: Date | string | null
   respectOrder?: boolean
   maxConsecutiveEpisodes?: number
+  autoAddNewEpisodes?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -766,6 +790,7 @@ export type ChannelShowScalarWhereInput = {
   lastPlayedAt?: Prisma.DateTimeNullableFilter<"ChannelShow"> | Date | string | null
   respectOrder?: Prisma.BoolFilter<"ChannelShow"> | boolean
   maxConsecutiveEpisodes?: Prisma.IntFilter<"ChannelShow"> | number
+  autoAddNewEpisodes?: Prisma.BoolFilter<"ChannelShow"> | boolean
   createdAt?: Prisma.DateTimeFilter<"ChannelShow"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"ChannelShow"> | Date | string
 }
@@ -782,6 +807,7 @@ export type ChannelShowCreateWithoutChannelInput = {
   lastPlayedAt?: Date | string | null
   respectOrder?: boolean
   maxConsecutiveEpisodes?: number
+  autoAddNewEpisodes?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   show: Prisma.MediaShowCreateNestedOneWithoutChannelShowsInput
@@ -800,6 +826,7 @@ export type ChannelShowUncheckedCreateWithoutChannelInput = {
   lastPlayedAt?: Date | string | null
   respectOrder?: boolean
   maxConsecutiveEpisodes?: number
+  autoAddNewEpisodes?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -842,6 +869,7 @@ export type ChannelShowCreateManyShowInput = {
   lastPlayedAt?: Date | string | null
   respectOrder?: boolean
   maxConsecutiveEpisodes?: number
+  autoAddNewEpisodes?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -858,6 +886,7 @@ export type ChannelShowUpdateWithoutShowInput = {
   lastPlayedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   respectOrder?: Prisma.BoolFieldUpdateOperationsInput | boolean
   maxConsecutiveEpisodes?: Prisma.IntFieldUpdateOperationsInput | number
+  autoAddNewEpisodes?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   channel?: Prisma.ChannelUpdateOneRequiredWithoutChannelShowsNestedInput
@@ -876,6 +905,7 @@ export type ChannelShowUncheckedUpdateWithoutShowInput = {
   lastPlayedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   respectOrder?: Prisma.BoolFieldUpdateOperationsInput | boolean
   maxConsecutiveEpisodes?: Prisma.IntFieldUpdateOperationsInput | number
+  autoAddNewEpisodes?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -893,6 +923,7 @@ export type ChannelShowUncheckedUpdateManyWithoutShowInput = {
   lastPlayedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   respectOrder?: Prisma.BoolFieldUpdateOperationsInput | boolean
   maxConsecutiveEpisodes?: Prisma.IntFieldUpdateOperationsInput | number
+  autoAddNewEpisodes?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -910,6 +941,7 @@ export type ChannelShowCreateManyChannelInput = {
   lastPlayedAt?: Date | string | null
   respectOrder?: boolean
   maxConsecutiveEpisodes?: number
+  autoAddNewEpisodes?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -926,6 +958,7 @@ export type ChannelShowUpdateWithoutChannelInput = {
   lastPlayedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   respectOrder?: Prisma.BoolFieldUpdateOperationsInput | boolean
   maxConsecutiveEpisodes?: Prisma.IntFieldUpdateOperationsInput | number
+  autoAddNewEpisodes?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   show?: Prisma.MediaShowUpdateOneRequiredWithoutChannelShowsNestedInput
@@ -944,6 +977,7 @@ export type ChannelShowUncheckedUpdateWithoutChannelInput = {
   lastPlayedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   respectOrder?: Prisma.BoolFieldUpdateOperationsInput | boolean
   maxConsecutiveEpisodes?: Prisma.IntFieldUpdateOperationsInput | number
+  autoAddNewEpisodes?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -961,6 +995,7 @@ export type ChannelShowUncheckedUpdateManyWithoutChannelInput = {
   lastPlayedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   respectOrder?: Prisma.BoolFieldUpdateOperationsInput | boolean
   maxConsecutiveEpisodes?: Prisma.IntFieldUpdateOperationsInput | number
+  autoAddNewEpisodes?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -981,6 +1016,7 @@ export type ChannelShowSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   lastPlayedAt?: boolean
   respectOrder?: boolean
   maxConsecutiveEpisodes?: boolean
+  autoAddNewEpisodes?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   channel?: boolean | Prisma.ChannelDefaultArgs<ExtArgs>
@@ -1001,6 +1037,7 @@ export type ChannelShowSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   lastPlayedAt?: boolean
   respectOrder?: boolean
   maxConsecutiveEpisodes?: boolean
+  autoAddNewEpisodes?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   channel?: boolean | Prisma.ChannelDefaultArgs<ExtArgs>
@@ -1021,6 +1058,7 @@ export type ChannelShowSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   lastPlayedAt?: boolean
   respectOrder?: boolean
   maxConsecutiveEpisodes?: boolean
+  autoAddNewEpisodes?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   channel?: boolean | Prisma.ChannelDefaultArgs<ExtArgs>
@@ -1041,11 +1079,12 @@ export type ChannelShowSelectScalar = {
   lastPlayedAt?: boolean
   respectOrder?: boolean
   maxConsecutiveEpisodes?: boolean
+  autoAddNewEpisodes?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type ChannelShowOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "channelId" | "showId" | "order" | "weight" | "shuffle" | "shuffleOrder" | "blockShuffle" | "blockShuffleSize" | "lastPlayedEpisodeId" | "lastPlayedAt" | "respectOrder" | "maxConsecutiveEpisodes" | "createdAt" | "updatedAt", ExtArgs["result"]["channelShow"]>
+export type ChannelShowOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "channelId" | "showId" | "order" | "weight" | "shuffle" | "shuffleOrder" | "blockShuffle" | "blockShuffleSize" | "lastPlayedEpisodeId" | "lastPlayedAt" | "respectOrder" | "maxConsecutiveEpisodes" | "autoAddNewEpisodes" | "createdAt" | "updatedAt", ExtArgs["result"]["channelShow"]>
 export type ChannelShowInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   channel?: boolean | Prisma.ChannelDefaultArgs<ExtArgs>
   show?: boolean | Prisma.MediaShowDefaultArgs<ExtArgs>
@@ -1079,6 +1118,7 @@ export type $ChannelShowPayload<ExtArgs extends runtime.Types.Extensions.Interna
     lastPlayedAt: Date | null
     respectOrder: boolean
     maxConsecutiveEpisodes: number
+    autoAddNewEpisodes: boolean
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["channelShow"]>
@@ -1519,6 +1559,7 @@ export interface ChannelShowFieldRefs {
   readonly lastPlayedAt: Prisma.FieldRef<"ChannelShow", 'DateTime'>
   readonly respectOrder: Prisma.FieldRef<"ChannelShow", 'Boolean'>
   readonly maxConsecutiveEpisodes: Prisma.FieldRef<"ChannelShow", 'Int'>
+  readonly autoAddNewEpisodes: Prisma.FieldRef<"ChannelShow", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"ChannelShow", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"ChannelShow", 'DateTime'>
 }
