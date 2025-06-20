@@ -1263,6 +1263,16 @@ function AddContentDialog({
               </div>
             </TabsContent>
           </Tabs>
+
+          {/* Keep show up-to-date checkbox */}
+          {selectedShows.size === 1 &&
+            (selectedEpisodes[Array.from(selectedShows)[0]]?.size ?? 0) === 0 &&
+            (selectedSeasons[Array.from(selectedShows)[0]]?.size ?? 0) === 0 && (
+              <div className="flex items-center space-x-2 mt-4">
+                <Checkbox id="keep-up" checked={keepUpToDate} onCheckedChange={(v) => setKeepUpToDate(!!v)} />
+                <Label htmlFor="keep-up">Keep show up-to-date</Label>
+              </div>
+          )}
         </CardContent>
 
         <div className="border-t p-6">
