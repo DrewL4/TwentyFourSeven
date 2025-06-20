@@ -3777,6 +3777,36 @@ function ChannelsPageContent() {
                     />
                     <Label htmlFor="block-shuffle">Block Shuffle</Label>
                   </div>
+
+                  {/* Franchise Automation Toggle */}
+                  <div className="flex items-center space-x-2 mt-2">
+                    <Switch
+                      id="franchise-switch"
+                      checked={selectedChannelQuery.data?.franchiseAutomation ?? false}
+                      onCheckedChange={(v) => {
+                        updateFiltersMutation.mutate({
+                          id: selectedChannelId!,
+                          franchiseAutomation: v,
+                          autoFilterEnabled: selectedChannelQuery.data?.autoFilterEnabled ?? false,
+                          filterType: selectedChannelQuery.data?.filterType ?? 'both',
+                        });
+                      }}
+                      className="touch-manipulation"
+                    />
+                    <Label htmlFor="franchise-switch" className="flex items-center gap-1">
+                      Smart Franchise
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            When enabled, any show that shares Plex collections with the primary show for this channel will be added automatically.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </Label>
+                  </div>
                 </CardContent>
               </Card>
             </div>
