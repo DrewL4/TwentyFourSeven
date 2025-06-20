@@ -34,10 +34,14 @@ export class ChannelAutomationService {
    */
   async processChannelAutomation(channel: any): Promise<void> {
     try {
+      // If this channel is configured for single-show automation, we don't need the heavy
+      // filtering logic for movies – only shows matter.
+      const singleShowMode = this.isSingleAutomatedShow(channel);
+
       const { filterType } = channel;
 
       // Process movies if enabled
-      if (filterType === 'movies' || filterType === 'both') {
+      if (!singleShowMode && (filterType === 'movies' || filterType === 'both')) {
         await this.processMovieAutomation(channel);
       }
 
@@ -55,6 +59,19 @@ export class ChannelAutomationService {
     } catch (error) {
       console.error(`Error processing automation for channel ${channel.id}:`, error);
     }
+  }
+
+  /**
+   * Returns true when the channel contains exactly ONE show, zero movies, and that
+   * show has `autoAddNewEpisodes` enabled. Only then can we treat the channel as a
+   * "single-show automation" channel.
+   */
+  private isSingleAutomatedShow(channel: any): boolean {
+    return (
+      channel.channelMovies.length === 0 &&
+      channel.channelShows.length === 1 &&
+      channel.channelShows[0].autoAddNewEpisodes === true
+    );
   }
 
   /**
@@ -82,15 +99,20 @@ export class ChannelAutomationService {
    * Process show automation for a channel
    */
   private async processShowAutomation(channel: any): Promise<void> {
-    // Get all shows that match the filter criteria
+    // If channel is single-show mode and franchiseAutomation is OFF, nothing to do –
+    // episodes for that show come in automatically via the Show → Episode relation.
+    const singleShowMode = this.isSingleAutomatedShow(channel);
+
+    if (singleShowMode && !channel.franchiseAutomation) {
+      return;
+    }
+
+    // Otherwise collect candidate shows (franchise or generic filters)
     const matchingShows = await this.getMatchingShows(channel);
 
-    // Get shows already in the channel
-    const existingShowIds = new Set(
-      channel.channelShows.map((cs: any) => cs.showId)
-    );
+    // Filter out shows already present on the channel
+    const existingShowIds = new Set(channel.channelShows.map((cs: any) => cs.showId));
 
-    // Add new matching shows to the channel
     for (const show of matchingShows) {
       if (!existingShowIds.has(show.id)) {
         await this.addShowToChannel(channel.id, show.id);
@@ -148,6 +170,24 @@ export class ChannelAutomationService {
    * Get shows that match the channel's filter criteria
    */
   private async getMatchingShows(channel: any): Promise<MediaShow[]> {
+    // If franchiseAutomation is requested and we have a reference show, derive matches
+    if (channel.franchiseAutomation && channel.channelShows.length > 0) {
+      const baseShow = channel.channelShows[0].show;
+
+      if (baseShow) {
+        const keyword = baseShow.title.split(" ")[0]; // naive first-word heuristic
+
+        const franchiseCandidates = await prisma.mediaShow.findMany({
+          where: {
+            title: { contains: keyword, mode: 'insensitive' }
+          } as any // cast for query mode typing compatibility
+        });
+
+        return franchiseCandidates;
+      }
+    }
+
+    // Fallback to generic filter pipeline (existing logic)
     const whereClause: any = {};
 
     // Year range filter
@@ -184,9 +224,10 @@ export class ChannelAutomationService {
     });
 
     // Apply additional filters that require JSON parsing
-    return shows.filter(show => {
-      return this.matchesFilters(show, channel);
-    });
+    const filtered = shows.filter(show => this.matchesFilters(show, channel));
+
+    // When franchiseAutomation is ON we may have duplicate entries; ensure uniqueness.
+    return Array.from(new Map(filtered.map(s => [s.id, s])).values());
   }
 
   /**
