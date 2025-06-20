@@ -386,7 +386,7 @@ export class ChannelAutomationService {
 
       // Auto-generate programs for this channel
       const { programmingService } = await import('@/lib/programming-service');
-      await programmingService.generateProgramsForChannel(channelId, 24);
+      await programmingService.generateProgramsForChannel(channelId);
     } catch (error) {
       console.error(`Error adding movie ${movieId} to channel ${channelId}:`, error);
     }
@@ -439,7 +439,7 @@ export class ChannelAutomationService {
 
       // Auto-generate programs for this channel
       const { programmingService } = await import('@/lib/programming-service');
-      await programmingService.generateProgramsForChannel(channelId, 24);
+      await programmingService.generateProgramsForChannel(channelId);
     } catch (error) {
       console.error(`Error adding show ${showId} to channel ${channelId}:`, error);
     }

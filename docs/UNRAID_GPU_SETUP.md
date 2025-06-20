@@ -1,203 +1,216 @@
-# TwentyFourSeven NVIDIA GPU Setup for Unraid
+# NVIDIA GPU Setup Guide for Unraid (DizqueTV-Style Implementation)
 
-This guide will help you set up and verify NVIDIA GPU support for TwentyFourSeven in Unraid.
+This guide will walk you through setting up NVIDIA GPU hardware acceleration for TwentyFourSeven on Unraid, following the same proven patterns used by DizqueTV.
+
+## Key Changes - DizqueTV-Style Implementation
+
+We've completely rewritten the GPU detection and Docker configuration to match DizqueTV's proven approach:
+
+### 🔄 **Major Changes Made**
+
+1. **Base Image**: Now uses `jrottenberg/ffmpeg:4.4-nvidia2004` (same as DizqueTV)
+2. **Simplified Runtime**: Uses `--runtime=nvidia` only (no `--gpus all`)
+3. **Environment Variables**: `NVIDIA_DRIVER_CAPABILITIES=all` (DizqueTV pattern)
+4. **Simplified Detection**: Direct nvidia-smi check instead of complex device probing
+5. **No Device Mapping**: Relies on NVIDIA runtime (like DizqueTV)
 
 ## Prerequisites
 
-### 1. Install NVIDIA Driver Plugin (if not already installed)
-1. Go to **Apps** → **Community Applications**
-2. Search for "**Nvidia-Driver**"
-3. Install the plugin appropriate for your GPU
-4. Reboot your Unraid server after installation
+### 1. Install NVIDIA Driver Plugin
+1. Go to **Apps** → **Community Applications** in Unraid
+2. Search for "NVIDIA-Driver"
+3. Install the **NVIDIA-Driver** plugin
+4. **Reboot your Unraid server** after installation
 
-### 2. Verify NVIDIA Setup on Unraid Host
-Open a terminal on your Unraid server and run:
-```bash
-nvidia-smi
-```
-You should see your GPU(s) listed with driver version and memory usage.
-
-## TwentyFourSeven Docker Setup
-
-### 1. Install from Unraid Template
-1. Go to **Docker** → **Add Container**
-2. Use the **TwentyFourSeven** template
-3. **Important Settings:**
-   - **HTTP Port**: Set your desired port (default: 8088)
-   - **Enable GPU Detection**: ✅ `true`
-   - **Enable Hardware Acceleration**: ✅ `true`
-   - **NVIDIA Visible Devices**: Set to `all` (or specific GPU IDs like `0,1`)
-
-### 2. Manual Docker Setup (Alternative)
-If installing manually, ensure these settings:
-
-**Extra Parameters:**
-```
---restart=unless-stopped --runtime=nvidia
-```
-
-**Environment Variables:**
-```
-GPU_DETECTION_ENABLED=true
-ENABLE_HARDWARE_ACCEL=true
-NVIDIA_VISIBLE_DEVICES=all
-NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
-```
-
-## Verification Steps
-
-### 1. Check Container Logs
-After starting the container, check the logs for:
-```
-External access configured for port: 8088
-🌐 TwentyFourSeven is available at: http://localhost:8088
-```
-
-### 2. Test GPU Detection in Web Interface
-1. Open TwentyFourSeven at `http://YOUR-UNRAID-IP:8088`
-2. Go to **Settings** → **FFMPEG Configuration**
-3. Look for **"Detected Hardware"** section
-4. You should see: `NVIDIA [Your GPU Model]`
-
-### 3. Test Hardware Acceleration
-In the FFMPEG settings page:
-1. Click **"NVIDIA NVENC (Recommended)"** preset
-2. Enable **"Hardware Acceleration"**
-3. Set **Acceleration Type** to **"NVIDIA NVENC"**
-4. Click **"Test Hardware Acceleration"**
-5. You should see ✅ success result
-
-### 4. Manual GPU Verification (Advanced)
-Execute commands inside the container:
+### 2. Verify GPU Detection
+After reboot, check that your GPUs are detected:
 
 ```bash
-# Enter container shell
-docker exec -it [container-name] sh
-
-# Check if NVIDIA runtime is working
+# SSH into your Unraid server and run:
 nvidia-smi
+```
 
-# Check GPU detection
-lspci | grep -i nvidia
+You should see output like:
+```
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 550.90.07    Driver Version: 550.90.07    CUDA Version: 12.4  |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|===============================+======================+======================|
+|   0  NVIDIA GeForce RTX 4090     Off   | 00000000:01:00.0  On |                  Off |
+| 30%   35C    P8              31W / 450W |    123MiB / 24564MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-------------------------------+----------------------+----------------------+
+```
 
-# Test NVENC encoding
-ffmpeg -f lavfi -i testsrc=duration=1:size=320x240:rate=30 -c:v h264_nvenc -f null -
+## Docker Configuration
+
+### Unraid Template Settings
+
+The template has been simplified to match DizqueTV's approach:
+
+#### **Required Settings:**
+- **ExtraParams**: `--restart=unless-stopped --runtime=nvidia`
+- **NVIDIA_VISIBLE_DEVICES**: `all` 
+- **NVIDIA_DRIVER_CAPABILITIES**: `all`
+
+#### **For Multiple GPUs:**
+If you have multiple NVIDIA GPUs and want to use specific ones:
+1. SSH into Unraid: `nvidia-smi -L`
+2. Note the GPU IDs (0, 1, 2, etc.)
+3. Set **NVIDIA_VISIBLE_DEVICES** to specific IDs: `0,1` (for first two GPUs)
+
+### Manual Docker Run Command
+
+If running manually:
+```bash
+docker run -d \
+  --name twentyfourseven \
+  --restart=unless-stopped \
+  --runtime=nvidia \
+  -e NVIDIA_VISIBLE_DEVICES=all \
+  -e NVIDIA_DRIVER_CAPABILITIES=all \
+  -p 8088:80 \
+  -v /mnt/user/appdata/twentyfourseven/database:/app/database \
+  -v /mnt/user/appdata/twentyfourseven/static:/app/static \
+  drew4/twentyfourseven:latest
 ```
 
 ## Troubleshooting
 
-### GPU Not Detected
-**Symptoms:**
-- "No dedicated GPU detected" message
-- NVIDIA NVENC preset is grayed out
+### 1. Check Container Logs
 
-**Solutions:**
-1. **Verify NVIDIA Driver Plugin is installed:**
-   ```bash
-   # On Unraid host
-   nvidia-smi
-   ```
+Look for these key indicators in your container logs:
 
-2. **Check container runtime:**
-   - Ensure `--runtime=nvidia` is in Extra Parameters
-   - Verify `NVIDIA_VISIBLE_DEVICES=all` is set
+#### ✅ **Success Indicators:**
+```
+✅ nvidia-smi found - NVIDIA runtime is working
+🎮 NVIDIA devices found: 3
+✅ NVIDIA GPU detection successful
+✅ NVENC encoders available
+🚀 Hardware Acceleration Status: ENABLED
+   GPU Vendor: nvidia
+   Method: nvenc
+   Device: /dev/nvidia0
+```
 
-3. **Restart container with proper settings**
+#### ❌ **Failure Indicators:**
+```
+⚠️  nvidia-smi not available - NVIDIA runtime not working
+💡 Ensure container is started with --runtime=nvidia
+```
 
-### Hardware Acceleration Test Fails
-**Symptoms:**
-- GPU detected but NVENC test fails
-- "No supported hardware acceleration methods found"
+### 2. Common Issues & Solutions
 
-**Solutions:**
-1. **Check FFMPEG NVENC support:**
-   ```bash
-   # Inside container
-   ffmpeg -codecs | grep nvenc
-   ```
+#### **Issue: "nvidia-smi not available"**
+**Solution:**
+1. Verify NVIDIA-Driver plugin is installed and Unraid is rebooted
+2. Check ExtraParams contains `--runtime=nvidia`
+3. Verify nvidia-smi works on Unraid host: `nvidia-smi`
 
-2. **Verify GPU memory availability:**
-   ```bash
-   # Inside container  
-   nvidia-smi
-   ```
+#### **Issue: "NVENC encoders not available"**  
+**Solution:**
+1. Check GPU compatibility: [NVIDIA Video Codec SDK](https://developer.nvidia.com/video-encode-and-decode-gpu-support-matrix-new)
+2. Verify driver version supports your GPU
+3. Check container logs for FFmpeg encoder list
 
-3. **Try different encoder:**
-   - Use `h264_nvenc` instead of `hevc_nvenc`
-   - Check if GPU supports the specific codec
+#### **Issue: "Hardware acceleration not working in streams"**
+**Solution:**
+1. Go to **Settings** → **FFMPEG Settings** in the web UI
+2. Verify "Enable Hardware Acceleration" is checked
+3. Hardware Acceleration Type should show "NVENC (NVIDIA)"
+4. Video Codec should be "h264_nvenc"
 
-### Container Won't Start
-**Symptoms:**
-- Container fails to start with GPU runtime
+### 3. Verification Steps
 
-**Solutions:**
-1. **Install NVIDIA Container Runtime:**
-   ```bash
-   # On Unraid host (if needed)
-   docker run --rm --runtime=nvidia nvidia/cuda:11.0-base nvidia-smi
-   ```
+#### **Step 1: Check GPU Detection**
+```bash
+# In container logs, look for:
+🎮 NVIDIA devices found: [number]
+✅ NVIDIA GPU detection successful
+```
 
-2. **Remove `--runtime=nvidia` temporarily:**
-   - Start container without GPU support
-   - Verify basic functionality
-   - Re-add GPU support once working
+#### **Step 2: Check FFmpeg NVENC Support**
+```bash
+# In container logs, look for:
+✅ NVENC encoders available
+```
 
-## Expected Performance
+#### **Step 3: Test Hardware Acceleration**
+1. Access TwentyFourSeven web UI
+2. Go to **Settings** → **FFMPEG Settings**
+3. Should show detected GPU information
+4. Enable hardware acceleration and save
 
-With NVIDIA GPU acceleration:
-- **Encoding Speed**: 5-10x faster than CPU
-- **CPU Usage**: Significantly reduced
-- **Power Efficiency**: Better for continuous transcoding
-- **Quality**: Comparable to CPU encoding with proper settings
+#### **Step 4: Monitor GPU Usage**
+```bash
+# On Unraid host, monitor GPU usage:
+watch -n 1 nvidia-smi
+```
+During video transcoding, you should see GPU utilization increase.
 
-## Optimal Settings for Different Use Cases
+### 4. Advanced Troubleshooting
 
-### Live Streaming
-- **Encoder**: `h264_nvenc`
-- **Preset**: `fast` or `medium`
-- **Rate Control**: CBR with target bitrate
-- **B-frames**: 2-3 for better compression
+#### **Debug Container GPU Access**
+```bash
+# Enter container
+docker exec -it twentyfourseven bash
 
-### File Transcoding
-- **Encoder**: `h264_nvenc` or `hevc_nvenc`
-- **Preset**: `slow` for best quality
-- **Rate Control**: CQ (Constant Quality) with CRF 20-23
-- **B-frames**: 3-4 for maximum compression
+# Check NVIDIA devices
+ls -la /dev/nvidia*
 
-### Low Latency
-- **Encoder**: `h264_nvenc`
-- **Preset**: `ultrafast` or `superfast`
-- **Rate Control**: CBR
-- **B-frames**: 0 for minimum latency
+# Test nvidia-smi inside container
+nvidia-smi
 
-## GPU Compatibility
+# Check FFmpeg encoders
+ffmpeg -encoders | grep nvenc
+```
 
-### Supported NVIDIA GPUs
-- **GTX 10 Series**: GTX 1050 and above (NVENC Gen 6)
-- **GTX 16 Series**: All models (NVENC Gen 7)
-- **RTX 20 Series**: All models (NVENC Gen 7)
-- **RTX 30 Series**: All models (NVENC Gen 7)
-- **RTX 40 Series**: All models (NVENC Gen 8)
+#### **Multiple GPU Selection**
+If you have multiple GPUs:
+```bash
+# List available GPUs
+nvidia-smi -L
 
-### Encoding Capabilities by Generation
-- **NVENC Gen 6**: H.264, limited HEVC
-- **NVENC Gen 7**: H.264, HEVC, improved quality
-- **NVENC Gen 8**: H.264, HEVC, AV1 (RTX 40 series)
+# Set specific GPU in Unraid template
+NVIDIA_VISIBLE_DEVICES=0,2  # Use GPU 0 and 2 only
+```
 
-## Final Checklist
+## Differences from Previous Implementation
 
-Before deploying to Docker Hub, verify:
-- ✅ Container starts successfully with `--runtime=nvidia`
-- ✅ GPU detection works in web interface
-- ✅ NVENC hardware acceleration test passes
-- ✅ Transcoding performance is improved vs CPU
-- ✅ No errors in container logs related to GPU
-- ✅ Template variables are properly configured
+### ❌ **Removed (Complex Approach):**
+- Complex device mapping (`/dev/nvidia0`, `/dev/nvidiactl`, etc.)
+- `--gpus all` parameter
+- Complex capability checking
+- Fallback detection logic
+- Permission management scripts
+
+### ✅ **Added (DizqueTV Approach):**
+- NVIDIA-enabled FFmpeg base image
+- Simple `--runtime=nvidia` only
+- `NVIDIA_DRIVER_CAPABILITIES=all`
+- Direct nvidia-smi detection
+- Simplified error handling
+
+## Comparison with DizqueTV
+
+| Feature | DizqueTV | TwentyFourSeven |
+|---------|----------|-----------------|
+| Base Image | `jrottenberg/ffmpeg:4.3-nvidia1804` | `jrottenberg/ffmpeg:4.4-nvidia2004` |
+| Runtime | `--runtime=nvidia` | `--runtime=nvidia` |
+| GPU Detection | Simple nvidia-smi check | Simple nvidia-smi check |
+| Capabilities | `NVIDIA_DRIVER_CAPABILITIES=all` | `NVIDIA_DRIVER_CAPABILITIES=all` |
+| Device Mapping | None (runtime handles it) | None (runtime handles it) |
 
 ## Support
 
-If you encounter issues:
-1. Check container logs for error messages
-2. Verify Unraid NVIDIA plugin installation
-3. Test basic GPU functionality outside container
-4. Consult TwentyFourSeven documentation for latest updates 
+If you're still having issues:
+
+1. **Check Unraid System Log** for NVIDIA driver errors
+2. **Verify GPU Compatibility** with NVENC
+3. **Test with DizqueTV** - if DizqueTV works, TwentyFourSeven should too
+4. **Post Container Logs** showing the GPU detection section
+
+The new implementation follows DizqueTV's proven patterns exactly, so if DizqueTV works on your system, TwentyFourSeven should work identically. 

@@ -5,7 +5,7 @@
   <Registry>https://hub.docker.com/</Registry>
   <Network>bridge</Network>
   <MyIP/>
-  <Shell>sh</Shell>
+  <Shell>bash</Shell>
   <Privileged>false</Privileged>
   <Support>https://github.com/drew4/twentyfourseven</Support>
   <Project>https://github.com/drew4/twentyfourseven</Project>
@@ -20,28 +20,25 @@
   <DateInstalled>1640995200</DateInstalled>
   <DonateText/>
   <DonateLink/>
-  <Requires/>
+  <Requires>NVIDIA GPU Driver must be installed on Unraid host. Install the "NVIDIA-Driver" plugin from Community Apps if you haven't already.</Requires>
   <Config Name="HTTP Port" Target="80" Default="8088" Mode="tcp" Description="Main HTTP port for the application. This is the only port you need to access TwentyFourSeven." Type="Port" Display="always" Required="true" Mask="false">8088</Config>
   <Config Name="External HTTP Port" Target="EXTERNAL_HTTP_PORT" Default="[PORT:80]" Mode="" Description="Automatically set to match the HTTP Port above. Used for internal URL configuration." Type="Variable" Display="never" Required="true" Mask="false">[PORT:80]</Config>
   <Config Name="Trusted Origins" Target="TRUSTED_ORIGINS" Default="" Mode="" Description="Comma-separated list of allowed origins for authentication. REQUIRED for external access! Example: http://localhost:[PORT:80],http://192.168.1.100:[PORT:80] (replace 192.168.1.100 with your Unraid server IP)" Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="Authentication Secret" Target="BETTER_AUTH_SECRET" Default="" Mode="" Description="Secret key for authentication. Leave empty to auto-generate a secure key. For production, set a strong custom secret (32+ characters)." Type="Variable" Display="always" Required="false" Mask="true"/>
   
-  <!-- GPU Configuration -->
+  <!-- GPU Configuration (DizqueTV-style simplified) -->
   <Config Name="Enable GPU Detection" Target="GPU_DETECTION_ENABLED" Default="true" Mode="" Description="Enable automatic GPU detection and hardware acceleration support." Type="Variable" Display="always" Required="false" Mask="false">true</Config>
   <Config Name="Enable Hardware Acceleration" Target="ENABLE_HARDWARE_ACCEL" Default="true" Mode="" Description="Enable hardware-accelerated video transcoding when supported GPU is detected." Type="Variable" Display="always" Required="false" Mask="false">true</Config>
-  <Config Name="NVIDIA Visible Devices" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="Make NVIDIA GPUs visible to container. Set to 'all' for all GPUs or specific GPU IDs (e.g., '0,1')." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
-  <Config Name="NVIDIA Driver Capabilities" Target="NVIDIA_DRIVER_CAPABILITIES" Default="compute,utility,video" Mode="" Description="NVIDIA driver capabilities for hardware acceleration." Type="Variable" Display="advanced" Required="false" Mask="false">compute,utility,video</Config>
+  <Config Name="NVIDIA Visible Devices" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="Make NVIDIA GPUs visible to container. Set to 'all' for all GPUs or specific GPU IDs (e.g., '0,1'). If you have multiple GPUs and want to use specific ones, find GPU IDs with 'nvidia-smi -L' on your Unraid host." Type="Variable" Display="always" Required="false" Mask="false">all</Config>
+  <Config Name="NVIDIA Driver Capabilities" Target="NVIDIA_DRIVER_CAPABILITIES" Default="all" Mode="" Description="NVIDIA driver capabilities for hardware acceleration. - DO NOT CHANGE unless you know what you're doing." Type="Variable" Display="always" Required="false" Mask="false">all</Config>
   
   <!-- Storage -->
   <Config Name="Database Storage" Target="/app/database" Default="/mnt/user/appdata/twentyfourseven/database" Mode="rw" Description="Path to store the SQLite database. Leave empty for ephemeral storage (data lost on container restart). If you see database permission errors, run: chown -R 1001:100 /mnt/user/appdata/twentyfourseven/database in the Unraid terminal." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/twentyfourseven/database</Config>
   <Config Name="Static Files Storage" Target="/app/static" Default="/mnt/user/appdata/twentyfourseven/static" Mode="rw" Description="Path to store static files (.m3u, .xml, etc.). Files placed here will be accessible at http://[IP]:[PORT]/files/. If you see permission errors, run: chown -R 1001:100 /mnt/user/appdata/twentyfourseven/static in the Unraid terminal." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/twentyfourseven/static</Config>
   
-  <!-- Device Mappings for GPU Support -->
-  <Config Name="DRI Devices (Intel/AMD GPU)" Target="/dev/dri" Default="/dev/dri" Mode="" Description="Direct Rendering Infrastructure devices for Intel/AMD GPU hardware acceleration. Only needed if you have Intel or AMD GPUs." Type="Device" Display="advanced" Required="false" Mask="false">/dev/dri</Config>
-  
   <!-- Advanced Settings -->
   <Config Name="FFMPEG Auto-Detect" Target="FFMPEG_AUTO_DETECT" Default="true" Mode="" Description="Automatically detect FFMPEG installation path." Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
-  <Config Name="Hardware Acceleration Device" Target="HARDWARE_ACCEL_DEVICE" Default="/dev/dri/renderD128" Mode="" Description="Hardware acceleration device path (mainly for Intel/AMD GPUs)." Type="Variable" Display="advanced" Required="false" Mask="false">/dev/dri/renderD128</Config>
+  <Config Name="Hardware Acceleration Device" Target="HARDWARE_ACCEL_DEVICE" Default="/dev/nvidia0" Mode="" Description="Hardware acceleration device path. For NVIDIA use /dev/nvidia0, for Intel/AMD use /dev/dri/renderD128." Type="Variable" Display="advanced" Required="false" Mask="false">/dev/nvidia0</Config>
   <Config Name="Log Level" Target="LOG_LEVEL" Default="info" Mode="" Description="Application log level (debug, info, warn, error)." Type="Variable" Display="advanced" Required="false" Mask="false">info</Config>
   <Config Name="Timezone" Target="TZ" Default="America/New_York" Mode="" Description="Timezone for the container (e.g., America/New_York, Europe/London, etc.)." Type="Variable" Display="advanced" Required="false" Mask="false">America/New_York</Config>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID for file permissions. Use 'id username' command to find your user ID." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>

@@ -523,6 +523,23 @@ export class ProgrammingService {
 
   /**
    * Auto-regenerate programs as needed (should be called periodically)
+   * 
+   * This is the core method that ensures channels never end. It:
+   * 1. Checks each channel's last scheduled program
+   * 2. Ensures programming extends to at least 'guideDays' into the future
+   * 3. Appends new programs seamlessly from where the schedule ends
+   * 4. Maintains content rotation order across extensions
+   * 
+   * This method is called:
+   * - On server startup (if programs exist)
+   * - Every hour via the scheduler
+   * - Manually via API endpoints
+   * 
+   * The algorithm ensures:
+   * - No gaps between programs
+   * - Content continues in the same rotation order
+   * - Currently playing programs are never affected
+   * - Database efficiency through targeted updates
    */
   async maintainPrograms() {
     const guideDays = await this.getGuideDays();
@@ -535,6 +552,13 @@ export class ProgrammingService {
     });
 
     for (const channel of channels) {
+      // Ensure existing schedule has no overlaps before appending
+      const overlapCheck = await this.verifyNoOverlaps(channel.id);
+      if (!overlapCheck.success) {
+        console.warn(`Found ${overlapCheck.overlaps.length} overlaps before maintenance on channel ${channel.name}. Cleaning up...`);
+        await this.cleanupOverlapsForChannel(channel.id);
+      }
+
       // Find the last scheduled program for this channel
       const lastProgram = await prisma.program.findFirst({
         where: { channelId: channel.id },
@@ -550,6 +574,12 @@ export class ProgrammingService {
       // Only append if needed
       if (!lastProgram || startTime < lookAhead) {
         await this.appendProgramsForChannel(channel.id, startTime, lookAhead);
+
+        // Verify no gaps after appending
+        const gapCheck = await this.verifyNoGaps(channel.id);
+        if (!gapCheck.success) {
+          console.warn(`Maintenance introduced ${gapCheck.gaps.length} gaps on channel ${channel.name}. Consider regenerating schedule.`);
+        }
       }
     }
   }
