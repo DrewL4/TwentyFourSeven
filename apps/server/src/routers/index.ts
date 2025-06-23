@@ -621,7 +621,7 @@ export const appRouter = {
         search: z.string().optional(),
         limit: z.number().default(50)
       }))
-      .handler(async ({ input }) => {
+      .handler(async ({ input }: { input: { search?: string; limit: number } }) => {
         const { search, limit } = input;
 
         // Get collection arrays from movies and shows
