@@ -6,7 +6,7 @@ export const appRouter = {
   healthCheck: publicProcedure.handler(() => {
     return "OK";
   }),
-  privateData: protectedProcedure.handler(({ context }) => {
+  privateData: protectedProcedure.handler(({ context }: { context: import('../lib/context').Context }) => {
     return {
       message: "This is private",
       user: context.session?.user,
