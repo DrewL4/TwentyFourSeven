@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "../lib/orpc";
 import { prisma } from "../lib/prisma";
+import type { Context } from "../lib/context";
 
 export const appRouter = {
   healthCheck: publicProcedure.handler(() => {
     return "OK";
   }),
-  privateData: protectedProcedure.handler(({ context }) => {
+  privateData: protectedProcedure.handler(({ context }: { context: Context }) => {
     return {
       message: "This is private",
       user: context.session?.user,
