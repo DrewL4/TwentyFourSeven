@@ -157,6 +157,7 @@ model Channel {
   filterActors String? // JSON string of actor filters
   filterDirectors String? // JSON string of director filters
   filterStudios String? // JSON string of studio filters
+  filterCollections String? // JSON string of collection filters
   filterYearStart Int?
   filterYearEnd Int?
   filterRating String? // Content rating filter
