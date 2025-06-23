@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     xmltv += '<!DOCTYPE tv SYSTEM "xmltv.dtd">\n';
     xmltv += '<tv generator-info-name="TwentyFourSeven" generator-info-url="https://github.com/vexorian/TwentyFourSeven" source-info-name="TwentyFourSeven">\n';
     for (const channel of channels) {
-      xmltv += `  <channel id="${escapeXml(channel.number.toString())}">\n`;
+      xmltv += `  <channel id="${escapeXml(channel.name)}">\n`;
       xmltv += `    <display-name lang="en">${escapeXml(channel.name)}</display-name>\n`;
       xmltv += `    <display-name>${escapeXml(channel.number.toString())}</display-name>\n`;
       if (channel.icon) {
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
     for (const program of programs) {
       const programStartTime = new Date(program.startTime);
       const programEndTime = new Date(programStartTime.getTime() + program.duration);
-      xmltv += `  <programme start="${formatXmltvTime(programStartTime)}" stop="${formatXmltvTime(programEndTime)}" channel="${escapeXml(program.channel.number.toString())}">\n`;
+      xmltv += `  <programme start="${formatXmltvTime(programStartTime)}" stop="${formatXmltvTime(programEndTime)}" channel="${escapeXml(program.channel.name)}">\n`;
       if (program.episode) {
         const show = program.episode.show;
         xmltv += `    <title lang="en">${escapeXml(show.title)}</title>\n`;
