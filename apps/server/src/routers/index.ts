@@ -1156,6 +1156,70 @@ export const appRouter = {
             { episodeNumber: 'asc' }
           ]
         });
+      }),
+
+    // NEW: Collections endpoint
+    collections: publicProcedure
+      .input(z.object({
+        search: z.string().optional(),
+        limit: z.number().default(50),
+        offset: z.number().default(0)
+      }))
+      .handler(async ({ input }) => {
+        const { search = undefined, limit, offset } = input;
+
+        // Fetch collections from both movies and shows
+        const [movieCollections, showCollections] = await Promise.all([
+          prisma.mediaMovie.findMany({
+            where: {
+              collections: { not: null }
+            },
+            select: { collections: true }
+          }),
+          prisma.mediaShow.findMany({
+            where: {
+              collections: { not: null }
+            },
+            select: { collections: true }
+          })
+        ]);
+
+        // Helper to add collections to the map with counts
+        const collectionMap: Map<string, number> = new Map();
+        const addCollections = (raw: { collections: string | null }[]) => {
+          raw.forEach(item => {
+            if (!item.collections) return;
+            try {
+              const cols = JSON.parse(item.collections) as unknown;
+              if (Array.isArray(cols)) {
+                cols.forEach(col => {
+                  if (typeof col === 'string' && col.trim()) {
+                    const key = col.trim();
+                    collectionMap.set(key, (collectionMap.get(key) || 0) + 1);
+                  }
+                });
+              }
+            } catch (_) {
+              // Ignore invalid JSON
+            }
+          });
+        };
+
+        addCollections(movieCollections);
+        addCollections(showCollections);
+
+        let result = Array.from(collectionMap.entries()).map(([name, count]) => ({ name, count }));
+        // Apply search filter
+        if (search) {
+          const term = search.toLowerCase();
+          result = result.filter(c => c.name.toLowerCase().includes(term));
+        }
+
+        // Sort alphabetically
+        result.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Pagination using offset & limit
+        return result.slice(offset, offset + limit);
       })
   },
 

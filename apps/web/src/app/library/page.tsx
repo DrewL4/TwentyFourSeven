@@ -37,9 +37,17 @@ export default function LibraryPage() {
     }
   }));
 
+  // NEW: Fetch collections
+  const collectionsQuery = useQuery(orpc.library.collections.queryOptions({
+    input: {
+      search: searchQuery || undefined,
+      limit: 10000
+    }
+  }));
+
   // Loading states
-  const isLoading = serversQuery.isLoading || showsQuery.isLoading || moviesQuery.isLoading;
-  const hasError = serversQuery.error || showsQuery.error || moviesQuery.error;
+  const isLoading = serversQuery.isLoading || showsQuery.isLoading || moviesQuery.isLoading || collectionsQuery.isLoading;
+  const hasError = serversQuery.error || showsQuery.error || moviesQuery.error || collectionsQuery.error;
 
   // Calculate totals
   const servers = serversQuery.data || [];
@@ -47,6 +55,7 @@ export default function LibraryPage() {
   const totalShows = showsQuery.data?.length || 0;
   const totalMovies = moviesQuery.data?.length || 0;
   const totalVideos = totalShows + totalMovies;
+  const totalCollections = collectionsQuery.data?.length || 0;
 
   const getLibraryIcon = (type: string) => {
     switch (type) {
@@ -119,7 +128,7 @@ export default function LibraryPage() {
       </div>
 
       {/* Library Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -161,6 +170,21 @@ export default function LibraryPage() {
             <div className="text-2xl font-bold">{servers.filter(s => s.type === 'PLEX' && s.active).length}</div>
             <p className="text-sm text-muted-foreground mt-1">
               Active Plex connections
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Folder className="w-5 h-5" />
+              Collections
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalCollections}</div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Plex collections detected
             </p>
           </CardContent>
         </Card>
@@ -327,6 +351,19 @@ export default function LibraryPage() {
                           <Badge variant="outline" className="mt-2">{movie.library?.name}</Badge>
                         </CardContent>
                       </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {(collectionsQuery.data && collectionsQuery.data.length > 0) && (
+                <div>
+                  <h2 className="text-2xl font-bold mb-4">Collections</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {collectionsQuery.data.map((col) => (
+                      <Badge key={col.name} variant="outline" className="px-3 py-1 text-sm">
+                        {col.name} <span className="ml-1 text-muted-foreground">({col.count})</span>
+                      </Badge>
                     ))}
                   </div>
                 </div>
