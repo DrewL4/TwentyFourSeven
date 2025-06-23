@@ -221,10 +221,12 @@ export class ChannelAutomationService {
       }
     }
 
+    // Collection filter (handled later in matchesFilters)
+
     // CONSERVATIVE APPROACH: Only auto-find content if explicit filters are set OR franchise automation is enabled
     const hasExplicitFilters = channel.filterYearStart || channel.filterYearEnd || 
                               channel.filterRating || channel.filterStudios || 
-                              channel.filterGenres || channel.filterActors || channel.filterDirectors;
+                              channel.filterGenres || channel.filterActors || channel.filterDirectors || channel.filterCollections;
 
     if (!hasExplicitFilters) {
       // Only look for franchise-related shows if franchise automation is explicitly enabled
@@ -511,6 +513,37 @@ export class ChannelAutomationService {
           )
         );
         if (!hasMatchingDirector) return false;
+      }
+    }
+
+    // Studio filter
+    if (channel.filterStudios) {
+      const filterStudios = JSON.parse(channel.filterStudios);
+      if (filterStudios.length > 0 && media.studio) {
+        const matchesStudio = filterStudios.some((filterStudio: string) =>
+          media.studio.toLowerCase().includes(filterStudio.toLowerCase())
+        );
+        if (!matchesStudio) return false;
+      }
+    }
+
+    // Collection filter
+    if (channel.filterCollections) {
+      const filterCollections = JSON.parse(channel.filterCollections);
+      if (filterCollections.length > 0 && media.collections) {
+        try {
+          const mediaCollections = JSON.parse(media.collections);
+          const matchesCollection = filterCollections.some((filterCol: string) =>
+            (mediaCollections as string[]).some((col: string) => col.toLowerCase() === filterCol.toLowerCase())
+          );
+          if (!matchesCollection) return false;
+        } catch (e) {
+          // Skip if invalid JSON
+          return false;
+        }
+      } else {
+        // No collections on media item, doesn't match
+        return false;
       }
     }
 

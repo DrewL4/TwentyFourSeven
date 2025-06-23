@@ -105,6 +105,7 @@ export const appRouter = {
         filterActors: z.string().optional(),
         filterDirectors: z.string().optional(),
         filterStudios: z.string().optional(),
+        filterCollections: z.string().optional(),
         filterYearStart: z.number().optional(),
         filterYearEnd: z.number().optional(),
         filterRating: z.string().optional(),
@@ -143,6 +144,7 @@ export const appRouter = {
         filterActors: z.string().optional(),
         filterDirectors: z.string().optional(),
         filterStudios: z.string().optional(),
+        filterCollections: z.string().optional(),
         filterYearStart: z.number().optional(),
         filterYearEnd: z.number().optional(),
         filterRating: z.string().optional(),
@@ -339,6 +341,7 @@ export const appRouter = {
         filterActors: z.string().optional(),
         filterDirectors: z.string().optional(),
         filterStudios: z.string().optional(),
+        filterCollections: z.string().optional(),
         filterYearStart: z.number().optional(),
         filterYearEnd: z.number().optional(),
         filterRating: z.string().optional(),
@@ -610,6 +613,67 @@ export const appRouter = {
         }
 
         return studioList.slice(0, limit);
+      }),
+
+    // Collections autocomplete
+    getCollections: protectedProcedure
+      .input(z.object({
+        search: z.string().optional(),
+        limit: z.number().default(50)
+      }))
+      .handler(async ({ input }) => {
+        const { search, limit } = input;
+
+        // Get collection arrays from movies and shows
+        const [movieCollections, showCollections] = await Promise.all([
+          prisma.mediaMovie.findMany({
+            where: {
+              collections: {
+                not: null
+              }
+            },
+            select: { collections: true }
+          }),
+          prisma.mediaShow.findMany({
+            where: {
+              collections: {
+                not: null
+              }
+            },
+            select: { collections: true }
+          })
+        ]);
+
+        // Flatten unique collection names
+        const allCollections = new Set<string>();
+
+        [...movieCollections, ...showCollections].forEach(item => {
+          if (item.collections) {
+            try {
+              const cols = JSON.parse(item.collections);
+              if (Array.isArray(cols)) {
+                cols.forEach((c: string) => {
+                  if (typeof c === 'string' && c.trim()) {
+                    allCollections.add(c.trim());
+                  }
+                });
+              }
+            } catch (error) {
+              // Skip invalid JSON
+            }
+          }
+        });
+
+        // Convert to sorted array
+        let collectionList = Array.from(allCollections).sort();
+
+        // Search filter
+        if (search && search.trim()) {
+          const term = search.toLowerCase();
+          collectionList = collectionList.filter(col => col.toLowerCase().includes(term));
+        }
+
+        return collectionList.slice(0, limit);
       }),
 
     reorderContent: protectedProcedure
