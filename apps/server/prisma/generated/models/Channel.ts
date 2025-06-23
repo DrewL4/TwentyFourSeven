@@ -68,6 +68,7 @@ export type ChannelMinAggregateOutputType = {
   filterActors: string | null
   filterDirectors: string | null
   filterStudios: string | null
+  filterCollections: string | null
   filterYearStart: number | null
   filterYearEnd: number | null
   filterRating: string | null
@@ -104,6 +105,7 @@ export type ChannelMaxAggregateOutputType = {
   filterActors: string | null
   filterDirectors: string | null
   filterStudios: string | null
+  filterCollections: string | null
   filterYearStart: number | null
   filterYearEnd: number | null
   filterRating: string | null
@@ -140,6 +142,7 @@ export type ChannelCountAggregateOutputType = {
   filterActors: number
   filterDirectors: number
   filterStudios: number
+  filterCollections: number
   filterYearStart: number
   filterYearEnd: number
   filterRating: number
@@ -200,6 +203,7 @@ export type ChannelMinAggregateInputType = {
   filterActors?: true
   filterDirectors?: true
   filterStudios?: true
+  filterCollections?: true
   filterYearStart?: true
   filterYearEnd?: true
   filterRating?: true
@@ -236,6 +240,7 @@ export type ChannelMaxAggregateInputType = {
   filterActors?: true
   filterDirectors?: true
   filterStudios?: true
+  filterCollections?: true
   filterYearStart?: true
   filterYearEnd?: true
   filterRating?: true
@@ -272,6 +277,7 @@ export type ChannelCountAggregateInputType = {
   filterActors?: true
   filterDirectors?: true
   filterStudios?: true
+  filterCollections?: true
   filterYearStart?: true
   filterYearEnd?: true
   filterRating?: true
@@ -395,6 +401,7 @@ export type ChannelGroupByOutputType = {
   filterActors: string | null
   filterDirectors: string | null
   filterStudios: string | null
+  filterCollections: string | null
   filterYearStart: number | null
   filterYearEnd: number | null
   filterRating: string | null
@@ -454,6 +461,7 @@ export type ChannelWhereInput = {
   filterActors?: Prisma.StringNullableFilter<"Channel"> | string | null
   filterDirectors?: Prisma.StringNullableFilter<"Channel"> | string | null
   filterStudios?: Prisma.StringNullableFilter<"Channel"> | string | null
+  filterCollections?: Prisma.StringNullableFilter<"Channel"> | string | null
   filterYearStart?: Prisma.IntNullableFilter<"Channel"> | number | null
   filterYearEnd?: Prisma.IntNullableFilter<"Channel"> | number | null
   filterRating?: Prisma.StringNullableFilter<"Channel"> | string | null
@@ -493,6 +501,7 @@ export type ChannelOrderByWithRelationInput = {
   filterActors?: Prisma.SortOrderInput | Prisma.SortOrder
   filterDirectors?: Prisma.SortOrderInput | Prisma.SortOrder
   filterStudios?: Prisma.SortOrderInput | Prisma.SortOrder
+  filterCollections?: Prisma.SortOrderInput | Prisma.SortOrder
   filterYearStart?: Prisma.SortOrderInput | Prisma.SortOrder
   filterYearEnd?: Prisma.SortOrderInput | Prisma.SortOrder
   filterRating?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -535,6 +544,7 @@ export type ChannelWhereUniqueInput = Prisma.AtLeast<{
   filterActors?: Prisma.StringNullableFilter<"Channel"> | string | null
   filterDirectors?: Prisma.StringNullableFilter<"Channel"> | string | null
   filterStudios?: Prisma.StringNullableFilter<"Channel"> | string | null
+  filterCollections?: Prisma.StringNullableFilter<"Channel"> | string | null
   filterYearStart?: Prisma.IntNullableFilter<"Channel"> | number | null
   filterYearEnd?: Prisma.IntNullableFilter<"Channel"> | number | null
   filterRating?: Prisma.StringNullableFilter<"Channel"> | string | null
@@ -574,6 +584,7 @@ export type ChannelOrderByWithAggregationInput = {
   filterActors?: Prisma.SortOrderInput | Prisma.SortOrder
   filterDirectors?: Prisma.SortOrderInput | Prisma.SortOrder
   filterStudios?: Prisma.SortOrderInput | Prisma.SortOrder
+  filterCollections?: Prisma.SortOrderInput | Prisma.SortOrder
   filterYearStart?: Prisma.SortOrderInput | Prisma.SortOrder
   filterYearEnd?: Prisma.SortOrderInput | Prisma.SortOrder
   filterRating?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -618,6 +629,7 @@ export type ChannelScalarWhereWithAggregatesInput = {
   filterActors?: Prisma.StringNullableWithAggregatesFilter<"Channel"> | string | null
   filterDirectors?: Prisma.StringNullableWithAggregatesFilter<"Channel"> | string | null
   filterStudios?: Prisma.StringNullableWithAggregatesFilter<"Channel"> | string | null
+  filterCollections?: Prisma.StringNullableWithAggregatesFilter<"Channel"> | string | null
   filterYearStart?: Prisma.IntNullableWithAggregatesFilter<"Channel"> | number | null
   filterYearEnd?: Prisma.IntNullableWithAggregatesFilter<"Channel"> | number | null
   filterRating?: Prisma.StringNullableWithAggregatesFilter<"Channel"> | string | null
@@ -654,6 +666,7 @@ export type ChannelCreateInput = {
   filterActors?: string | null
   filterDirectors?: string | null
   filterStudios?: string | null
+  filterCollections?: string | null
   filterYearStart?: number | null
   filterYearEnd?: number | null
   filterRating?: string | null
@@ -693,6 +706,7 @@ export type ChannelUncheckedCreateInput = {
   filterActors?: string | null
   filterDirectors?: string | null
   filterStudios?: string | null
+  filterCollections?: string | null
   filterYearStart?: number | null
   filterYearEnd?: number | null
   filterRating?: string | null
@@ -732,6 +746,7 @@ export type ChannelUpdateInput = {
   filterActors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterDirectors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterStudios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  filterCollections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterYearStart?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterYearEnd?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterRating?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -771,6 +786,7 @@ export type ChannelUncheckedUpdateInput = {
   filterActors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterDirectors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterStudios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  filterCollections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterYearStart?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterYearEnd?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterRating?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -810,6 +826,7 @@ export type ChannelCreateManyInput = {
   filterActors?: string | null
   filterDirectors?: string | null
   filterStudios?: string | null
+  filterCollections?: string | null
   filterYearStart?: number | null
   filterYearEnd?: number | null
   filterRating?: string | null
@@ -846,6 +863,7 @@ export type ChannelUpdateManyMutationInput = {
   filterActors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterDirectors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterStudios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  filterCollections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterYearStart?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterYearEnd?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterRating?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -882,6 +900,7 @@ export type ChannelUncheckedUpdateManyInput = {
   filterActors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterDirectors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterStudios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  filterCollections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterYearStart?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterYearEnd?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterRating?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -918,6 +937,7 @@ export type ChannelCountOrderByAggregateInput = {
   filterActors?: Prisma.SortOrder
   filterDirectors?: Prisma.SortOrder
   filterStudios?: Prisma.SortOrder
+  filterCollections?: Prisma.SortOrder
   filterYearStart?: Prisma.SortOrder
   filterYearEnd?: Prisma.SortOrder
   filterRating?: Prisma.SortOrder
@@ -965,6 +985,7 @@ export type ChannelMaxOrderByAggregateInput = {
   filterActors?: Prisma.SortOrder
   filterDirectors?: Prisma.SortOrder
   filterStudios?: Prisma.SortOrder
+  filterCollections?: Prisma.SortOrder
   filterYearStart?: Prisma.SortOrder
   filterYearEnd?: Prisma.SortOrder
   filterRating?: Prisma.SortOrder
@@ -1001,6 +1022,7 @@ export type ChannelMinOrderByAggregateInput = {
   filterActors?: Prisma.SortOrder
   filterDirectors?: Prisma.SortOrder
   filterStudios?: Prisma.SortOrder
+  filterCollections?: Prisma.SortOrder
   filterYearStart?: Prisma.SortOrder
   filterYearEnd?: Prisma.SortOrder
   filterRating?: Prisma.SortOrder
@@ -1095,6 +1117,7 @@ export type ChannelCreateWithoutProgramsInput = {
   filterActors?: string | null
   filterDirectors?: string | null
   filterStudios?: string | null
+  filterCollections?: string | null
   filterYearStart?: number | null
   filterYearEnd?: number | null
   filterRating?: string | null
@@ -1133,6 +1156,7 @@ export type ChannelUncheckedCreateWithoutProgramsInput = {
   filterActors?: string | null
   filterDirectors?: string | null
   filterStudios?: string | null
+  filterCollections?: string | null
   filterYearStart?: number | null
   filterYearEnd?: number | null
   filterRating?: string | null
@@ -1187,6 +1211,7 @@ export type ChannelUpdateWithoutProgramsInput = {
   filterActors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterDirectors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterStudios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  filterCollections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterYearStart?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterYearEnd?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterRating?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1225,6 +1250,7 @@ export type ChannelUncheckedUpdateWithoutProgramsInput = {
   filterActors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterDirectors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterStudios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  filterCollections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterYearStart?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterYearEnd?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterRating?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1263,6 +1289,7 @@ export type ChannelCreateWithoutChannelShowsInput = {
   filterActors?: string | null
   filterDirectors?: string | null
   filterStudios?: string | null
+  filterCollections?: string | null
   filterYearStart?: number | null
   filterYearEnd?: number | null
   filterRating?: string | null
@@ -1301,6 +1328,7 @@ export type ChannelUncheckedCreateWithoutChannelShowsInput = {
   filterActors?: string | null
   filterDirectors?: string | null
   filterStudios?: string | null
+  filterCollections?: string | null
   filterYearStart?: number | null
   filterYearEnd?: number | null
   filterRating?: string | null
@@ -1355,6 +1383,7 @@ export type ChannelUpdateWithoutChannelShowsInput = {
   filterActors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterDirectors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterStudios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  filterCollections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterYearStart?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterYearEnd?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterRating?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1393,6 +1422,7 @@ export type ChannelUncheckedUpdateWithoutChannelShowsInput = {
   filterActors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterDirectors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterStudios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  filterCollections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterYearStart?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterYearEnd?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterRating?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1431,6 +1461,7 @@ export type ChannelCreateWithoutChannelMoviesInput = {
   filterActors?: string | null
   filterDirectors?: string | null
   filterStudios?: string | null
+  filterCollections?: string | null
   filterYearStart?: number | null
   filterYearEnd?: number | null
   filterRating?: string | null
@@ -1469,6 +1500,7 @@ export type ChannelUncheckedCreateWithoutChannelMoviesInput = {
   filterActors?: string | null
   filterDirectors?: string | null
   filterStudios?: string | null
+  filterCollections?: string | null
   filterYearStart?: number | null
   filterYearEnd?: number | null
   filterRating?: string | null
@@ -1523,6 +1555,7 @@ export type ChannelUpdateWithoutChannelMoviesInput = {
   filterActors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterDirectors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterStudios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  filterCollections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterYearStart?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterYearEnd?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterRating?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1561,6 +1594,7 @@ export type ChannelUncheckedUpdateWithoutChannelMoviesInput = {
   filterActors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterDirectors?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterStudios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  filterCollections?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filterYearStart?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterYearEnd?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   filterRating?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1648,6 +1682,7 @@ export type ChannelSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   filterActors?: boolean
   filterDirectors?: boolean
   filterStudios?: boolean
+  filterCollections?: boolean
   filterYearStart?: boolean
   filterYearEnd?: boolean
   filterRating?: boolean
@@ -1688,6 +1723,7 @@ export type ChannelSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   filterActors?: boolean
   filterDirectors?: boolean
   filterStudios?: boolean
+  filterCollections?: boolean
   filterYearStart?: boolean
   filterYearEnd?: boolean
   filterRating?: boolean
@@ -1724,6 +1760,7 @@ export type ChannelSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   filterActors?: boolean
   filterDirectors?: boolean
   filterStudios?: boolean
+  filterCollections?: boolean
   filterYearStart?: boolean
   filterYearEnd?: boolean
   filterRating?: boolean
@@ -1760,6 +1797,7 @@ export type ChannelSelectScalar = {
   filterActors?: boolean
   filterDirectors?: boolean
   filterStudios?: boolean
+  filterCollections?: boolean
   filterYearStart?: boolean
   filterYearEnd?: boolean
   filterRating?: boolean
@@ -1775,7 +1813,7 @@ export type ChannelSelectScalar = {
   updatedAt?: boolean
 }
 
-export type ChannelOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "number" | "name" | "icon" | "stealth" | "groupTitle" | "startTime" | "iconWidth" | "iconDuration" | "iconPosition" | "guideFlexPlaceholder" | "guideMinimumDurationSeconds" | "isOnDemand" | "onDemandModulo" | "episodeMemoryEnabled" | "autoFilterEnabled" | "filterGenres" | "filterActors" | "filterDirectors" | "filterStudios" | "filterYearStart" | "filterYearEnd" | "filterRating" | "filterType" | "lastAutoScanAt" | "defaultEpisodeOrder" | "respectEpisodeOrder" | "blockShuffle" | "blockShuffleSize" | "autoSortMethod" | "franchiseAutomation" | "createdAt" | "updatedAt", ExtArgs["result"]["channel"]>
+export type ChannelOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "number" | "name" | "icon" | "stealth" | "groupTitle" | "startTime" | "iconWidth" | "iconDuration" | "iconPosition" | "guideFlexPlaceholder" | "guideMinimumDurationSeconds" | "isOnDemand" | "onDemandModulo" | "episodeMemoryEnabled" | "autoFilterEnabled" | "filterGenres" | "filterActors" | "filterDirectors" | "filterStudios" | "filterCollections" | "filterYearStart" | "filterYearEnd" | "filterRating" | "filterType" | "lastAutoScanAt" | "defaultEpisodeOrder" | "respectEpisodeOrder" | "blockShuffle" | "blockShuffleSize" | "autoSortMethod" | "franchiseAutomation" | "createdAt" | "updatedAt", ExtArgs["result"]["channel"]>
 export type ChannelInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   programs?: boolean | Prisma.Channel$programsArgs<ExtArgs>
   channelShows?: boolean | Prisma.Channel$channelShowsArgs<ExtArgs>
@@ -1813,6 +1851,7 @@ export type $ChannelPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     filterActors: string | null
     filterDirectors: string | null
     filterStudios: string | null
+    filterCollections: string | null
     filterYearStart: number | null
     filterYearEnd: number | null
     filterRating: string | null
@@ -2272,6 +2311,7 @@ export interface ChannelFieldRefs {
   readonly filterActors: Prisma.FieldRef<"Channel", 'String'>
   readonly filterDirectors: Prisma.FieldRef<"Channel", 'String'>
   readonly filterStudios: Prisma.FieldRef<"Channel", 'String'>
+  readonly filterCollections: Prisma.FieldRef<"Channel", 'String'>
   readonly filterYearStart: Prisma.FieldRef<"Channel", 'Int'>
   readonly filterYearEnd: Prisma.FieldRef<"Channel", 'Int'>
   readonly filterRating: Prisma.FieldRef<"Channel", 'String'>

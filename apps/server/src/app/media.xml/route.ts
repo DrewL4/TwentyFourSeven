@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     xmltv += '<!DOCTYPE tv SYSTEM "xmltv.dtd">\n';
     xmltv += '<tv generator-info-name="TwentyFourSeven" generator-info-url="https://github.com/vexorian/TwentyFourSeven" source-info-name="TwentyFourSeven">\n';
     for (const channel of channels) {
-      xmltv += `  <channel id="${escapeXml(channel.number.toString())}">\n`;
+      xmltv += `  <channel id="${escapeXml(channel.name)}">\n`;
       xmltv += `    <display-name lang="en">${escapeXml(channel.name)}</display-name>\n`;
       xmltv += `    <display-name>${escapeXml(channel.number.toString())}</display-name>\n`;
       if (channel.icon) {
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
     for (const program of programs) {
       const programStartTime = new Date(program.startTime);
       const programEndTime = new Date(programStartTime.getTime() + program.duration);
-      xmltv += `  <programme start="${formatXmltvTime(programStartTime)}" stop="${formatXmltvTime(programEndTime)}" channel="${escapeXml(program.channel.number.toString())}">\n`;
+      xmltv += `  <programme start="${formatXmltvTime(programStartTime)}" stop="${formatXmltvTime(programEndTime)}" channel="${escapeXml(program.channel.name)}">\n`;
       if (program.episode) {
         const show = program.episode.show;
         xmltv += `    <title lang="en">${escapeXml(show.title)}</title>\n`;
@@ -126,13 +126,13 @@ export async function GET(request: NextRequest) {
           try {
             const genres = JSON.parse(show.genres);
             if (Array.isArray(genres)) {
-              genres.forEach(genre => {
+              genres.forEach((genre: string) => {
                 xmltv += `    <category lang="en">${escapeXml(genre)}</category>\n`;
               });
             }
           } catch (e) {
-            const genres = show.genres.split(',').map(g => g.trim()).filter(g => g);
-            genres.forEach(genre => {
+            const genres = show.genres.split(',').map((g: string) => g.trim()).filter((g: string) => g);
+            genres.forEach((genre: string) => {
               xmltv += `    <category lang="en">${escapeXml(genre)}</category>\n`;
             });
           }
@@ -152,8 +152,8 @@ export async function GET(request: NextRequest) {
               });
             }
           } catch (e) {
-            const actors = show.actors.split(',').map(a => a.trim()).filter(a => a);
-            actors.forEach(actor => {
+            const actors = show.actors.split(',').map((a: string) => a.trim()).filter((a: string) => a);
+            actors.forEach((actor: string) => {
               xmltv += `      <actor>${escapeXml(actor)}</actor>\n`;
             });
           }
@@ -186,8 +186,8 @@ export async function GET(request: NextRequest) {
               });
             }
           } catch (e) {
-            const genres = program.movie.genres.split(',').map(g => g.trim()).filter(g => g);
-            genres.forEach(genre => {
+            const genres = program.movie.genres.split(',').map((g: string) => g.trim()).filter((g: string) => g);
+            genres.forEach((genre: string) => {
               xmltv += `    <category lang="en">${escapeXml(genre)}</category>\n`;
             });
           }
@@ -205,8 +205,8 @@ export async function GET(request: NextRequest) {
               });
             }
           } catch (e) {
-            const actors = program.movie.actors.split(',').map(a => a.trim()).filter(a => a);
-            actors.forEach(actor => {
+            const actors = program.movie.actors.split(',').map((a: string) => a.trim()).filter((a: string) => a);
+            actors.forEach((actor: string) => {
               xmltv += `      <actor>${escapeXml(actor)}</actor>\n`;
             });
           }
@@ -222,8 +222,8 @@ export async function GET(request: NextRequest) {
               });
             }
           } catch (e) {
-            const directors = program.movie.directors.split(',').map(d => d.trim()).filter(d => d);
-            directors.forEach(director => {
+            const directors = program.movie.directors.split(',').map((d: string) => d.trim()).filter((d: string) => d);
+            directors.forEach((director: string) => {
               xmltv += `      <director>${escapeXml(director)}</director>\n`;
             });
           }

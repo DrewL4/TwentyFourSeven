@@ -147,6 +147,18 @@ export class ChannelAutomationService {
   private async getMatchingMovies(channel: any): Promise<MediaMovie[]> {
     const whereClause: any = {};
 
+    // Collection filter - if specified, only get movies from specific collections
+    if (channel.filterCollections) {
+      const collections = JSON.parse(channel.filterCollections);
+      if (collections.length > 0) {
+        whereClause.OR = collections.map((collection: string) => ({
+          collections: {
+            contains: `"${collection}"`
+          }
+        }));
+      }
+    }
+
     // Year range filter
     if (channel.filterYearStart || channel.filterYearEnd) {
       whereClause.year = {};
@@ -167,12 +179,26 @@ export class ChannelAutomationService {
     if (channel.filterStudios) {
       const studios = JSON.parse(channel.filterStudios);
       if (studios.length > 0) {
-        whereClause.OR = studios.map((studio: string) => ({
-          studio: {
-            contains: studio,
-            mode: 'insensitive'
-          }
-        }));
+        // If we already have OR conditions from collections, we need to combine them
+        if (whereClause.OR) {
+          whereClause.AND = [
+            { OR: whereClause.OR }, // Collection filters
+            { OR: studios.map((studio: string) => ({
+              studio: {
+                contains: studio,
+                mode: 'insensitive'
+              }
+            }))}
+          ];
+          delete whereClause.OR;
+        } else {
+          whereClause.OR = studios.map((studio: string) => ({
+            studio: {
+              contains: studio,
+              mode: 'insensitive'
+            }
+          }));
+        }
       }
     }
 
@@ -191,6 +217,18 @@ export class ChannelAutomationService {
    */
   private async getMatchingShows(channel: any): Promise<MediaShow[]> {
     const whereClause: any = {};
+
+    // Collection filter - if specified, only get shows from specific collections
+    if (channel.filterCollections) {
+      const collections = JSON.parse(channel.filterCollections);
+      if (collections.length > 0) {
+        whereClause.OR = collections.map((collection: string) => ({
+          collections: {
+            contains: `"${collection}"`
+          }
+        }));
+      }
+    }
 
     // Year range filter
     if (channel.filterYearStart || channel.filterYearEnd) {
@@ -472,6 +510,20 @@ export class ChannelAutomationService {
    * Check if a media item matches the channel's filter criteria
    */
   private matchesFilters(media: MediaMovie | MediaShow, channel: any): boolean {
+    // Collection filter
+    if (channel.filterCollections) {
+      const filterCollections = JSON.parse(channel.filterCollections);
+      if (filterCollections.length > 0 && media.collections) {
+        const mediaCollections = JSON.parse(media.collections);
+        const hasMatchingCollection = filterCollections.some((filterCollection: string) =>
+          mediaCollections.some((collection: string) =>
+            collection.toLowerCase().includes(filterCollection.toLowerCase())
+          )
+        );
+        if (!hasMatchingCollection) return false;
+      }
+    }
+
     // Genre filter
     if (channel.filterGenres) {
       const filterGenres = JSON.parse(channel.filterGenres);

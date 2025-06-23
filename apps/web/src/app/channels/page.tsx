@@ -32,7 +32,8 @@ import {
   Timer,
   Type,
   Zap,
-  Info
+  Info,
+  Folder
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import Link from "next/link";
@@ -72,6 +73,7 @@ type Channel = {
   filterActors?: string;
   filterDirectors?: string;
   filterStudios?: string;
+  filterCollections?: string;
   filterYearStart?: number;
   filterYearEnd?: number;
   filterRating?: string;
@@ -169,6 +171,7 @@ function AddContentDialog({
   const [actorFilter, setActorFilter] = useState<string[]>([]);
   const [directorFilter, setDirectorFilter] = useState<string[]>([]);
   const [studioFilter, setStudioFilter] = useState<string[]>([]);
+  const [collectionFilter, setCollectionFilter] = useState<string[]>([]);
   const [ratingFilter, setRatingFilter] = useState("");
   const [autoFilterEnabled, setAutoFilterEnabled] = useState(false);
   const [smartFilteringEnabled, setSmartFilteringEnabled] = useState(false);
@@ -211,6 +214,12 @@ function AddContentDialog({
         setStudioFilter(existingChannelData.filterStudios ? JSON.parse(existingChannelData.filterStudios) : []);
       } catch (e) {
         setStudioFilter([]);
+      }
+      
+      try {
+        setCollectionFilter(existingChannelData.filterCollections ? JSON.parse(existingChannelData.filterCollections) : []);
+      } catch (e) {
+        setCollectionFilter([]);
       }
       
       // Set other filter fields
@@ -465,6 +474,7 @@ function AddContentDialog({
         filterActors: actorFilter.length > 0 ? JSON.stringify(actorFilter) : undefined,
         filterDirectors: directorFilter.length > 0 ? JSON.stringify(directorFilter) : undefined,
         filterStudios: studioFilter.length > 0 ? JSON.stringify(studioFilter) : undefined,
+        filterCollections: collectionFilter.length > 0 ? JSON.stringify(collectionFilter) : undefined,
         filterYearStart: yearFilter ? parseInt(yearFilter) : (yearRangeStart ? parseInt(yearRangeStart) : undefined),
         filterYearEnd: yearFilter ? parseInt(yearFilter) : (yearRangeEnd ? parseInt(yearRangeEnd) : undefined),
         filterRating: ratingFilter || undefined,
@@ -496,6 +506,7 @@ function AddContentDialog({
         filterActors: actorFilter.length > 0 ? JSON.stringify(actorFilter) : undefined,
         filterDirectors: directorFilter.length > 0 ? JSON.stringify(directorFilter) : undefined,
         filterStudios: studioFilter.length > 0 ? JSON.stringify(studioFilter) : undefined,
+        filterCollections: collectionFilter.length > 0 ? JSON.stringify(collectionFilter) : undefined,
         filterYearStart: yearFilter ? parseInt(yearFilter) : (yearRangeStart ? parseInt(yearRangeStart) : undefined),
         filterYearEnd: yearFilter ? parseInt(yearFilter) : (yearRangeEnd ? parseInt(yearRangeEnd) : undefined),
         filterRating: ratingFilter || undefined,
@@ -702,6 +713,7 @@ function AddContentDialog({
     setActorFilter([]);
     setDirectorFilter([]);
     setStudioFilter([]);
+    setCollectionFilter([]);
     setRatingFilter("");
     setAutoFilterEnabled(false);
     setSmartFilteringEnabled(false);
@@ -713,6 +725,72 @@ function AddContentDialog({
     setExpandedShows(new Set());
     setShowFilters(false);
     onClose();
+  };
+
+  // NEW: Collections state
+  const [selectedCollections, setSelectedCollections] = useState<Set<string>>(new Set());
+  const [addingCollections, setAddingCollections] = useState(false);
+  const queryClient = useQueryClient();
+  const collectionsQuery = useQuery(orpc.library.collections.queryOptions({ input: { limit: 10000 } }));
+  const filteredCollections = (collectionsQuery.data || []) as { name: string; count: number }[];
+
+  const toggleCollectionSelection = (name: string) => {
+    const newSelected = new Set(selectedCollections);
+    if (newSelected.has(name)) {
+      newSelected.delete(name);
+    } else {
+      newSelected.add(name);
+    }
+    setSelectedCollections(newSelected);
+  };
+
+  const selectAllCollections = () => {
+    setSelectedCollections(new Set(filteredCollections.map((col) => col.name)));
+  };
+
+  const clearCollectionSelection = () => {
+    setSelectedCollections(new Set());
+  };
+
+  // Helper: get all show/movie IDs already in the channel
+  const existingShowIds = new Set(existingShows.map((s: any) => s.showId || s.id));
+  const existingMovieIds = new Set(existingMovies.map((m: any) => m.movieId || m.id));
+
+  // Add all content from selected collections
+  const handleBulkAddCollections = async () => {
+    if (selectedCollections.size === 0) return;
+    setAddingCollections(true);
+    try {
+      // For each collection, fetch all movies and shows in parallel using fetchQuery
+      const collectionNames = Array.from(selectedCollections);
+      const [allShows, allMovies] = await Promise.all([
+        Promise.all(collectionNames.map(name =>
+          queryClient.fetchQuery(orpc.library.shows.queryOptions({ input: { collection: name, limit: 10000 } }))
+        )),
+        Promise.all(collectionNames.map(name =>
+          queryClient.fetchQuery(orpc.library.movies.queryOptions({ input: { collection: name, limit: 10000 } }))
+        )),
+      ]);
+      // Flatten results
+      const shows = allShows.flat();
+      const movies = allMovies.flat();
+      // Add each show/movie if not already in channel
+      shows.forEach((show: any) => {
+        if (!existingShowIds.has(show.id)) {
+          onAddShows(show.id);
+          existingShowIds.add(show.id);
+        }
+      });
+      movies.forEach((movie: any) => {
+        if (!existingMovieIds.has(movie.id)) {
+          onAddMovies(movie.id);
+          existingMovieIds.add(movie.id);
+        }
+      });
+    } finally {
+      setAddingCollections(false);
+      setSelectedCollections(new Set());
+    }
   };
 
   if (!isOpen) return null;
@@ -968,6 +1046,24 @@ function AddContentDialog({
                      />
                    </div>
                  </div>
+                 <div className="grid grid-cols-1 gap-3">
+                   <div className="space-y-2">
+                     <Label className="text-xs font-medium flex items-center gap-1">
+                       <Folder className="w-3 h-3" />
+                       Collections
+                     </Label>
+                     <MultiSelect
+                       placeholder="e.g. Marvel, DC Universe"
+                       value={collectionFilter}
+                       onValueChange={setCollectionFilter}
+                       options={collectionsQuery.data?.map((c: any) => c.name) || []}
+                       loading={collectionsQuery.isLoading}
+                       className="h-8"
+                       maxItems={5}
+                       showCounter={false}
+                     />
+                   </div>
+                 </div>
                  <div className="flex items-center justify-between mt-4">
                    <div className="flex items-center space-x-2">
                      <Checkbox 
@@ -1000,7 +1096,7 @@ function AddContentDialog({
         <CardContent className="p-0 h-full">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
             <div className="border-b px-6">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="shows" className="flex items-center gap-2">
                   <Video className="w-4 h-4" />
                   TV Shows ({filteredShows.length})
@@ -1013,6 +1109,13 @@ function AddContentDialog({
                   Movies ({filteredMovies.length})
                   {selectedMovies.size > 0 && (
                     <Badge variant="secondary">{selectedMovies.size} selected</Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="collections" className="flex items-center gap-2">
+                  <Folder className="w-4 h-4" />
+                  Collections ({filteredCollections.length})
+                  {selectedCollections.size > 0 && (
+                    <Badge variant="secondary">{selectedCollections.size} selected</Badge>
                   )}
                 </TabsTrigger>
               </TabsList>
@@ -1280,6 +1383,66 @@ function AddContentDialog({
                 )}
               </div>
             </TabsContent>
+
+            <TabsContent value="collections" className="p-6 space-y-4 h-[500px] overflow-hidden">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={selectAllCollections}
+                    disabled={filteredCollections.length === 0 || addingCollections}
+                  >
+                    Select All ({filteredCollections.length})
+                  </Button>
+                  {selectedCollections.size > 0 && (
+                    <Button onClick={handleBulkAddCollections} disabled={addingCollections}>
+                      {addingCollections ? "Adding..." : `Add ${selectedCollections.size} Collections`}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="overflow-y-auto h-full space-y-2">
+                {filteredCollections.map((col) => (
+                  <div
+                    key={col.name}
+                    className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                      selectedCollections.has(col.name) ? 'bg-accent border-primary' : 'hover:bg-muted'
+                    }`}
+                  >
+                    <Checkbox
+                      checked={selectedCollections.has(col.name)}
+                      onCheckedChange={() => toggleCollectionSelection(col.name)}
+                      disabled={addingCollections}
+                    />
+                    <Folder className="w-8 h-8 text-muted-foreground" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium truncate">{col.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {col.count} items
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => toggleCollectionSelection(col.name)}
+                      disabled={addingCollections}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                ))}
+                {filteredCollections.length === 0 && (
+                  <div className="text-center py-12">
+                    <Folder className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No collections found</h3>
+                    <p className="text-muted-foreground">
+                      {searchTerm ? "Try adjusting your search terms" : "No collections available to add"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
           </Tabs>
 
 
@@ -1300,11 +1463,12 @@ function AddContentDialog({
                 onClick={() => {
                   handleBulkAddShows();
                   handleBulkAddMovies();
+                  handleBulkAddCollections();
                   handleClose();
                 }}
                 disabled={selectedShows.size === 0 && selectedMovies.size === 0}
               >
-                Add Selected ({selectedShows.size + selectedMovies.size})
+                Add Selected ({selectedShows.size + selectedMovies.size + selectedCollections.size})
               </Button>
             </div>
           </div>

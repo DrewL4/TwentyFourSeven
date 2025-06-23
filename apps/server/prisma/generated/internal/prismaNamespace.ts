@@ -1897,6 +1897,7 @@ export const ChannelScalarFieldEnum = {
   filterActors: 'filterActors',
   filterDirectors: 'filterDirectors',
   filterStudios: 'filterStudios',
+  filterCollections: 'filterCollections',
   filterYearStart: 'filterYearStart',
   filterYearEnd: 'filterYearEnd',
   filterRating: 'filterRating',

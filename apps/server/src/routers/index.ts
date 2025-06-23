@@ -6,7 +6,7 @@ export const appRouter = {
   healthCheck: publicProcedure.handler(() => {
     return "OK";
   }),
-  privateData: protectedProcedure.handler(({ context }) => {
+  privateData: protectedProcedure.handler(({ context }: { context: import('../lib/context').Context }) => {
     return {
       message: "This is private",
       user: context.session?.user,
@@ -105,6 +105,7 @@ export const appRouter = {
         filterActors: z.string().optional(),
         filterDirectors: z.string().optional(),
         filterStudios: z.string().optional(),
+        filterCollections: z.string().optional(),
         filterYearStart: z.number().optional(),
         filterYearEnd: z.number().optional(),
         filterRating: z.string().optional(),
@@ -143,6 +144,7 @@ export const appRouter = {
         filterActors: z.string().optional(),
         filterDirectors: z.string().optional(),
         filterStudios: z.string().optional(),
+        filterCollections: z.string().optional(),
         filterYearStart: z.number().optional(),
         filterYearEnd: z.number().optional(),
         filterRating: z.string().optional(),
@@ -339,6 +341,7 @@ export const appRouter = {
         filterActors: z.string().optional(),
         filterDirectors: z.string().optional(),
         filterStudios: z.string().optional(),
+        filterCollections: z.string().optional(),
         filterYearStart: z.number().optional(),
         filterYearEnd: z.number().optional(),
         filterRating: z.string().optional(),
@@ -1081,6 +1084,7 @@ export const appRouter = {
       .input(z.object({
         libraryId: z.string().optional(),
         search: z.string().optional(),
+        collection: z.string().optional(),
         limit: z.number().default(50),
         offset: z.number().default(0)
       }))
@@ -1088,10 +1092,10 @@ export const appRouter = {
         const where: any = {};
         if (input.libraryId) where.libraryId = input.libraryId;
         if (input.search) {
-          where.title = {
-            contains: input.search,
-            mode: 'insensitive'
-          };
+          where.title = { contains: input.search, mode: 'insensitive' };
+        }
+        if (input.collection) {
+          where.collections = { contains: `"${input.collection}"` };
         }
 
         return await prisma.mediaShow.findMany({
@@ -1115,6 +1119,7 @@ export const appRouter = {
       .input(z.object({
         libraryId: z.string().optional(),
         search: z.string().optional(),
+        collection: z.string().optional(),
         limit: z.number().default(50),
         offset: z.number().default(0)
       }))
@@ -1122,10 +1127,10 @@ export const appRouter = {
         const where: any = {};
         if (input.libraryId) where.libraryId = input.libraryId;
         if (input.search) {
-          where.title = {
-            contains: input.search,
-            mode: 'insensitive'
-          };
+          where.title = { contains: input.search, mode: 'insensitive' };
+        }
+        if (input.collection) {
+          where.collections = { contains: `"${input.collection}"` };
         }
 
         return await prisma.mediaMovie.findMany({
@@ -1156,6 +1161,72 @@ export const appRouter = {
             { episodeNumber: 'asc' }
           ]
         });
+      }),
+
+    // NEW: Collections endpoint
+    collections: publicProcedure
+      .input(z.object({
+        search: z.string().optional(),
+        limit: z.number().default(50),
+        offset: z.number().default(0)
+      }))
+      .handler(async ({ input }: { input: { search?: string; limit: number; offset: number } }) => {
+        const { search = undefined, limit, offset } = input;
+
+        // Fetch collections from both movies and shows
+        const [movieCollections, showCollections] = await Promise.all([
+          prisma.mediaMovie.findMany({
+            where: {
+              collections: { not: null }
+            },
+            select: { collections: true }
+          }),
+          prisma.mediaShow.findMany({
+            where: {
+              collections: { not: null }
+            },
+            select: { collections: true }
+          })
+        ]);
+
+        // Helper to add collections to the map with counts
+        const collectionMap: Map<string, number> = new Map();
+        const addCollections = (raw: { collections: string | null }[]) => {
+          raw.forEach(item => {
+            if (!item.collections) return;
+            try {
+              const cols = JSON.parse(item.collections) as unknown;
+              if (Array.isArray(cols)) {
+                cols.forEach(col => {
+                  if (typeof col === 'string' && col.trim()) {
+                    const key = col.trim();
+                    collectionMap.set(key, (collectionMap.get(key) || 0) + 1);
+                  }
+                });
+              }
+            } catch (_) {
+              // Ignore invalid JSON
+            }
+          });
+        };
+
+        addCollections(movieCollections);
+        addCollections(showCollections);
+
+        type CollectionStat = { name: string; count: number };
+
+        let result: CollectionStat[] = Array.from(collectionMap.entries()).map(([name, count]) => ({ name, count }));
+        // Apply search filter
+        if (search) {
+          const term = search.toLowerCase();
+          result = result.filter(c => c.name.toLowerCase().includes(term));
+        }
+
+        // Sort alphabetically
+        result.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Pagination using offset & limit
+        return result.slice(offset, offset + limit);
       })
   },
 

@@ -202,6 +202,134 @@ export class ProgrammingService {
   }
 
   /**
+   * Validate content has valid durations before scheduling
+   */
+  private validateContentDurations(allContent: Array<{ type: string; content: any; duration: number }>): Array<{ type: string; content: any; duration: number }> {
+    return allContent.filter(item => {
+      const duration = item.duration;
+      if (!duration || duration <= 0) {
+        console.warn(`Skipping ${item.type} "${item.content.title || item.content.id}" - invalid duration: ${duration}`);
+        return false;
+      }
+      // Ensure reasonable duration limits (1 second to 24 hours)
+      if (duration < 1000 || duration > 24 * 60 * 60 * 1000) {
+        console.warn(`Skipping ${item.type} "${item.content.title || item.content.id}" - unreasonable duration: ${duration}ms`);
+        return false;
+      }
+      return true;
+    });
+  }
+
+  /**
+   * Fill gaps between programs by inserting content
+   */
+  private async fillGaps(channelId: string, gaps: Array<{ program1: any; program2: any; gapDuration: number }>): Promise<boolean> {
+    if (gaps.length === 0) return true;
+
+    console.log(`Attempting to fill ${gaps.length} gaps on channel ${channelId}`);
+    
+    // Get channel content for gap filling
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      include: {
+        channelShows: {
+          include: {
+            show: {
+              include: {
+                episodes: {
+                  orderBy: [
+                    { seasonNumber: 'asc' },
+                    { episodeNumber: 'asc' }
+                  ]
+                }
+              }
+            }
+          },
+          orderBy: { order: 'asc' }
+        },
+        channelMovies: {
+          include: { movie: true },
+          orderBy: { order: 'asc' }
+        }
+      }
+    });
+
+    if (!channel) return false;
+
+    // Build validated content array
+    const showItems = channel.channelShows.map(cs => ({
+      order: cs.order,
+      type: 'show' as const,
+      episodes: cs.show.episodes.map(episode => ({
+        type: 'episode' as const,
+        content: episode,
+        duration: episode.duration
+      }))
+    }));
+
+    const movieItems = channel.channelMovies.map(cm => ({
+      order: cm.order,
+      type: 'movie' as const,
+      item: {
+        type: 'movie' as const,
+        content: cm.movie,
+        duration: cm.movie.duration
+      }
+    }));
+
+    const allItems = [...showItems, ...movieItems].sort((a, b) => a.order - b.order);
+    
+    // Flatten and validate content
+    const allContent = [];
+    for (const item of allItems) {
+      if (item.type === 'show') {
+        allContent.push(...item.episodes);
+      } else {
+        allContent.push(item.item);
+      }
+    }
+
+    const validatedContent = this.validateContentDurations(allContent);
+    if (validatedContent.length === 0) {
+      console.warn(`No valid content available to fill gaps on channel ${channelId}`);
+      return false;
+    }
+
+    // Fill each gap
+    const programsToInsert = [];
+    for (const gap of gaps) {
+      const gapStart = new Date(gap.program1.startTime.getTime() + gap.program1.duration);
+      const gapEnd = new Date(gap.program2.startTime);
+      const availableTime = gapEnd.getTime() - gapStart.getTime();
+
+      // Find content that fits in the gap
+      const fittingContent = validatedContent.filter(item => item.duration <= availableTime);
+      if (fittingContent.length === 0) {
+        console.warn(`No content fits in gap of ${availableTime}ms between programs`);
+        continue;
+      }
+
+      // Use the first fitting content item
+      const selectedContent = fittingContent[0];
+      programsToInsert.push({
+        channelId,
+        startTime: gapStart,
+        duration: selectedContent.duration,
+        ...(selectedContent.type === 'episode' ? { episodeId: selectedContent.content.id } : { movieId: selectedContent.content.id })
+      });
+    }
+
+    // Insert gap-filling programs
+    if (programsToInsert.length > 0) {
+      await prisma.program.createMany({ data: programsToInsert });
+      console.log(`Inserted ${programsToInsert.length} programs to fill gaps on channel ${channelId}`);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Clean up any overlapping programs on a specific channel
    */
   private async cleanupOverlapsForChannel(channelId: string): Promise<void> {
@@ -213,21 +341,28 @@ export class ProgrammingService {
 
     console.log(`Cleaning up ${verificationResult.overlaps.length} overlaps on channel ${channelId}`);
     
-    // For each overlap, keep the earlier program and remove the later one
+    // Group overlaps and resolve them systematically
     const programsToDelete = new Set<string>();
+    const programsToAdjust = [];
     
     for (const overlap of verificationResult.overlaps) {
-      // Keep the earlier program, mark the later one for deletion
       const program1Start = overlap.program1.startTime.getTime();
       const program2Start = overlap.program2.startTime.getTime();
       
       if (program1Start < program2Start) {
-        programsToDelete.add(overlap.program2.id);
+        // Keep program1, but adjust program2's start time to avoid gap
+        const program1End = program1Start + overlap.program1.duration;
+        programsToAdjust.push({
+          id: overlap.program2.id,
+          newStartTime: new Date(program1End)
+        });
       } else {
+        // Keep program2, delete program1
         programsToDelete.add(overlap.program1.id);
       }
     }
 
+    // Delete overlapping programs
     if (programsToDelete.size > 0) {
       await prisma.program.deleteMany({
         where: {
@@ -236,8 +371,19 @@ export class ProgrammingService {
           }
         }
       });
-      
       console.log(`Removed ${programsToDelete.size} overlapping programs from channel ${channelId}`);
+    }
+
+    // Adjust program start times to prevent gaps
+    for (const adjustment of programsToAdjust) {
+      await prisma.program.update({
+        where: { id: adjustment.id },
+        data: { startTime: adjustment.newStartTime }
+      });
+    }
+
+    if (programsToAdjust.length > 0) {
+      console.log(`Adjusted ${programsToAdjust.length} program start times to prevent gaps on channel ${channelId}`);
     }
   }
 
@@ -428,6 +574,17 @@ export class ProgrammingService {
       return;
     }
 
+    // Validate content durations to prevent gaps
+    const validatedContent = this.validateContentDurations(allContent);
+    if (validatedContent.length === 0) {
+      console.warn(`No valid content found for channel ${channel.name} after duration validation - channel will have no programming`);
+      return;
+    }
+
+    if (validatedContent.length < allContent.length) {
+      console.warn(`Filtered out ${allContent.length - validatedContent.length} items with invalid durations for channel ${channel.name}`);
+    }
+
     // Generate programs for the specified duration
     const endTime = new Date(startTime.getTime() + (hours * 60 * 60 * 1000));
     let currentTime = new Date(startTime);
@@ -438,7 +595,7 @@ export class ProgrammingService {
     // Always generate programming to fill the entire time period by looping content
     // Ensure programs are perfectly sequential with no gaps
     while (currentTime < endTime) {
-      const item = allContent[contentIndex % allContent.length];
+      const item = validatedContent[contentIndex % validatedContent.length];
       
       // Create program entry with exact timing
       const program = {
@@ -496,7 +653,7 @@ export class ProgrammingService {
       console.log(`✓ Verified continuous programming with no gaps for channel ${channel.name}`);
     }
 
-    console.log(`Generated ${programs.length} programs for channel ${channel.name} (looped content ${Math.ceil(programs.length / allContent.length)} times)`);
+    console.log(`Generated ${programs.length} programs for channel ${channel.name} (looped content ${Math.ceil(programs.length / validatedContent.length)} times)`);
   }
 
   /**
@@ -522,24 +679,20 @@ export class ProgrammingService {
   }
 
   /**
-   * Auto-regenerate programs as needed (should be called periodically)
+   * Enhanced programming maintenance with comprehensive gap prevention and automatic recovery
    * 
-   * This is the core method that ensures channels never end. It:
-   * 1. Checks each channel's last scheduled program
-   * 2. Ensures programming extends to at least 'guideDays' into the future
-   * 3. Appends new programs seamlessly from where the schedule ends
-   * 4. Maintains content rotation order across extensions
+   * This is the core method that ensures channels never end. Enhanced features:
+   * 1. Validates content durations before scheduling
+   * 2. Cleans up overlaps without creating gaps
+   * 3. Fills any detected gaps automatically
+   * 4. Regenerates schedules automatically if gaps persist
+   * 5. Ensures programming extends to at least 'guideDays' into the future
+   * 6. Maintains content rotation order across extensions
    * 
    * This method is called:
    * - On server startup (if programs exist)
    * - Every hour via the scheduler
    * - Manually via API endpoints
-   * 
-   * The algorithm ensures:
-   * - No gaps between programs
-   * - Content continues in the same rotation order
-   * - Currently playing programs are never affected
-   * - Database efficiency through targeted updates
    */
   async maintainPrograms() {
     const guideDays = await this.getGuideDays();
@@ -552,40 +705,77 @@ export class ProgrammingService {
     });
 
     for (const channel of channels) {
-      // Ensure existing schedule has no overlaps before appending
-      const overlapCheck = await this.verifyNoOverlaps(channel.id);
-      if (!overlapCheck.success) {
-        console.warn(`Found ${overlapCheck.overlaps.length} overlaps before maintenance on channel ${channel.name}. Cleaning up...`);
-        await this.cleanupOverlapsForChannel(channel.id);
-      }
-
-      // Find the last scheduled program for this channel
-      const lastProgram = await prisma.program.findFirst({
-        where: { channelId: channel.id },
-        orderBy: { startTime: 'desc' }
-      });
-      let startTime = now;
-      if (lastProgram) {
-        const lastEnd = new Date(lastProgram.startTime.getTime() + lastProgram.duration);
-        if (lastEnd > now) {
-          startTime = lastEnd;
+      try {
+        // Step 1: Clean up overlaps using enhanced method
+        const overlapCheck = await this.verifyNoOverlaps(channel.id);
+        if (!overlapCheck.success) {
+          console.warn(`Found ${overlapCheck.overlaps.length} overlaps before maintenance on channel ${channel.name}. Cleaning up...`);
+          await this.cleanupOverlapsForChannel(channel.id);
         }
-      }
-      // Only append if needed
-      if (!lastProgram || startTime < lookAhead) {
-        await this.appendProgramsForChannel(channel.id, startTime, lookAhead);
 
-        // Verify no gaps after appending
-        const gapCheck = await this.verifyNoGaps(channel.id);
+        // Step 2: Check for existing gaps and attempt to fill them
+        let gapCheck = await this.verifyNoGaps(channel.id);
         if (!gapCheck.success) {
-          console.warn(`Maintenance introduced ${gapCheck.gaps.length} gaps on channel ${channel.name}. Consider regenerating schedule.`);
+          console.warn(`Found ${gapCheck.gaps.length} existing gaps on channel ${channel.name}. Attempting to fill...`);
+          const gapsFilled = await this.fillGaps(channel.id, gapCheck.gaps);
+          
+          if (gapsFilled) {
+            // Re-verify after gap filling
+            gapCheck = await this.verifyNoGaps(channel.id);
+          }
         }
+
+        // Step 3: Extend programming if needed
+        const lastProgram = await prisma.program.findFirst({
+          where: { channelId: channel.id },
+          orderBy: { startTime: 'desc' }
+        });
+        
+        let startTime = now;
+        if (lastProgram) {
+          const lastEnd = new Date(lastProgram.startTime.getTime() + lastProgram.duration);
+          if (lastEnd > now) {
+            startTime = lastEnd;
+          }
+        }
+
+        // Only append if needed
+        if (!lastProgram || startTime < lookAhead) {
+          await this.appendProgramsForChannelWithValidation(channel.id, startTime, lookAhead);
+        }
+
+        // Step 4: Final gap verification and automatic regeneration if needed
+        const finalGapCheck = await this.verifyNoGaps(channel.id);
+        if (!finalGapCheck.success) {
+          console.warn(`Maintenance still shows ${finalGapCheck.gaps.length} gaps on channel ${channel.name}. Attempting automatic regeneration...`);
+          
+          // Try to fill remaining gaps one more time
+          const finalGapsFilled = await this.fillGaps(channel.id, finalGapCheck.gaps);
+          
+          if (!finalGapsFilled) {
+            // If gap filling failed, regenerate the entire schedule
+            console.warn(`Gap filling failed for channel ${channel.name}. Regenerating entire schedule...`);
+            await this.generateProgramsForChannel(channel.id);
+            console.log(`✅ Automatically regenerated schedule for channel ${channel.name}`);
+          } else {
+            console.log(`✅ Successfully filled remaining gaps on channel ${channel.name}`);
+          }
+        }
+
+      } catch (error) {
+        console.error(`Error during maintenance for channel ${channel.name}:`, error);
+        // Continue with other channels instead of failing completely
       }
     }
   }
 
+  // Enhanced helper to append programs with content validation
+  async appendProgramsForChannelWithValidation(channelId: string, startTime: Date, endTime: Date) {
+    return this.appendProgramsForChannel(channelId, startTime, endTime, true);
+  }
+
   // Helper to append programs for a channel from startTime to endTime
-  async appendProgramsForChannel(channelId: string, startTime: Date, endTime: Date) {
+  async appendProgramsForChannel(channelId: string, startTime: Date, endTime: Date, withValidation: boolean = false) {
     // Get the current lineup for the channel
     const channel = await prisma.channel.findUnique({
       where: { id: channelId },
@@ -644,6 +834,14 @@ export class ProgrammingService {
       }
     }
     if (allContent.length === 0) return;
+
+    // Apply content validation if requested
+    const finalContent = withValidation ? this.validateContentDurations(allContent) : allContent;
+    if (finalContent.length === 0) {
+      console.warn(`No valid content available for channel ${channelId} after validation`);
+      return;
+    }
+
     // Find where to start in the rotation
     let contentIndex = 0;
     if (startTime > new Date()) {
@@ -655,18 +853,18 @@ export class ProgrammingService {
       if (lastProgram) {
         // Find the index of the last item used
         const lastId = lastProgram.episodeId || lastProgram.movieId;
-        contentIndex = allContent.findIndex(item =>
+        contentIndex = finalContent.findIndex(item =>
           (item.type === 'episode' && item.content.id === lastProgram.episodeId) ||
           (item.type === 'movie' && item.content.id === lastProgram.movieId)
         );
         if (contentIndex === -1) contentIndex = 0;
-        contentIndex = (contentIndex + 1) % allContent.length;
+        contentIndex = (contentIndex + 1) % finalContent.length;
       }
     }
     let currentTime = new Date(startTime);
     const programs = [];
     while (currentTime < endTime) {
-      const item = allContent[contentIndex % allContent.length];
+      const item = finalContent[contentIndex % finalContent.length];
       const program = {
         channelId,
         startTime: new Date(currentTime.getTime()),
