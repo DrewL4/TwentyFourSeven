@@ -170,6 +170,8 @@ function AddContentDialog({
   const [directorFilter, setDirectorFilter] = useState<string[]>([]);
   const [studioFilter, setStudioFilter] = useState<string[]>([]);
   const [ratingFilter, setRatingFilter] = useState("");
+  const [collectionFilter, setCollectionFilter] = useState<string[]>([]);
+  const [collectionSearch, setCollectionSearch] = useState("");
   const [autoFilterEnabled, setAutoFilterEnabled] = useState(false);
   const [smartFilteringEnabled, setSmartFilteringEnabled] = useState(false);
   const [keepUpToDate, setKeepUpToDate] = useState(false);
@@ -242,6 +244,10 @@ function AddContentDialog({
     input: { search: studioSearch, limit: 200 } 
   }));
 
+  const collectionsQuery = useQuery(orpc.channels.getCollections.queryOptions({
+    input: { search: collectionSearch, limit: 200 }
+  }));
+
     // Get filtered content for smart filtering context
   const getFilteredContent = (excludeFilter?: 'ratings') => {
     const allContent = [
@@ -290,7 +296,7 @@ function AddContentDialog({
   };
 
   // Get contextual options based on current filter selections
-  const getContextualOptions = useCallback((type: 'actors' | 'directors' | 'genres' | 'studios' | 'ratings') => {
+  const getContextualOptions = useCallback((type: 'actors' | 'directors' | 'genres' | 'studios' | 'ratings' | 'collections') => {
     if (!smartFilteringEnabled) {
       // Return all options when smart filtering is disabled
       switch (type) {
@@ -299,6 +305,7 @@ function AddContentDialog({
         case 'genres': return genresQuery.data || [];
         case 'studios': return studiosQuery.data || [];
         case 'ratings': return ['G', 'PG', 'PG-13', 'R', 'NC-17', 'TV-Y', 'TV-Y7', 'TV-G', 'TV-PG', 'TV-14', 'TV-MA'];
+        case 'collections': return collectionsQuery.data || [];
         default: return [];
       }
     }
@@ -326,6 +333,9 @@ function AddContentDialog({
           case 'ratings':
             values = item.contentRating ? [item.contentRating] : [];
             break;
+          case 'collections':
+            values = item.collections ? JSON.parse(item.collections) : [];
+            break;
         }
         
         values.forEach(value => {
@@ -342,12 +352,13 @@ function AddContentDialog({
     const searchTerm = type === 'actors' ? actorSearch : 
                       type === 'directors' ? directorSearch :
                       type === 'genres' ? genreSearch : 
-                      type === 'studios' ? studioSearch : '';
+                      type === 'studios' ? studioSearch : 
+                      type === 'collections' ? collectionSearch : '';
     
     return Array.from(optionsSet)
       .sort()
       .filter(option => !searchTerm || option.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [smartFilteringEnabled, genreFilter, actorFilter, directorFilter, studioFilter, yearFilter, yearRangeStart, yearRangeEnd, ratingFilter, actorSearch, directorSearch, genreSearch, studioSearch, showsQuery.data, moviesQuery.data, actorsQuery.data, directorsQuery.data, genresQuery.data, studiosQuery.data]);
+  }, [smartFilteringEnabled, genreFilter, actorFilter, directorFilter, studioFilter, yearFilter, yearRangeStart, yearRangeEnd, ratingFilter, actorSearch, directorSearch, genreSearch, studioSearch, showsQuery.data, moviesQuery.data, actorsQuery.data, directorsQuery.data, genresQuery.data, studiosQuery.data, collectionsQuery.data, collectionSearch, showsQuery.data, moviesQuery.data]);
 
   // Enhanced filter logic
   const filteredShows = (showsQuery.data || []).filter((show: any) => {
@@ -474,7 +485,8 @@ function AddContentDialog({
         respectEpisodeOrder: existingChannelData?.respectEpisodeOrder ?? true,
         blockShuffle: existingChannelData?.blockShuffle || false,
         blockShuffleSize: existingChannelData?.blockShuffleSize || 1,
-        autoSortMethod: existingChannelData?.autoSortMethod || undefined
+        autoSortMethod: existingChannelData?.autoSortMethod || undefined,
+        filterCollections: collectionFilter.length > 0 ? JSON.stringify(collectionFilter) : undefined,
       };
       onSaveAutomation(filters);
     }
@@ -505,7 +517,8 @@ function AddContentDialog({
         respectEpisodeOrder: existingChannelData?.respectEpisodeOrder ?? true,
         blockShuffle: existingChannelData?.blockShuffle || false,
         blockShuffleSize: existingChannelData?.blockShuffleSize || 1,
-        autoSortMethod: existingChannelData?.autoSortMethod || undefined
+        autoSortMethod: existingChannelData?.autoSortMethod || undefined,
+        filterCollections: collectionFilter.length > 0 ? JSON.stringify(collectionFilter) : undefined,
       };
       onSaveAutomation(filters);
     }
@@ -705,6 +718,7 @@ function AddContentDialog({
     setRatingFilter("");
     setAutoFilterEnabled(false);
     setSmartFilteringEnabled(false);
+    setCollectionFilter([]);
   };
 
   const handleClose = () => {
@@ -901,6 +915,22 @@ function AddContentDialog({
                          </SelectContent>
                        </Select>
                      </div>
+                   <div className="space-y-2">
+                     <Label className="text-xs font-medium flex items-center gap-1">
+                       Collection
+                     </Label>
+                     <MultiSelect
+                       placeholder="e.g. Pixar, Marvel"
+                       value={collectionFilter}
+                       onValueChange={setCollectionFilter}
+                       options={getContextualOptions('collections')}
+                       loading={collectionsQuery.isLoading}
+                       onSearch={setCollectionSearch}
+                       className="h-8"
+                       maxItems={10}
+                       showCounter={false}
+                     />
+                   </div>
                  </div>
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                    <div className="space-y-2">
