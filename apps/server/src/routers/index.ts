@@ -1165,7 +1165,7 @@ export const appRouter = {
         limit: z.number().default(50),
         offset: z.number().default(0)
       }))
-      .handler(async ({ input }) => {
+      .handler(async ({ input }: { input: { search?: string; limit: number; offset: number } }) => {
         const { search = undefined, limit, offset } = input;
 
         // Fetch collections from both movies and shows
@@ -1208,7 +1208,9 @@ export const appRouter = {
         addCollections(movieCollections);
         addCollections(showCollections);
 
-        let result = Array.from(collectionMap.entries()).map(([name, count]) => ({ name, count }));
+        type CollectionStat = { name: string; count: number };
+
+        let result: CollectionStat[] = Array.from(collectionMap.entries()).map(([name, count]) => ({ name, count }));
         // Apply search filter
         if (search) {
           const term = search.toLowerCase();

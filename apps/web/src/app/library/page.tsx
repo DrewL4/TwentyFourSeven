@@ -360,7 +360,7 @@ export default function LibraryPage() {
                 <div>
                   <h2 className="text-2xl font-bold mb-4">Collections</h2>
                   <div className="flex flex-wrap gap-2">
-                    {collectionsQuery.data.map((col) => (
+                    {(collectionsQuery.data as { name: string; count: number }[]).map((col) => (
                       <Badge key={col.name} variant="outline" className="px-3 py-1 text-sm">
                         {col.name} <span className="ml-1 text-muted-foreground">({col.count})</span>
                       </Badge>
