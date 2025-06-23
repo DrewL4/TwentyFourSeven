@@ -1,5 +1,23 @@
 import { prisma } from '@/lib/prisma';
-import type { Channel, MediaMovie, MediaShow } from '../../prisma/generated';
+import type { MediaMovie, MediaShow } from '../../prisma/generated';
+
+// Extend the generated Channel model with the eager-loaded relations we use inside the service
+export interface ChannelWithRelations {
+  id: string;
+  name: string;
+  filterType: string;
+  filterGenres?: string | null;
+  filterActors?: string | null;
+  filterDirectors?: string | null;
+  filterStudios?: string | null;
+  filterCollections?: string | null;
+  filterYearStart?: number | null;
+  filterYearEnd?: number | null;
+  filterRating?: string | null;
+  franchiseAutomation: boolean;
+  channelMovies: Array<{ movieId: string }>;
+  channelShows: Array<{ showId: string; show: MediaShow }>;
+}
 
 export class ChannelAutomationService {
   /**
@@ -32,7 +50,7 @@ export class ChannelAutomationService {
   /**
    * Process automation for a specific channel
    */
-  async processChannelAutomation(channel: any): Promise<void> {
+  async processChannelAutomation(channel: ChannelWithRelations): Promise<void> {
     try {
       const { filterType } = channel;
       let contentAdded = false;
@@ -71,13 +89,13 @@ export class ChannelAutomationService {
   /**
    * Process movie automation for a channel
    */
-  private async processMovieAutomation(channel: any): Promise<boolean> {
+  private async processMovieAutomation(channel: ChannelWithRelations): Promise<boolean> {
     // Get all movies that match the filter criteria
     const matchingMovies = await this.getMatchingMovies(channel);
 
     // Get movies already in the channel
     const existingMovieIds = new Set(
-      channel.channelMovies.map((cm: any) => cm.movieId)
+      channel.channelMovies.map((cm: { movieId: string }) => cm.movieId)
     );
 
     let moviesAdded = false;
@@ -102,7 +120,7 @@ export class ChannelAutomationService {
   /**
    * Process show automation for a channel
    */
-  private async processShowAutomation(channel: any): Promise<boolean> {
+  private async processShowAutomation(channel: ChannelWithRelations): Promise<boolean> {
     console.log(`Processing show automation for channel "${channel.name}" with filters:`, {
       filterGenres: channel.filterGenres,
       filterActors: channel.filterActors,
@@ -119,7 +137,7 @@ export class ChannelAutomationService {
 
     // Get shows already in the channel
     const existingShowIds = new Set(
-      channel.channelShows.map((cs: any) => cs.showId)
+      channel.channelShows.map((cs: { showId: string }) => cs.showId)
     );
 
     let showsAdded = false;
@@ -144,7 +162,7 @@ export class ChannelAutomationService {
   /**
    * Get movies that match the channel's filter criteria
    */
-  private async getMatchingMovies(channel: any): Promise<MediaMovie[]> {
+  private async getMatchingMovies(channel: ChannelWithRelations): Promise<MediaMovie[]> {
     const whereClause: any = {};
 
     // Year range filter
@@ -181,7 +199,7 @@ export class ChannelAutomationService {
     });
 
     // Apply additional filters that require JSON parsing
-    return movies.filter(movie => {
+    return movies.filter((movie: MediaMovie) => {
       return this.matchesFilters(movie, channel);
     });
   }
@@ -189,7 +207,7 @@ export class ChannelAutomationService {
   /**
    * Get shows that match the channel's filter criteria
    */
-  private async getMatchingShows(channel: any): Promise<MediaShow[]> {
+  private async getMatchingShows(channel: ChannelWithRelations): Promise<MediaShow[]> {
     const whereClause: any = {};
 
     // Year range filter
@@ -244,7 +262,7 @@ export class ChannelAutomationService {
     });
 
     // Apply additional filters that require JSON parsing
-    return shows.filter(show => {
+    return shows.filter((show: MediaShow) => {
       return this.matchesFilters(show, channel);
     });
   }
@@ -252,7 +270,7 @@ export class ChannelAutomationService {
   /**
    * Find shows similar to those already in the channel
    */
-  private async findSimilarShows(channel: any): Promise<MediaShow[]> {
+  private async findSimilarShows(channel: ChannelWithRelations): Promise<MediaShow[]> {
     // Get existing shows in the channel
     const existingShows = channel.channelShows;
     
@@ -286,7 +304,7 @@ export class ChannelAutomationService {
     // Find shows that match the similarity criteria
     const allShows = await prisma.mediaShow.findMany();
     
-    return allShows.filter(show => {
+    return allShows.filter((show: MediaShow) => {
       return this.isSimilarShow(show, similarityData, existingShows);
     }).slice(0, 5); // Limit to 5 similar shows when using fallback method
   }
@@ -294,9 +312,9 @@ export class ChannelAutomationService {
   /**
    * Find shows that are part of the same franchise/series as existing shows
    */
-  private async findFranchiseRelatedShows(existingShows: any[]): Promise<MediaShow[]> {
+  private async findFranchiseRelatedShows(existingShows: ChannelWithRelations['channelShows']): Promise<MediaShow[]> {
     const franchiseShows: MediaShow[] = [];
-    const existingShowIds = existingShows.map(cs => cs.showId);
+    const existingShowIds = existingShows.map((cs: { showId: string }) => cs.showId);
 
     for (const channelShow of existingShows) {
       const show = channelShow.show;
@@ -305,7 +323,7 @@ export class ChannelAutomationService {
       // Find shows with similar titles (franchise/sequel/prequel patterns)
       const allShows = await prisma.mediaShow.findMany();
       
-      const relatedShows = allShows.filter(otherShow => {
+      const relatedShows = allShows.filter((otherShow: MediaShow) => {
         if (existingShowIds.includes(otherShow.id)) {
           return false; // Skip shows already in channel
         }
@@ -369,7 +387,7 @@ export class ChannelAutomationService {
   /**
    * Extract similarity data from existing shows
    */
-  private async extractSimilarityData(existingShows: any[]): Promise<{genres: string[], actors: string[], directors: string[]}> {
+  private async extractSimilarityData(existingShows: ChannelWithRelations['channelShows']): Promise<{genres: string[], actors: string[], directors: string[]}> {
     const genres = new Set<string>();
     const actors = new Set<string>();
     const directors = new Set<string>();
@@ -418,9 +436,9 @@ export class ChannelAutomationService {
   /**
    * Check if a show is similar to existing shows in the channel
    */
-  private isSimilarShow(show: any, similarityData: {genres: string[], actors: string[], directors: string[]}, existingShows: any[]): boolean {
+  private isSimilarShow(show: MediaShow, similarityData: {genres: string[], actors: string[], directors: string[]}, existingShows: ChannelWithRelations['channelShows']): boolean {
     // Don't add shows that are already in the channel
-    const existingShowIds = existingShows.map(cs => cs.showId);
+    const existingShowIds = existingShows.map((cs: { showId: string }) => cs.showId);
     if (existingShowIds.includes(show.id)) {
       return false;
     }
@@ -473,7 +491,7 @@ export class ChannelAutomationService {
   /**
    * Check if a media item matches the channel's filter criteria
    */
-  private matchesFilters(media: MediaMovie | MediaShow, channel: any): boolean {
+  private matchesFilters(media: MediaMovie | MediaShow, channel: ChannelWithRelations): boolean {
     // Genre filter
     if (channel.filterGenres) {
       const filterGenres = JSON.parse(channel.filterGenres);
