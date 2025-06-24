@@ -1,69 +1,384 @@
 "use client"
 
-import SignInForm from "@/components/sign-in-form";
-import SignUpForm from "@/components/sign-up-form";
-import FirstTimeSetup from "@/components/first-time-setup";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Shield, Users, ArrowLeft } from 'lucide-react';
 
 export default function LoginPage() {
-  const [showSignIn, setShowSignIn] = useState(true);
-  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null); // null = loading
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  const [loginMethod, setLoginMethod] = useState<'select' | 'local' | 'watchtower'>('select');
+  
+  // Local login state
+  const [localEmail, setLocalEmail] = useState('');
+  const [localPassword, setLocalPassword] = useState('');
+  const [localLoading, setLocalLoading] = useState(false);
+  
+  // WatchTower login state
+  const [watchTowerUrl, setWatchTowerUrl] = useState('http://127.0.0.1:8000');
+  const [apiToken, setApiToken] = useState('');
+  const [watchTowerEmail, setWatchTowerEmail] = useState('');
+  const [watchTowerPassword, setWatchTowerPassword] = useState('');
+  const [watchTowerLoading, setWatchTowerLoading] = useState(false);
+  const [watchTowerConfigured, setWatchTowerConfigured] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    checkSetupStatus();
-  }, []);
-
-  const checkSetupStatus = async () => {
+  // Check if WatchTower is already configured
+  const checkWatchTowerConfig = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/admin/setup-status");
+      const response = await fetch('http://localhost:3000/api/admin/watchtower/status', {
+        credentials: 'include'
+      });
+      
       if (response.ok) {
         const data = await response.json();
-        setNeedsSetup(data.needsSetup);
+        setWatchTowerConfigured(data.configured);
+        if (data.configured && data.url) {
+          setWatchTowerUrl(data.url);
+        }
       } else {
-        // If API fails, assume setup is not needed
-        setNeedsSetup(false);
+        // If we can't check status (not admin), assume not configured
+        setWatchTowerConfigured(false);
       }
     } catch (error) {
-      console.error("Failed to check setup status:", error);
-      // If check fails, assume setup is not needed
-      setNeedsSetup(false);
-    } finally {
-      setLoading(false);
+      console.error('Error checking WatchTower config:', error);
+      setWatchTowerConfigured(false);
     }
   };
 
-  const handleSetupComplete = () => {
-    // After setup is complete, redirect to main app
-    router.push("/dashboard");
+  const handleLocalLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalLoading(true);
+    setError('');
+    
+    try {
+      // TODO: Implement local login
+      console.log('Local login:', { localEmail, localPassword });
+      setError('Local login not implemented yet');
+    } catch (error) {
+      setError('Login failed');
+    } finally {
+      setLocalLoading(false);
+    }
   };
 
-  if (loading) {
+  const handleWatchTowerLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWatchTowerLoading(true);
+    setError('');
+    
+    try {
+      // Only save configuration if WatchTower is not already configured
+      if (!watchTowerConfigured) {
+        const configResponse = await fetch('http://localhost:3000/api/admin/watchtower/save-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            watchTowerUrl, 
+            apiToken 
+          })
+        });
+
+        if (!configResponse.ok) {
+          throw new Error('Failed to save WatchTower configuration');
+        }
+      }
+
+      // Attempt to login with WatchTower credentials
+      const loginResponse = await fetch('http://localhost:3000/api/auth/watchtower', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include cookies for session management
+        body: JSON.stringify({
+          email: watchTowerEmail,
+          password: watchTowerPassword
+        })
+      });
+
+      if (loginResponse.ok) {
+        const data = await loginResponse.json();
+        
+        if (data.note && data.note.includes('refresh')) {
+          // Session creation failed, but user is authenticated
+          // Store the user data and redirect with a flag
+          localStorage.setItem('watchtower_pending_auth', JSON.stringify({
+            user: data.user,
+            timestamp: Date.now()
+          }));
+          
+          // Redirect to a special page that will complete the authentication
+          window.location.href = '/dashboard?watchtower_auth=pending';
+        } else {
+          // Normal successful login
+          window.location.href = '/dashboard';
+        }
+      } else {
+        const errorData = await loginResponse.json();
+        setError(errorData.error || 'WatchTower login failed');
+      }
+    } catch (error) {
+      setError('Failed to connect to WatchTower. Please check your settings.');
+    } finally {
+      setWatchTowerLoading(false);
+    }
+  };
+
+  // Login method selection screen
+  if (loginMethod === 'select') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-sm text-gray-600">Checking setup status...</p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md mx-auto space-y-6">
+          {/* Header */}
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-900">Welcome to TwentyFourSeven</h1>
+            <p className="text-gray-600 mt-2">Choose how you'd like to sign in</p>
+          </div>
+
+          {/* Login Options */}
+          <div className="space-y-4">
+            {/* Local Login Option */}
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setLoginMethod('local')}>
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <Users className="h-6 w-6 text-gray-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900">Local Account</h3>
+                    <p className="text-sm text-gray-600">Sign in with your TwentyFourSeven email and password</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* WatchTower Login Option */}
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={async () => {
+              await checkWatchTowerConfig();
+              setLoginMethod('watchtower');
+            }}>
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Shield className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900">WatchTower Account</h3>
+                    <p className="text-sm text-gray-600">Sign in using your WatchTower server and credentials</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Footer */}
+          <div className="text-center text-sm text-gray-500">
+            <p>
+              Need help? <a href="/contact" className="text-blue-600 hover:text-blue-800 underline">Contact support</a>
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Show first-time setup if database is empty
-  if (needsSetup) {
-    return <FirstTimeSetup onComplete={handleSetupComplete} />;
+  // Local login form
+  if (loginMethod === 'local') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md mx-auto">
+          <CardHeader>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLoginMethod('select')}
+                className="p-1"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div>
+                <CardTitle className="flex items-center space-x-2">
+                  <Users className="h-6 w-6 text-gray-600" />
+                  <span>Local Login</span>
+                </CardTitle>
+                <CardDescription>
+                  Sign in with your TwentyFourSeven account
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLocalLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={localEmail}
+                  onChange={(e) => setLocalEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={localPassword}
+                  onChange={(e) => setLocalPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className="text-red-600 text-sm bg-red-50 p-2 rounded">
+                  {error}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={localLoading}
+                className="w-full"
+              >
+                {localLoading ? 'Signing in...' : 'Sign In'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
-  // Show normal login/signup forms
-  return (
-    <>
-      {showSignIn ? (
-        <SignInForm onSwitchToSignUp={() => setShowSignIn(false)} />
-      ) : (
-        <SignUpForm onSwitchToSignIn={() => setShowSignIn(true)} />
-      )}
-    </>
-  );
+  // WatchTower login form
+  if (loginMethod === 'watchtower') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md mx-auto">
+          <CardHeader>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLoginMethod('select')}
+                className="p-1"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div>
+                <CardTitle className="flex items-center space-x-2">
+                  <Shield className="h-6 w-6 text-blue-600" />
+                  <span>WatchTower Login</span>
+                </CardTitle>
+                <CardDescription>
+                  {watchTowerConfigured === null 
+                    ? 'Loading...'
+                    : watchTowerConfigured 
+                      ? 'Sign in with your WatchTower credentials'
+                      : 'Connect to your WatchTower server and sign in'
+                  }
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {watchTowerConfigured === null ? (
+              <div className="text-center py-4">
+                <p className="text-gray-600">Checking WatchTower configuration...</p>
+              </div>
+            ) : (
+              <form onSubmit={handleWatchTowerLogin} className="space-y-4">
+                {/* Show setup fields only if not configured */}
+                {!watchTowerConfigured && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="watchTowerUrl">WatchTower Server URL</Label>
+                      <Input
+                        id="watchTowerUrl"
+                        type="url"
+                        value={watchTowerUrl}
+                        onChange={(e) => setWatchTowerUrl(e.target.value)}
+                        placeholder="http://127.0.0.1:8000"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="apiToken">API Token</Label>
+                      <Input
+                        id="apiToken"
+                        type="password"
+                        value={apiToken}
+                        onChange={(e) => setApiToken(e.target.value)}
+                        placeholder="Enter your WatchTower API token"
+                        required
+                      />
+                      <p className="text-xs text-gray-500">
+                        Get this from your WatchTower admin panel → Integration Management
+                      </p>
+                    </div>
+                    
+                    <div className="border-t pt-4">
+                      <p className="text-sm text-gray-600 mb-4">
+                        Now enter your WatchTower login credentials:
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* Always show login fields */}
+                <div className="space-y-2">
+                  <Label htmlFor="watchTowerEmail">WatchTower Email</Label>
+                  <Input
+                    id="watchTowerEmail"
+                    type="email"
+                    value={watchTowerEmail}
+                    onChange={(e) => setWatchTowerEmail(e.target.value)}
+                    placeholder="Your WatchTower email"
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="watchTowerPassword">WatchTower Password</Label>
+                  <Input
+                    id="watchTowerPassword"
+                    type="password"
+                    value={watchTowerPassword}
+                    onChange={(e) => setWatchTowerPassword(e.target.value)}
+                    placeholder="Your WatchTower password"
+                    required
+                  />
+                </div>
+
+              {error && (
+                <div className="text-red-600 text-sm bg-red-50 p-2 rounded">
+                  {error}
+                </div>
+              )}
+
+                              <Button
+                  type="submit"
+                  disabled={watchTowerLoading}
+                  className="w-full"
+                >
+                  {watchTowerLoading ? (
+                    watchTowerConfigured ? 'Signing in...' : 'Setting up & signing in...'
+                  ) : (
+                    watchTowerConfigured ? 'Sign In with WatchTower' : 'Setup & Sign In'
+                  )}
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return null;
 }

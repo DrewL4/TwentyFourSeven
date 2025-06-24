@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { WatchTowerService } from "@/lib/watchtower-service";
+import { WatchTowerHubService } from "@/lib/watchtower-hub-service-simple";
 
 export async function POST(request: NextRequest) {
   try {
-    const watchTowerService = WatchTowerService.getInstance();
+    const watchTowerService = WatchTowerHubService.getInstance();
     const results = await watchTowerService.syncUsers();
 
     return NextResponse.json({

@@ -19,7 +19,7 @@ class SchedulerService {
       clearInterval(this.watchTowerInterval);
     }
 
-    const watchTowerService = WatchTowerService.getInstance();
+          const watchTowerService = WatchTowerService.getInstance();
     const settings = await watchTowerService.getSettings();
 
     if (!settings || !settings.watchTowerAutoSync) {

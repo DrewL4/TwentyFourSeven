@@ -1,0 +1,9 @@
+model Setting {
+  id        String   @id @map("_id") @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("setting")
+} 

@@ -10,6 +10,7 @@ import { Settings, Server, Radio, Video, Save, ExternalLink, Calendar, Download 
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import FirstTimeSetup from "@/components/first-time-setup";
+import WatchTowerConnectionSetup from "@/components/watchtower-connection-setup";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
@@ -459,14 +460,8 @@ export default function SettingsPage() {
                 ✕
               </Button>
             </div>
-            <div className="p-0">
-              <FirstTimeSetup 
-                onComplete={() => {
-                  setShowWatchTowerSetup(false);
-                  // Optionally refresh the page or show success message
-                  window.location.reload();
-                }} 
-              />
+            <div className="p-4">
+              <WatchTowerConnectionSetup />
             </div>
           </div>
         </div>
