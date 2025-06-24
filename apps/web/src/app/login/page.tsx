@@ -27,7 +27,7 @@ export default function LoginPage() {
   // Check if WatchTower is already configured
   const checkWatchTowerConfig = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/admin/watchtower/status', {
+      const response = await fetch('/api/admin/watchtower/status', {
         credentials: 'include'
       });
       
@@ -71,7 +71,7 @@ export default function LoginPage() {
     try {
       // Only save configuration if WatchTower is not already configured
       if (!watchTowerConfigured) {
-        const configResponse = await fetch('http://localhost:3000/api/admin/watchtower/save-config', {
+        const configResponse = await fetch('/api/admin/watchtower/save-config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -86,7 +86,7 @@ export default function LoginPage() {
       }
 
       // Attempt to login with WatchTower credentials
-      const loginResponse = await fetch('http://localhost:3000/api/auth/watchtower', {
+      const loginResponse = await fetch('/api/auth/watchtower', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // Include cookies for session management

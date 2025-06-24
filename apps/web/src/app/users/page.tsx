@@ -47,7 +47,7 @@ export default function UsersPage() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/admin/users");
+      const response = await fetch("/api/admin/users");
       if (response.ok) {
         const data = await response.json();
         setUsers(data.users || []);
@@ -63,7 +63,7 @@ export default function UsersPage() {
 
   const loadWatchTowerSettings = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/admin/get-watchtower-settings");
+      const response = await fetch("/api/admin/get-watchtower-settings");
       if (response.ok) {
         const data = await response.json();
         if (data.settings && data.settings.watchTowerEnabled) {
@@ -174,7 +174,7 @@ export default function UsersPage() {
             originalJoinDate: wtUser.date_joined // Pass the WatchTower join date
           };
 
-          const importResponse = await fetch("http://localhost:3000/api/admin/import-user", {
+          const importResponse = await fetch("/api/admin/import-user", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(userData),
@@ -232,7 +232,7 @@ export default function UsersPage() {
           watchTowerLastSync: new Date().toISOString()
         };
 
-        await fetch("http://localhost:3000/api/admin/save-watchtower-settings", {
+        await fetch("/api/admin/save-watchtower-settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(settingsData),
@@ -266,14 +266,14 @@ export default function UsersPage() {
           watchTowerLastSync: new Date().toISOString()
         };
 
-        await fetch("http://localhost:3000/api/admin/save-watchtower-settings", {
+        await fetch("/api/admin/save-watchtower-settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(settingsData),
         });
       }
 
-      const response = await fetch("http://localhost:3000/api/admin/sync-watchtower-users", {
+      const response = await fetch("/api/admin/sync-watchtower-users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });

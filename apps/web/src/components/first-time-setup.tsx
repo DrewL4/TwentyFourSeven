@@ -73,7 +73,7 @@ export default function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
         source: 'local_admin_setup'
       };
 
-      const adminResponse = await fetch("http://localhost:3000/api/admin/create-admin", {
+      const adminResponse = await fetch("/api/admin/create-admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(adminData),
@@ -225,7 +225,7 @@ export default function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
               source: 'watchtower_import'
             };
 
-            const importResponse = await fetch("http://localhost:3000/api/admin/import-user", {
+            const importResponse = await fetch("/api/admin/import-user", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(userData),
@@ -263,7 +263,7 @@ export default function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
             source: 'watchtower_admin_setup'
           };
 
-          const adminResponse = await fetch("http://localhost:3000/api/admin/create-admin", {
+          const adminResponse = await fetch("/api/admin/create-admin", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(adminData),
@@ -293,7 +293,7 @@ export default function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
             watchTowerLastSync: new Date().toISOString()
           };
 
-          const settingsResponse = await fetch("http://localhost:3000/api/admin/save-watchtower-settings", {
+          const settingsResponse = await fetch("/api/admin/save-watchtower-settings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(settingsData),

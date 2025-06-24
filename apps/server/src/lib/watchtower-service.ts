@@ -159,7 +159,7 @@ export class WatchTowerService {
           originalJoinDate: wtUser.date_joined // Pass the WatchTower join date
         };
 
-        const importResponse = await fetch("http://localhost:3000/api/admin/import-user", {
+        const importResponse = await fetch("/api/admin/import-user", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(userData),

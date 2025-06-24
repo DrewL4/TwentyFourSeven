@@ -70,7 +70,7 @@ const WatchTowerConnectionSetup: React.FC = () => {
 
   const loadConnectionStatus = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/admin/watchtower/status', {
+      const response = await fetch('/api/admin/watchtower/status', {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -109,7 +109,7 @@ const WatchTowerConnectionSetup: React.FC = () => {
 
   const testConnection = async (): Promise<boolean> => {
     try {
-      const response = await fetch('http://localhost:3000/api/admin/watchtower/test', {
+      const response = await fetch('/api/admin/watchtower/test', {
         method: 'POST',
         credentials: 'include',
         headers: { 
@@ -133,7 +133,7 @@ const WatchTowerConnectionSetup: React.FC = () => {
 
   const registerWebhooks = async (): Promise<boolean> => {
     try {
-      const response = await fetch('http://localhost:3000/api/admin/watchtower/register-webhooks', {
+      const response = await fetch('/api/admin/watchtower/register-webhooks', {
         method: 'POST',
         credentials: 'include',
         headers: { 
@@ -154,7 +154,7 @@ const WatchTowerConnectionSetup: React.FC = () => {
 
   const syncUsers = async (): Promise<boolean> => {
     try {
-      const response = await fetch('http://localhost:3000/api/admin/watchtower/sync-users', {
+      const response = await fetch('/api/admin/watchtower/sync-users', {
         method: 'POST',
         credentials: 'include',
         headers: { 
@@ -231,7 +231,7 @@ const WatchTowerConnectionSetup: React.FC = () => {
 
       if (syncSuccess) {
         // Save configuration
-        await fetch('http://localhost:3000/api/admin/watchtower/save-config', {
+        await fetch('/api/admin/watchtower/save-config', {
           method: 'POST',
           credentials: 'include',
           headers: { 
@@ -264,7 +264,7 @@ const WatchTowerConnectionSetup: React.FC = () => {
     }
 
     try {
-      await fetch('http://localhost:3000/api/admin/watchtower/disconnect', {
+      await fetch('/api/admin/watchtower/disconnect', {
         method: 'POST',
         credentials: 'include',
         headers: {
