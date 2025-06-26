@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Test API token validation
-    const tokenResponse = await fetch(`${watchTowerUrl}/api/v1/auth/validate-token/`, {
+    const tokenResponse = await fetch(`${watchTowerUrl}/api/api/v1/auth/validate-token/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     const tokenData = await tokenResponse.json();
 
     // Test users API access
-    const usersResponse = await fetch(`${watchTowerUrl}/api/v1/users/`, {
+    const usersResponse = await fetch(`${watchTowerUrl}/api/api/v1/users/`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiToken}`
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     const usersData = await usersResponse.json();
 
     // Test services API access
-    const servicesResponse = await fetch(`${watchTowerUrl}/api/v1/services/`, {
+    const servicesResponse = await fetch(`${watchTowerUrl}/api/api/v1/services/`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiToken}`

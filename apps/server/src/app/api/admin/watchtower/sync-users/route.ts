@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch users from WatchTower
-    const response = await fetch(`${watchTowerUrl}/api/v1/users/`, {
+    const response = await fetch(`${watchTowerUrl}/api/api/v1/users/`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiToken}`
@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
           watchTowerUsername: watchTowerUser.username,
           role: watchTowerUser.is_admin ? 'ADMIN' : 'USER',
           isActive: watchTowerUser.is_active !== false,
+          watchTowerJoinDate: watchTowerUser.date_joined ? new Date(watchTowerUser.date_joined) : null,
           // Store additional WatchTower metadata
           watchTowerMetadata: {
             isStaff: watchTowerUser.is_staff,
@@ -113,21 +114,25 @@ export async function POST(request: NextRequest) {
           // Update existing user
           await db.user.update({
             where: { id: existingUser.id },
-            data: userData
+            data: {
+              ...userData,
+              updatedAt: new Date()
+            }
           });
           syncStats.updated++;
         } else {
-          // Create new user
+          // Create new user with proper ID generation
+          const userId = `watchtower_${watchTowerUser.id}_${Date.now()}`;
           await db.user.create({
             data: {
               ...userData,
               // Required fields for user creation
-              id: `watchtower_${watchTowerUser.id}_${Date.now()}`,
+              id: userId,
               emailVerified: false,
-              createdAt: new Date(),
+              createdAt: userData.watchTowerJoinDate || new Date(),
               updatedAt: new Date(),
-              // Set a temporary password - they'll use SSO
-              password: `watchtower_sso_${Date.now()}`
+              // No password set - they'll use SSO or forgot password
+              password: null
             }
           });
           syncStats.created++;
@@ -139,7 +144,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update last sync timestamp
+    // Update last sync timestamp  
     await db.setting.upsert({
       where: { key: 'watchtower_last_sync' },
       update: { value: new Date().toISOString() },

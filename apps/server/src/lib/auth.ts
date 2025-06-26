@@ -15,6 +15,19 @@ export const auth = betterAuth({
   trustedOrigins: getTrustedOrigins(),
   emailAndPassword: {
     enabled: true,
+  },
+  // Add credentials provider for custom authentication
+  advanced: {
+    generateId: () => crypto.randomUUID(),
+    crossSubDomainCookies: {
+      enabled: false
+    },
+    useSecureCookies: false, // Allow cookies over HTTP in development
+    defaultCookieAttributes: {
+      sameSite: "lax", // Allow cross-origin cookies
+      secure: false, // Allow cookies over HTTP in development
+      httpOnly: true,
+    }
   }
 });
 

@@ -2,10 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   async rewrites() {
+    const serverPort = process.env.SERVER_PORT || '3000';
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:3000/api/:path*',
+        destination: `http://localhost:${serverPort}/api/:path*`,
       },
     ];
   },

@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       is_active: true
     };
 
-    const response = await fetch(`${watchTowerUrl}/api/v1/webhooks/register/`, {
+    const response = await fetch(`${watchTowerUrl}/api/api/v1/webhooks/register/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
 // Helper function to get WatchTower config
 async function getWatchTowerConfig() {
-  const { db } = await import('@/lib/context');
-  const config = await db.setting.findMany({
+  const config = await prisma.setting.findMany({
     where: {
       key: {
         in: ['watchtower_url', 'watchtower_api_token']
@@ -27,23 +27,30 @@ async function getWatchTowerConfig() {
 // POST /api/auth/watchtower - SSO Login
 export async function POST(request: NextRequest) {
   try {
+    console.log('🔐 WatchTower SSO login attempt started');
     const { email, password } = await request.json();
 
     if (!email || !password) {
+      console.log('❌ Missing email or password');
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
       );
     }
 
+    console.log('👤 Login attempt for email:', email);
+
     const config = await getWatchTowerConfig();
 
     if (!config.url || !config.apiToken) {
+      console.log('❌ WatchTower not configured - URL:', !!config.url, 'Token:', !!config.apiToken);
       return NextResponse.json(
         { error: 'WatchTower not configured. Please contact administrator.' },
         { status: 503 }
       );
     }
+
+    console.log('🌐 Authenticating with WatchTower at:', config.url);
 
     // Authenticate with WatchTower
     const authResponse = await fetch(`${config.url}/api/api/v1/auth/login/`, {
@@ -54,8 +61,11 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({ email, password })
     });
 
+    console.log('🔑 WatchTower auth response status:', authResponse.status);
+
     if (!authResponse.ok) {
       const error = await authResponse.text();
+      console.log('❌ WatchTower authentication failed:', error);
       return NextResponse.json(
         { error: 'Invalid WatchTower credentials', details: error },
         { status: 401 }
@@ -63,6 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     const authData = await authResponse.json();
+    console.log('✅ WatchTower authentication successful, got token');
 
     // Get user details from WatchTower
     const userResponse = await fetch(`${config.url}/api/api/v1/users/me/`, {
@@ -72,7 +83,10 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    console.log('👤 WatchTower user details response status:', userResponse.status);
+
     if (!userResponse.ok) {
+      console.log('❌ Failed to get user details from WatchTower');
       return NextResponse.json(
         { error: 'Failed to get user details from WatchTower' },
         { status: 500 }
@@ -80,12 +94,12 @@ export async function POST(request: NextRequest) {
     }
 
     const watchTowerResponse = await userResponse.json();
-    const watchTowerUser = watchTowerResponse.user; // Extract user from nested response
-
-    // Create or update user in TwentyFourSeven
-    const { db } = await import('@/lib/context');
+    const watchTowerUser = watchTowerResponse.user;
     
-    let user = await db.user.findFirst({
+    console.log('📋 Got WatchTower user:', watchTowerUser?.email, 'ID:', watchTowerUser?.id);
+
+    // Check if user exists
+    let user = await prisma.user.findFirst({
       where: {
         OR: [
           { email: watchTowerUser.email },
@@ -94,11 +108,13 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    console.log('🔍 Existing user found:', !!user);
+
     const userData = {
-      email: watchTowerUser.email || '',
       name: watchTowerUser.first_name && watchTowerUser.last_name 
         ? `${watchTowerUser.first_name} ${watchTowerUser.last_name}`.trim()
         : watchTowerUser.username || watchTowerUser.email || 'WatchTower User',
+      email: watchTowerUser.email || '',
       watchTowerUserId: watchTowerUser.id?.toString() || '',
       watchTowerUsername: watchTowerUser.username || '',
       role: watchTowerUser.is_admin ? 'ADMIN' : 'USER',
@@ -113,124 +129,106 @@ export async function POST(request: NextRequest) {
 
     if (user) {
       // Update existing user
-      user = await db.user.update({
+      console.log('📝 Updating existing user:', user.id);
+      await prisma.user.update({
         where: { id: user.id },
-        data: userData
-      });
-    } else {
-      // Create new user using better-auth's sign-up method
-      const plainPassword = `watchtower_sso_${crypto.randomUUID()}`;
-      
-      try {
-        // Use better-auth to create the user properly
-        const signUpRequest = new Request(`${request.url.split('/api/auth/watchtower')[0]}/api/auth/sign-up/email`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: userData.email,
-            password: plainPassword,
-            name: userData.name
-          })
-        });
-
-        const signUpResponse = await auth.handler(signUpRequest);
-        
-        if (signUpResponse.ok) {
-          const signUpData = await signUpResponse.json();
-          
-          // Get the user that was just created
-          user = await db.user.findUnique({
-            where: { email: userData.email }
-          });
-
-          if (!user) {
-            throw new Error('User not found after sign-up');
-          }
-
-          // Update with WatchTower metadata but keep the original ID and password
-          user = await db.user.update({
-            where: { id: user.id },
-            data: {
-              watchTowerUserId: userData.watchTowerUserId,
-              watchTowerUsername: userData.watchTowerUsername,
-              role: userData.role,
-              isActive: userData.isActive,
-              watchTowerMetadata: userData.watchTowerMetadata,
-              emailVerified: true
-            }
-          });
-
-          // Store the plain password for future sign-ins
-          (user as any).plainPassword = plainPassword;
-        } else {
-          throw new Error('Better-auth sign-up failed');
+        data: {
+          ...userData,
+          updatedAt: new Date()
         }
-      } catch (signUpError) {
-        console.error('Better-auth sign-up error:', signUpError);
-        throw new Error('Failed to create user through better-auth');
-      }
+      });
+      console.log('✅ Existing user updated successfully');
+
+      // For existing users, delete and recreate to use better-auth
+      console.log('♻️ Recreating user with better-auth...');
+      
+      // Delete existing user and sessions
+      await prisma.session.deleteMany({ where: { userId: user.id } });
+      await prisma.account.deleteMany({ where: { userId: user.id } });
+      await prisma.user.delete({ where: { id: user.id } });
     }
 
-    // Use better-auth's sign-in to create a proper session
-    try {
-      const sessionRequest = new Request(`${request.url.split('/api/auth/watchtower')[0]}/api/auth/sign-in/email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: user.email,
-          password: (user as any).plainPassword || `watchtower_sso_${user.id}`
-        })
-      });
+    // Create temporary password for the user
+    const tempPassword = crypto.randomBytes(16).toString('hex');
 
-      const sessionResponse = await auth.handler(sessionRequest);
-      
-      if (sessionResponse.ok) {
-        const cookies = sessionResponse.headers.get('set-cookie');
-        
-        const response = NextResponse.json({
-          success: true,
-          message: 'WatchTower SSO login successful',
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-            isActive: user.isActive
-          },
-          redirectTo: '/dashboard'
-        });
-
-        if (cookies) {
-          response.headers.set('set-cookie', cookies);
-        }
-
-        return response;
+    // Create new user using better-auth's signUpEmail
+    console.log('➕ Creating user with better-auth signUpEmail...');
+    
+    const signUpResult = await auth.api.signUpEmail({
+      body: {
+        name: userData.name,
+        email: userData.email,
+        password: tempPassword,
+        callbackURL: undefined
       }
-    } catch (fallbackError) {
-      console.error('Better-auth fallback sign-in error:', fallbackError);
-    }
-
-    // Return success without session as final fallback
-    return NextResponse.json({
-      success: true,
-      message: 'WatchTower SSO login successful (no session)',
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        isActive: user.isActive
-      },
-      redirectTo: '/dashboard',
-      note: 'Please refresh the page to complete login'
     });
 
+    if (!signUpResult) {
+      throw new Error('Failed to create user with better-auth');
+    }
+
+    console.log('✅ User created with better-auth');
+
+    // Update with WatchTower-specific fields
+    await prisma.user.update({
+      where: { id: signUpResult.user.id },
+      data: {
+        watchTowerUserId: userData.watchTowerUserId,
+        watchTowerUsername: userData.watchTowerUsername,
+        role: userData.role,
+        isActive: userData.isActive,
+        watchTowerMetadata: userData.watchTowerMetadata,
+        watchTowerJoinDate: userData.watchTowerMetadata?.dateJoined ? new Date(userData.watchTowerMetadata.dateJoined) : new Date(),
+        password: null, // Clear password for SSO users
+      }
+    });
+
+    console.log('✅ User WatchTower metadata updated');
+
+    // Sign in the user to create a proper session
+    console.log('🔐 Signing in user to create session...');
+    
+    const signInResponse = await auth.api.signInEmail({
+      body: {
+        email: userData.email,
+        password: tempPassword
+      },
+      asResponse: true // Receive a full Response object so we get the signed cookies
+    }) as Response;
+
+    // Extract JSON payload (user + token) from the Better-Auth response
+    const signInResult = await signInResponse.clone().json().catch(() => ({}));
+
+    console.log('🪵 signInResult', signInResult);
+
+    console.log('✅ User signed in and session created');
+
+    // Create response
+    const response = NextResponse.json({
+      success: true,
+      message: 'WatchTower SSO login successful',
+      user: {
+        id: signUpResult.user.id,
+        email: signUpResult.user.email,
+        name: signUpResult.user.name,
+        role: userData.role,
+        isActive: userData.isActive
+      },
+      redirectTo: '/dashboard'
+    });
+
+    // Copy any Set-Cookie headers Better-Auth produced (these are already signed)
+    signInResponse.headers.forEach((value, key) => {
+      if (key.toLowerCase() === 'set-cookie') {
+        response.headers.append('set-cookie', value);
+      }
+    });
+
+    console.log('🎉 WatchTower SSO login completed successfully');
+    return response;
+
   } catch (error) {
-    console.error('WatchTower SSO error:', error);
+    console.error('💥 WatchTower SSO error:', error);
     return NextResponse.json(
       { error: 'SSO login failed', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

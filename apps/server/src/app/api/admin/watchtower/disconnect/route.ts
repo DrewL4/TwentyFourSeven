@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     // Attempt to deregister webhook from WatchTower
     if (configMap.watchtower_url && configMap.watchtower_api_token && configMap.watchtower_webhook_id) {
       try {
-        await fetch(`${configMap.watchtower_url}/api/v1/webhooks/${configMap.watchtower_webhook_id}/`, {
+        await fetch(`${configMap.watchtower_url}/api/api/v1/webhooks/${configMap.watchtower_webhook_id}/`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${configMap.watchtower_api_token}`

@@ -27,7 +27,9 @@ export default function LoginPage() {
   // Check if WatchTower is already configured
   const checkWatchTowerConfig = async () => {
     try {
-      const response = await fetch('/api/admin/watchtower/status', {
+      // Use the server URL for API calls
+      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
+      const response = await fetch(`${serverUrl}/api/admin/watchtower/status`, {
         credentials: 'include'
       });
       
@@ -69,9 +71,15 @@ export default function LoginPage() {
     setError('');
     
     try {
+      console.log('Starting WatchTower login process...');
+      
+      // Get server URL for API calls
+      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
+      
       // Only save configuration if WatchTower is not already configured
       if (!watchTowerConfigured) {
-        const configResponse = await fetch('/api/admin/watchtower/save-config', {
+        console.log('Saving WatchTower configuration...');
+        const configResponse = await fetch(`${serverUrl}/api/admin/watchtower/save-config`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -81,12 +89,15 @@ export default function LoginPage() {
         });
 
         if (!configResponse.ok) {
+          console.error('Failed to save WatchTower configuration:', await configResponse.text());
           throw new Error('Failed to save WatchTower configuration');
         }
+        console.log('WatchTower configuration saved successfully');
       }
 
       // Attempt to login with WatchTower credentials
-      const loginResponse = await fetch('/api/auth/watchtower', {
+      console.log('Attempting WatchTower authentication...');
+      const loginResponse = await fetch(`${serverUrl}/api/auth/watchtower`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include', // Include cookies for session management
@@ -96,28 +107,42 @@ export default function LoginPage() {
         })
       });
 
+      console.log('Login response status:', loginResponse.status);
+      console.log('Login response ok:', loginResponse.ok);
+
       if (loginResponse.ok) {
         const data = await loginResponse.json();
+        console.log('Login response data:', data);
         
-        if (data.note && data.note.includes('refresh')) {
-          // Session creation failed, but user is authenticated
-          // Store the user data and redirect with a flag
-          localStorage.setItem('watchtower_pending_auth', JSON.stringify({
-            user: data.user,
-            timestamp: Date.now()
-          }));
+        if (data.success) {
+          console.log('Login successful, redirecting to dashboard...');
           
-          // Redirect to a special page that will complete the authentication
-          window.location.href = '/dashboard?watchtower_auth=pending';
+          if (data.requiresRefresh) {
+            // Show a message and then refresh
+            alert('Login successful! The page will refresh to complete the process.');
+            window.location.reload();
+          } else {
+            // For local development, use full URL to ensure proper redirect
+            const dashboardUrl = process.env.NODE_ENV === 'development' 
+              ? `${window.location.origin}/dashboard`
+              : '/dashboard';
+            
+            console.log('Redirecting to:', dashboardUrl);
+            
+            // Use window.location.href for a full page redirect
+            window.location.href = dashboardUrl;
+          }
         } else {
-          // Normal successful login
-          window.location.href = '/dashboard';
+          console.error('Login response indicates failure:', data);
+          setError(data.error || data.message || 'WatchTower login failed');
         }
       } else {
-        const errorData = await loginResponse.json();
-        setError(errorData.error || 'WatchTower login failed');
+        const errorData = await loginResponse.json().catch(() => ({ error: 'Failed to parse error response' }));
+        console.error('Login failed with status:', loginResponse.status, 'Error:', errorData);
+        setError(errorData.error || `Login failed (Status: ${loginResponse.status})`);
       }
     } catch (error) {
+      console.error('WatchTower login error:', error);
       setError('Failed to connect to WatchTower. Please check your settings.');
     } finally {
       setWatchTowerLoading(false);

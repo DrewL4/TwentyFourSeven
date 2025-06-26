@@ -11,6 +11,8 @@ async function checkAdminAuthOrAllowConfigCheck(request: NextRequest) {
 
 // GET /api/admin/watchtower/status
 export async function GET(request: NextRequest) {
+  console.log('📊 WatchTower status endpoint called');
+  
   const authError = await checkAdminAuthOrAllowConfigCheck(request);
   if (authError) return authError;
 
@@ -30,6 +32,7 @@ export async function GET(request: NextRequest) {
     }, {});
 
     const isConfigured = !!(configMap.watchtower_url && configMap.watchtower_api_token);
+    console.log('🔧 WatchTower configured:', isConfigured);
 
     if (!isConfigured) {
       return NextResponse.json({
@@ -39,23 +42,27 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Test connection to WatchTower
+    // Test connection to WatchTower using CrossAppToken validation
     try {
-      const response = await fetch(`${configMap.watchtower_url}/api/api/v1/auth/validate-token/`, {
+      console.log('🌐 Testing connection to WatchTower...');
+      const response = await fetch(`${configMap.watchtower_url}/api/v1/auth/validate-api-token/`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${configMap.watchtower_api_token}`
-        }
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          token: configMap.watchtower_api_token
+        })
       });
 
       const connected = response.ok;
+      console.log('📡 WatchTower connection test result:', connected);
       let connectionDetails = null;
 
       if (connected) {
         const tokenData = await response.json();
         connectionDetails = {
-          tokenValid: true,
+          tokenValid: tokenData.valid || false,
           appName: tokenData.app_name,
           permissions: tokenData.permissions,
           lastChecked: new Date().toISOString()
@@ -72,6 +79,7 @@ export async function GET(request: NextRequest) {
       });
 
     } catch (connectionError) {
+      console.error('💥 WatchTower connection error:', connectionError);
       return NextResponse.json({
         configured: true,
         connected: false,
@@ -83,7 +91,7 @@ export async function GET(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Error checking WatchTower status:', error);
+    console.error('💥 Error checking WatchTower status:', error);
     return NextResponse.json(
       { error: 'Failed to check status' },
       { status: 500 }

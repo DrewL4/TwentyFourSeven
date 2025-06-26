@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/context';
+import { db } from "@/lib/context";
 
 // Helper function to check admin permissions
 async function checkAdminAuth(request: NextRequest) {
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
 
     // Test connection to WatchTower
     try {
-      const response = await fetch(`${config.url}/api/v1/auth/validate-token/`, {
+      const response = await fetch(`${config.url}/api/api/v1/auth/validate-token/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
