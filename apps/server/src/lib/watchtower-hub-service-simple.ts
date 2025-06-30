@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import { db } from './context';
-import { watchTowerConfig } from './watchtower-config';
 
 interface WatchTowerUser {
   id: number;
@@ -25,6 +24,9 @@ interface WebhookEvent {
 
 export class WatchTowerHubService {
   private static instance: WatchTowerHubService;
+  private watchTowerUrl: string | null = null;
+  private apiToken: string | null = null;
+  private webhookSecret: string | null = null;
 
   private constructor() {}
 
@@ -35,8 +37,34 @@ export class WatchTowerHubService {
     return WatchTowerHubService.instance;
   }
 
+  async initialize(): Promise<void> {
+    try {
+      const config = await db.setting.findMany({
+        where: {
+          key: {
+            in: ['watchtower_url', 'watchtower_api_token', 'watchtower_webhook_secret']
+          }
+        }
+      });
+
+      const configMap = config.reduce((acc: Record<string, string>, setting: any) => {
+        acc[setting.key] = setting.value;
+        return acc;
+      }, {});
+
+      this.watchTowerUrl = configMap.watchtower_url || null;
+      this.apiToken = configMap.watchtower_api_token || null;
+      this.webhookSecret = configMap.watchtower_webhook_secret || null;
+    } catch (error) {
+      console.error('Failed to initialize WatchTower configuration:', error);
+    }
+  }
+
   async isConfigured(): Promise<boolean> {
-    return await watchTowerConfig.isConfigured();
+    if (!this.watchTowerUrl || !this.apiToken) {
+      await this.initialize();
+    }
+    return !!(this.watchTowerUrl && this.apiToken);
   }
 
   verifyWebhookSignature(payload: string, signature: string): boolean {
@@ -168,16 +196,15 @@ export class WatchTowerHubService {
   }
 
   async fetchUsers(): Promise<WatchTowerUser[]> {
-    const config = await watchTowerConfig.getConfig();
-    
-    if (!config.url || !config.apiToken) {
+    if (!await this.isConfigured()) {
       throw new Error('WatchTower not configured');
     }
 
     try {
-      const response = await fetch(`${config.url}/api/v1/users/`, {
+      // Use the proper CrossAppToken API endpoint
+      const response = await fetch(`${this.watchTowerUrl}/api/api/v1/users/`, {
         headers: {
-          'Authorization': `Bearer ${config.apiToken}`,
+          'Authorization': `Bearer ${this.apiToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -187,7 +214,28 @@ export class WatchTowerHubService {
       }
 
       const data = await response.json();
-      return data.results || data;
+      console.log('WatchTower API Response:', JSON.stringify(data, null, 2));
+      
+      // Filter for TV users only (those with TV service)
+      const allUsers = data.users || [];
+      console.log(`Total users from WatchTower: ${allUsers.length}`);
+      
+      if (allUsers.length > 0) {
+        console.log('Sample user data:', JSON.stringify(allUsers[0], null, 2));
+      }
+      
+      const filteredUsers = allUsers.filter((user: any) => {
+        const hasServices = user.services && Array.isArray(user.services);
+        const hasTvService = hasServices && user.services.includes('TV');
+        const isActive = user.is_active;
+        
+        console.log(`User ${user.email}: services=${JSON.stringify(user.services)}, active=${isActive}, hasTV=${hasTvService}`);
+        
+        return hasServices && hasTvService && isActive;
+      });
+      
+      console.log(`Filtered TV users: ${filteredUsers.length}`);
+      return filteredUsers;
     } catch (error) {
       console.error('Error fetching users from WatchTower:', error);
       throw error;
@@ -196,15 +244,15 @@ export class WatchTowerHubService {
 
   async checkConnection(): Promise<boolean> {
     try {
-      const config = await watchTowerConfig.getConfig();
-      
-      if (!config.url || !config.apiToken) {
+      if (!await this.isConfigured()) {
         return false;
       }
 
-      const response = await fetch(`${config.url}/api/health/`, {
+      // Test with the users endpoint to verify token works
+      const response = await fetch(`${this.watchTowerUrl}/api/api/v1/users/`, {
+        method: 'GET',
         headers: {
-          'Authorization': `Bearer ${config.apiToken}`,
+          'Authorization': `Bearer ${this.apiToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -273,14 +321,13 @@ export class WatchTowerHubService {
   }
 
   async authenticateUser(email: string, password: string): Promise<WatchTowerUser | null> {
-    const config = await watchTowerConfig.getConfig();
-    
-    if (!config.url || !config.apiToken) {
+    if (!await this.isConfigured()) {
       throw new Error('WatchTower not configured');
     }
 
     try {
-      const response = await fetch(`${config.url}/api/v1/auth/login/`, {
+      // Use the same login endpoint as the working integration
+      const response = await fetch(`${this.watchTowerUrl}/api/login/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -297,8 +344,8 @@ export class WatchTowerHubService {
 
       const authData = await response.json();
       
-      // Get user details
-      const userResponse = await fetch(`${config.url}/api/v1/users/me/`, {
+      // Get user details using the JWT token
+      const userResponse = await fetch(`${this.watchTowerUrl}/api/admin/export-users/`, {
         headers: {
           'Authorization': `Bearer ${authData.access_token}`
         }
@@ -308,7 +355,10 @@ export class WatchTowerHubService {
         return null;
       }
 
-      return await userResponse.json();
+      // Find the current user in the export data
+      const data = await userResponse.json();
+      const users = data.users || [];
+      return users.find((user: WatchTowerUser) => user.email === email) || null;
     } catch (error) {
       console.error('Error authenticating user:', error);
       return null;
