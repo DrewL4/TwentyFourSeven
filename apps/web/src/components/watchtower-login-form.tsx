@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Eye, EyeOff, Shield, ArrowLeft } from 'lucide-react';
+import { getServerUrl } from '@/utils/server-url';
 
 interface WatchTowerLoginFormProps {
   onBack?: () => void;
@@ -34,11 +35,13 @@ const WatchTowerLoginForm: React.FC<WatchTowerLoginFormProps> = ({
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/watchtower', {
+      const serverUrl = getServerUrl();
+      const response = await fetch(`${serverUrl}/api/auth/watchtower`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({ email, password })
       });
 

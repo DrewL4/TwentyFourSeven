@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Shield, Users, ArrowLeft } from 'lucide-react';
+import { getServerUrl } from '@/utils/server-url';
 
 export default function LoginPage() {
   const [loginMethod, setLoginMethod] = useState<'select' | 'local' | 'watchtower'>('select');
@@ -28,7 +29,7 @@ export default function LoginPage() {
   const checkWatchTowerConfig = async () => {
     try {
       // Use the server URL for API calls
-      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
+      const serverUrl = getServerUrl();
       const response = await fetch(`${serverUrl}/api/admin/watchtower/status`, {
         credentials: 'include'
       });
@@ -74,7 +75,7 @@ export default function LoginPage() {
       console.log('Starting WatchTower login process...');
       
       // Get server URL for API calls
-      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
+      const serverUrl = getServerUrl();
       
       // Only save configuration if WatchTower is not already configured
       if (!watchTowerConfigured) {

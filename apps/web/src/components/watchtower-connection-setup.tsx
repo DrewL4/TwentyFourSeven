@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, AlertCircle, ExternalLink, Copy, Eye, EyeOff } from 'lucide-react';
+import { getServerUrl } from '@/utils/server-url';
 
 interface ConnectionStatus {
   isConnected: boolean;
@@ -70,7 +71,8 @@ const WatchTowerConnectionSetup: React.FC = () => {
 
   const loadConnectionStatus = async () => {
     try {
-      const response = await fetch('/api/admin/watchtower/status', {
+      const serverUrl = getServerUrl();
+      const response = await fetch(`${serverUrl}/api/admin/watchtower/status`, {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -109,7 +111,8 @@ const WatchTowerConnectionSetup: React.FC = () => {
 
   const testConnection = async (): Promise<boolean> => {
     try {
-      const response = await fetch('/api/admin/watchtower/test', {
+      const serverUrl = getServerUrl();
+      const response = await fetch(`${serverUrl}/api/admin/watchtower/test`, {
         method: 'POST',
         credentials: 'include',
         headers: { 
@@ -133,7 +136,8 @@ const WatchTowerConnectionSetup: React.FC = () => {
 
   const registerWebhooks = async (): Promise<boolean> => {
     try {
-      const response = await fetch('/api/admin/watchtower/register-webhooks', {
+      const serverUrl = getServerUrl();
+      const response = await fetch(`${serverUrl}/api/admin/watchtower/register-webhooks`, {
         method: 'POST',
         credentials: 'include',
         headers: { 
@@ -154,7 +158,8 @@ const WatchTowerConnectionSetup: React.FC = () => {
 
   const syncUsers = async (): Promise<boolean> => {
     try {
-      const response = await fetch('/api/admin/watchtower/sync-users', {
+      const serverUrl = getServerUrl();
+      const response = await fetch(`${serverUrl}/api/admin/watchtower/sync-users`, {
         method: 'POST',
         credentials: 'include',
         headers: { 
@@ -231,7 +236,8 @@ const WatchTowerConnectionSetup: React.FC = () => {
 
       if (syncSuccess) {
         // Save configuration
-        await fetch('/api/admin/watchtower/save-config', {
+        const serverUrl = getServerUrl();
+        await fetch(`${serverUrl}/api/admin/watchtower/save-config`, {
           method: 'POST',
           credentials: 'include',
           headers: { 
@@ -264,7 +270,8 @@ const WatchTowerConnectionSetup: React.FC = () => {
     }
 
     try {
-      await fetch('/api/admin/watchtower/disconnect', {
+      const serverUrl = getServerUrl();
+      await fetch(`${serverUrl}/api/admin/watchtower/disconnect`, {
         method: 'POST',
         credentials: 'include',
         headers: {

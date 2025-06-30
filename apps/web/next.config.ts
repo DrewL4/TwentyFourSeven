@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   async rewrites() {
+    // Only use rewrites in development - in production, nginx handles routing
+    if (process.env.NODE_ENV === 'production') {
+      return [];
+    }
+    
     const serverPort = process.env.SERVER_PORT || '3000';
     return [
       {

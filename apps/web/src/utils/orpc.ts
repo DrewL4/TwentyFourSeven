@@ -43,16 +43,19 @@ export const queryClient = new QueryClient({
 function getServerUrl(): string {
   // Check if running in browser
   if (typeof window !== 'undefined') {
-    // In production with nginx proxy, use the same origin as the web app
+    // In production, always use the same origin as the web app
     const currentOrigin = window.location.origin;
     
-    // If we're accessing via a non-standard port, assume it's through nginx proxy
-    if (currentOrigin !== 'http://localhost:3001' && currentOrigin !== 'http://localhost:3000') {
-      return currentOrigin;
+    // Only use localhost fallback if we're actually on localhost
+    if (currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1')) {
+      return process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
     }
+    
+    // For all other domains (including your 247.midweststreams.us), use the same origin
+    return currentOrigin;
   }
   
-  // Fallback to environment variable or default
+  // Server-side fallback
   return process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
 }
 

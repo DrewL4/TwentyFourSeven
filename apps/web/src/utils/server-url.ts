@@ -1,7 +1,8 @@
-import { createAuthClient } from "better-auth/react";
-
-// Function to get the server URL dynamically
-function getServerUrl(): string {
+/**
+ * Get the server URL dynamically based on the current environment
+ * This handles both development and production scenarios correctly
+ */
+export function getServerUrl(): string {
   // Check if running in browser
   if (typeof window !== 'undefined') {
     // In production, always use the same origin as the web app
@@ -16,17 +17,11 @@ function getServerUrl(): string {
       return process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
     }
     
-    // For all other domains (including your 247.midweststreams.us), use the same origin
+    // For all other domains (including external domains like 247.midweststreams.us), 
+    // use the same origin since nginx routes everything through port 80
     return currentOrigin;
   }
   
   // Server-side fallback
   return process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
-}
-
-export const authClient = createAuthClient({
-  baseURL: getServerUrl(),
-  fetchOptions: {
-    credentials: 'include', // Include cookies in cross-origin requests
-  },
-});
+} 
