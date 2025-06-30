@@ -386,19 +386,29 @@ export class PlexAPI {
    * Get libraries from a Plex server
    */
   async getLibraries(uri: string, token: string): Promise<PlexLibrary[]> {
-    const response = await fetch(`${uri}/library/sections`, {
-      headers: {
-        ...this.headers,
-        'X-Plex-Token': token
+    try {
+      const response = await this.secureFetch(`${uri}/library/sections`, {
+        headers: {
+          'X-Plex-Token': token
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Access token is invalid or expired");
+        }
+        throw new Error(`Failed to fetch libraries: ${response.status}`);
       }
-    });
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch libraries");
+      const data = await response.json();
+      return data.MediaContainer?.Directory || [];
+    } catch (error) {
+      console.error(`[PlexAPI] Error fetching libraries from ${uri}:`, error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error("Failed to retrieve library list");
     }
-
-    const data = await response.json();
-    return data.MediaContainer?.Directory || [];
   }
 
   /**
@@ -410,57 +420,87 @@ export class PlexAPI {
       url += `?type=${type}`;
     }
 
-    const response = await fetch(url, {
-      headers: {
-        ...this.headers,
-        'X-Plex-Token': token
+    try {
+      const response = await this.secureFetch(url, {
+        headers: {
+          'X-Plex-Token': token
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Access token is invalid or expired");
+        }
+        throw new Error(`Failed to fetch library content: ${response.status}`);
       }
-    });
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch library content");
+      const data = await response.json();
+      return data.MediaContainer?.Metadata || [];
+    } catch (error) {
+      console.error(`[PlexAPI] Error fetching library content from ${url}:`, error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error("Failed to retrieve library content");
     }
-
-    const data = await response.json();
-    return data.MediaContainer?.Metadata || [];
   }
 
   /**
    * Get episodes for a TV show
    */
   async getShowEpisodes(uri: string, token: string, showKey: string): Promise<PlexEpisode[]> {
-    const response = await fetch(`${uri}/library/metadata/${showKey}/allLeaves`, {
-      headers: {
-        ...this.headers,
-        'X-Plex-Token': token
+    try {
+      const response = await this.secureFetch(`${uri}/library/metadata/${showKey}/allLeaves`, {
+        headers: {
+          'X-Plex-Token': token
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Access token is invalid or expired");
+        }
+        throw new Error(`Failed to fetch show episodes: ${response.status}`);
       }
-    });
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch show episodes");
+      const data = await response.json();
+      return data.MediaContainer?.Metadata || [];
+    } catch (error) {
+      console.error(`[PlexAPI] Error fetching episodes for show ${showKey}:`, error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error("Failed to retrieve show episodes");
     }
-
-    const data = await response.json();
-    return data.MediaContainer?.Metadata || [];
   }
 
   /**
    * Get server information
    */
   async getServerInfo(uri: string, token: string): Promise<any> {
-    const response = await fetch(`${uri}/`, {
-      headers: {
-        ...this.headers,
-        'X-Plex-Token': token
+    try {
+      const response = await this.secureFetch(`${uri}/`, {
+        headers: {
+          'X-Plex-Token': token
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Access token is invalid or expired");
+        }
+        throw new Error(`Failed to fetch server info: ${response.status}`);
       }
-    });
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch server info");
+      const data = await response.json();
+      return data.MediaContainer;
+    } catch (error) {
+      console.error(`[PlexAPI] Error fetching server info from ${uri}:`, error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error("Failed to retrieve server information");
     }
-
-    const data = await response.json();
-    return data.MediaContainer;
   }
 
   /**
@@ -547,18 +587,18 @@ export class PlexAPI {
     try {
       console.log(`[PlexAPI] Getting media parts for ${ratingKey} from ${uri}`);
       
-      const response = await fetch(`${uri}/library/metadata/${ratingKey}`, {
+      const response = await this.secureFetch(`${uri}/library/metadata/${ratingKey}`, {
         headers: {
-          ...this.headers,
-          'Accept': 'application/json', // Explicitly request JSON
+          'Accept': 'application/json',
           'X-Plex-Token': token
         }
       });
 
       if (!response.ok) {
         console.error(`[PlexAPI] Failed to fetch media metadata: ${response.status} ${response.statusText}`);
-        const text = await response.text();
-        console.error(`[PlexAPI] Response body: ${text}`);
+        if (response.status === 401) {
+          throw new Error("Access token is invalid or expired");
+        }
         throw new Error(`Failed to fetch media metadata: ${response.statusText}`);
       }
 
@@ -575,48 +615,37 @@ export class PlexAPI {
         }
       }
 
-      // Fallback for XML if JSON parsing fails or doesn't find the part
-      console.log(`[PlexAPI] Could not find part in JSON, attempting to parse as XML.`);
-      const xmlText = await response.text(); // This won't work as body is already read, need to re-fetch or clone
-      
-      // The previous logic for XML parsing can be kept here as a fallback,
-      // but for now, we'll focus on the JSON path which is more reliable.
-      // Let's re-implement the fetch to get the text body if JSON fails.
-
+      console.log(`[PlexAPI] Could not find part in JSON response for ${ratingKey}`);
+      return null;
     } catch (error) {
-       if (error instanceof SyntaxError) { // JSON parsing error
-        console.log('[PlexAPI] Response was not valid JSON, will try to re-fetch and parse as XML.');
-        // Re-fetch logic would go here, but it's better to rely on the JSON path working.
-      }
-      console.error('Error getting media parts:', error);
-    }
-    
-    // If we are here, something went wrong. Let's try to fetch again but as text.
-    console.log('[PlexAPI] Retrying fetch to get XML text for parsing.');
-    try {
-        const response = await fetch(`${uri}/library/metadata/${ratingKey}`, {
-            headers: {
-              ...this.headers,
-              // 'Accept': 'application/xml', // Request XML this time
-              'X-Plex-Token': token
-            }
+      console.error(`[PlexAPI] Error getting media parts for ${ratingKey}:`, error);
+      
+      // Fallback: try XML parsing if JSON fails
+      try {
+        console.log('[PlexAPI] Retrying with XML parsing...');
+        const response = await this.secureFetch(`${uri}/library/metadata/${ratingKey}`, {
+          headers: {
+            'X-Plex-Token': token
+          }
         });
+        
+        if (!response.ok) {
+          return null;
+        }
+        
         const xmlText = await response.text();
         const partMatch = xmlText.match(/<Part[^>]+key="([^"]+)"[^>]+duration="([^"]+)"/);
       
         if (partMatch) {
-            const partKey = partMatch[1];
-            const duration = parseInt(partMatch[2], 10);
-            
-            console.log(`[PlexAPI] Found part via XML fallback: key=${partKey}, duration=${duration}`);
-            
-            return { partKey, duration };
-        } else {
-            console.log(`[PlexAPI] No Part element found in XML fallback.`);
-            console.log(`[PlexAPI] XML snippet:`, xmlText.substring(0, 1000));
+          const partKey = partMatch[1];
+          const duration = parseInt(partMatch[2], 10);
+          
+          console.log(`[PlexAPI] Found part via XML fallback: key=${partKey}, duration=${duration}`);
+          return { partKey, duration };
         }
-    } catch(xmlError) {
-        console.error('Error in XML fallback:', xmlError);
+      } catch (xmlError) {
+        console.error('[PlexAPI] XML fallback also failed:', xmlError);
+      }
     }
 
     return null;
