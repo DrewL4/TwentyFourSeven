@@ -40,105 +40,363 @@ interface PlexServerConfig {
   arChannels?: boolean;
 }
 
+// Security audit logging
+interface AuditLogEntry {
+  timestamp: Date;
+  action: string;
+  userId?: string;
+  username?: string;
+  clientIp?: string;
+  success: boolean;
+  error?: string;
+  metadata?: Record<string, any>;
+}
+
+class SecurityAuditLogger {
+  private static logs: AuditLogEntry[] = [];
+  private static readonly MAX_LOGS = 10000;
+
+  static log(entry: Omit<AuditLogEntry, 'timestamp'>): void {
+    const logEntry: AuditLogEntry = {
+      timestamp: new Date(),
+      ...entry
+    };
+
+    this.logs.push(logEntry);
+    
+    // Keep only the most recent logs
+    if (this.logs.length > this.MAX_LOGS) {
+      this.logs = this.logs.slice(-this.MAX_LOGS);
+    }
+
+    // Log to console for immediate monitoring
+    const level = logEntry.success ? 'info' : 'warn';
+    console[level](`[AUDIT] ${logEntry.action}`, {
+      timestamp: logEntry.timestamp.toISOString(),
+      userId: logEntry.userId,
+      username: logEntry.username?.substring(0, 3) + '***',
+      clientIp: logEntry.clientIp,
+      success: logEntry.success,
+      error: logEntry.error,
+      metadata: logEntry.metadata
+    });
+  }
+
+  static getRecentLogs(limit: number = 100): AuditLogEntry[] {
+    return this.logs.slice(-limit);
+  }
+
+  static getFailedAttempts(timeWindow: number = 3600000): AuditLogEntry[] {
+    const cutoff = new Date(Date.now() - timeWindow);
+    return this.logs.filter(log => 
+      !log.success && 
+      log.timestamp > cutoff && 
+      log.action.includes('authentication')
+    );
+  }
+}
+
 export class PlexService {
   /**
-   * Login to Plex and discover available servers
+   * Login to Plex and discover available servers with enhanced security
    */
-  static async login(username: string, password: string): Promise<PlexLoginResult> {
+  static async login(username: string, password: string, clientIp?: string): Promise<PlexLoginResult> {
+    // Input sanitization and validation
+    if (!username || !password) {
+      SecurityAuditLogger.log({
+        action: 'plex_authentication_attempt',
+        username: username || 'unknown',
+        clientIp,
+        success: false,
+        error: 'Missing credentials'
+      });
+      throw new Error('Username and password are required');
+    }
+
+    // Sanitize inputs
+    const sanitizedUsername = username.trim().toLowerCase();
+    
     const plex = new PlexAPI();
     
-    // Sign in to get access token
-    const loginResult = await plex.signIn(username, password);
-    
-    // Get available servers
-    const servers = await plex.getServers();
-    
-    // Test connections and find best one for each server
-    const discoveredServers: PlexServerDiscovery[] = [];
-    
-    for (const server of servers) {
-      const bestConnection = await plex.findBestConnection(server);
-      
-      discoveredServers.push({
-        name: server.name,
-        machineIdentifier: server.machineIdentifier,
-        accessToken: server.accessToken,
-        bestConnection: bestConnection ? {
-          uri: bestConnection.uri,
-          protocol: bestConnection.protocol,
-          address: bestConnection.address,
-          port: bestConnection.port,
-          local: bestConnection.local
-        } : null,
-        allConnections: server.connections.map(conn => ({
-          uri: conn.uri,
-          protocol: conn.protocol,
-          address: conn.address,
-          port: conn.port,
-          local: conn.local
-        }))
+    try {
+      SecurityAuditLogger.log({
+        action: 'plex_authentication_attempt',
+        username: sanitizedUsername,
+        clientIp,
+        success: false, // Will be updated on success
+        metadata: { timestamp: new Date().toISOString() }
       });
+
+      // Sign in to get access token with enhanced security
+      const loginResult = await plex.signIn(sanitizedUsername, password, clientIp);
+      
+      SecurityAuditLogger.log({
+        action: 'plex_authentication_success',
+        userId: loginResult.user.id,
+        username: sanitizedUsername,
+        clientIp,
+        success: true,
+        metadata: { 
+          userEmail: loginResult.user.email,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      // Get available servers
+      const servers = await plex.getServers();
+      
+      SecurityAuditLogger.log({
+        action: 'plex_server_discovery',
+        userId: loginResult.user.id,
+        username: sanitizedUsername,
+        clientIp,
+        success: true,
+        metadata: { 
+          serverCount: servers.length,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+      // Test connections and find best one for each server
+      const discoveredServers: PlexServerDiscovery[] = [];
+      
+      for (const server of servers) {
+        try {
+          const bestConnection = await plex.findBestConnection(server);
+          
+          discoveredServers.push({
+            name: server.name,
+            machineIdentifier: server.machineIdentifier,
+            accessToken: server.accessToken,
+            bestConnection: bestConnection ? {
+              uri: bestConnection.uri,
+              protocol: bestConnection.protocol,
+              address: bestConnection.address,
+              port: bestConnection.port,
+              local: bestConnection.local
+            } : null,
+            allConnections: server.connections.map(conn => ({
+              uri: conn.uri,
+              protocol: conn.protocol,
+              address: conn.address,
+              port: conn.port,
+              local: conn.local
+            }))
+          });
+        } catch (error) {
+          console.warn(`Failed to test connections for server ${server.name}:`, error);
+          // Still add the server even if connection testing fails
+          discoveredServers.push({
+            name: server.name,
+            machineIdentifier: server.machineIdentifier,
+            accessToken: server.accessToken,
+            bestConnection: null,
+            allConnections: server.connections.map(conn => ({
+              uri: conn.uri,
+              protocol: conn.protocol,
+              address: conn.address,
+              port: conn.port,
+              local: conn.local
+            }))
+          });
+        }
+      }
+
+      return {
+        accessToken: loginResult.authToken,
+        user: loginResult.user,
+        servers: discoveredServers
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown authentication error';
+      const errorCode = (error as any)?.code;
+      
+      SecurityAuditLogger.log({
+        action: 'plex_authentication_failure',
+        username: sanitizedUsername,
+        clientIp,
+        success: false,
+        error: errorMessage,
+        metadata: { 
+          errorCode,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      // Don't expose sensitive error details
+      if (errorCode === 'RATE_LIMITED') {
+        throw error; // Pass through rate limiting errors with retry info
+      } else if (errorCode === 'INVALID_INPUT') {
+        throw new Error('Invalid credentials format');
+      } else if (errorMessage.includes('Invalid username or password')) {
+        throw new Error('Invalid username or password');
+      } else if (errorMessage.includes('Rate limit exceeded')) {
+        throw new Error('Too many attempts. Please try again later.');
+      } else if (errorMessage.includes('Network error')) {
+        throw new Error('Unable to connect to Plex. Please check your internet connection.');
+      } else {
+        throw new Error('Authentication failed. Please try again.');
+      }
     }
-    
-    return {
-      accessToken: loginResult.authToken,
-      user: loginResult.user,
-      servers: discoveredServers
-    };
   }
 
   /**
-   * Add a Plex server to the database
+   * Add a Plex server to the database with enhanced security validation
    */
-  static async addPlexServer(config: PlexServerConfig): Promise<MediaServer> {
-    // Test the connection first
-    const plex = new PlexAPI({ uri: config.uri });
-    const connectionValid = await plex.testConnection(config.uri, config.accessToken);
-    
-    if (!connectionValid) {
-      throw new Error('Unable to connect to Plex server with provided configuration');
+  static async addPlexServer(config: PlexServerConfig, clientIp?: string): Promise<MediaServer> {
+    // Input validation and sanitization
+    if (!config.name || !config.uri || !config.accessToken) {
+      throw new Error('Missing required server configuration');
     }
 
-    // Check if server already exists
-    const existingServer = await prisma.mediaServer.findFirst({
-      where: {
-        url: config.uri,
-        type: 'PLEX'
+    // Validate URI format
+    try {
+      const url = new URL(config.uri);
+      if (!['http:', 'https:'].includes(url.protocol)) {
+        throw new Error('Invalid protocol. Only HTTP and HTTPS are supported.');
+      }
+    } catch {
+      throw new Error('Invalid server URL format');
+    }
+
+    // Sanitize inputs
+    const sanitizedConfig = {
+      name: config.name.trim().substring(0, 100),
+      uri: config.uri.trim(),
+      accessToken: config.accessToken.trim(),
+      arGuide: config.arGuide || false,
+      arChannels: config.arChannels || false
+    };
+
+    SecurityAuditLogger.log({
+      action: 'plex_server_add_attempt',
+      clientIp,
+      success: false,
+      metadata: {
+        serverName: sanitizedConfig.name,
+        serverUri: sanitizedConfig.uri,
+        timestamp: new Date().toISOString()
       }
     });
 
-    if (existingServer) {
-      // Update existing server
-      return await prisma.mediaServer.update({
-        where: { id: existingServer.id },
-        data: {
-          name: config.name,
-          token: config.accessToken,
-          active: true
+    try {
+      // Test the connection first with timeout
+      const plex = new PlexAPI({ uri: sanitizedConfig.uri });
+      const connectionValid = await plex.testConnection(sanitizedConfig.uri, sanitizedConfig.accessToken);
+      
+      if (!connectionValid) {
+        SecurityAuditLogger.log({
+          action: 'plex_server_connection_failed',
+          clientIp,
+          success: false,
+          error: 'Connection test failed',
+          metadata: {
+            serverName: sanitizedConfig.name,
+            serverUri: sanitizedConfig.uri,
+            timestamp: new Date().toISOString()
+          }
+        });
+        throw new Error('Unable to connect to Plex server with provided configuration');
+      }
+
+      // Check if server already exists
+      const existingServer = await prisma.mediaServer.findFirst({
+        where: {
+          url: sanitizedConfig.uri,
+          type: 'PLEX'
         }
       });
-    }
 
-    // Create new server
-    const newServer = await prisma.mediaServer.create({
-      data: {
-        name: config.name,
-        url: config.uri,
-        token: config.accessToken,
-        type: 'PLEX',
-        active: true
+      let server: MediaServer;
+
+      if (existingServer) {
+        // Update existing server
+        server = await prisma.mediaServer.update({
+          where: { id: existingServer.id },
+          data: {
+            name: sanitizedConfig.name,
+            token: sanitizedConfig.accessToken,
+            active: true
+          }
+        });
+
+        SecurityAuditLogger.log({
+          action: 'plex_server_updated',
+          clientIp,
+          success: true,
+          metadata: {
+            serverId: server.id,
+            serverName: sanitizedConfig.name,
+            timestamp: new Date().toISOString()
+          }
+        });
+      } else {
+        // Create new server
+        server = await prisma.mediaServer.create({
+          data: {
+            name: sanitizedConfig.name,
+            url: sanitizedConfig.uri,
+            token: sanitizedConfig.accessToken,
+            type: 'PLEX',
+            active: true
+          }
+        });
+
+        SecurityAuditLogger.log({
+          action: 'plex_server_created',
+          clientIp,
+          success: true,
+          metadata: {
+            serverId: server.id,
+            serverName: sanitizedConfig.name,
+            timestamp: new Date().toISOString()
+          }
+        });
       }
-    });
 
-    // Automatically sync libraries after adding the server
-    try {
-      await this.syncLibraries(newServer.id);
+      // Automatically sync libraries after adding the server
+      try {
+        await this.syncLibraries(server.id);
+        SecurityAuditLogger.log({
+          action: 'plex_server_sync_initiated',
+          clientIp,
+          success: true,
+          metadata: {
+            serverId: server.id,
+            timestamp: new Date().toISOString()
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to auto-sync libraries after adding server:', error);
+        SecurityAuditLogger.log({
+          action: 'plex_server_sync_failed',
+          clientIp,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown sync error',
+          metadata: {
+            serverId: server.id,
+            timestamp: new Date().toISOString()
+          }
+        });
+        // Don't fail the server creation if library sync fails
+      }
+
+      return server;
     } catch (error) {
-      console.warn('Failed to auto-sync libraries after adding server:', error);
-      // Don't fail the server creation if library sync fails
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      SecurityAuditLogger.log({
+        action: 'plex_server_add_failed',
+        clientIp,
+        success: false,
+        error: errorMessage,
+        metadata: {
+          serverName: sanitizedConfig.name,
+          serverUri: sanitizedConfig.uri,
+          timestamp: new Date().toISOString()
+        }
+      });
+      throw error;
     }
-
-    return newServer;
   }
 
   /**

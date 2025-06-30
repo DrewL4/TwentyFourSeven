@@ -954,8 +954,8 @@ export const appRouter = {
 
     plexLogin: protectedProcedure
       .input(z.object({
-        username: z.string(),
-        password: z.string()
+        username: z.string().min(1).max(100),
+        password: z.string().min(1).max(256)
       }))
       .handler(async ({ input }): Promise<{
         accessToken: string;
@@ -980,21 +980,39 @@ export const appRouter = {
           }>;
         }>;
       }> => {
-        const { PlexService } = await import('../lib/plex-service');
-        return await PlexService.login(input.username, input.password);
+        try {
+          const { PlexService } = await import('../lib/plex-service');
+          // Note: Client IP extraction would need to be implemented at the middleware level
+          // For now, we'll pass undefined and let the service handle rate limiting by username
+          return await PlexService.login(input.username, input.password, undefined);
+        } catch (error) {
+          // Enhanced error handling for security
+          if (error instanceof Error) {
+            const errorCode = (error as any)?.code;
+            
+            if (errorCode === 'RATE_LIMITED') {
+              // Rate limiting error - let it bubble up with the original message
+              throw error;
+            }
+            
+            throw error;
+          }
+          throw new Error('Authentication failed');
+        }
       }),
 
     addPlexServer: protectedProcedure
       .input(z.object({
-        name: z.string(),
+        name: z.string().min(1).max(100),
         uri: z.string().url(),
-        accessToken: z.string(),
+        accessToken: z.string().min(1).max(500),
         arGuide: z.boolean().optional().default(false),
         arChannels: z.boolean().optional().default(false)
       }))
       .handler(async ({ input }) => {
         const { PlexService } = await import('../lib/plex-service');
-        return await PlexService.addPlexServer(input);
+        // Note: Client IP extraction would need to be implemented at the middleware level
+        return await PlexService.addPlexServer(input, undefined);
       }),
 
     getServerInfo: protectedProcedure

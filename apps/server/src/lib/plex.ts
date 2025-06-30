@@ -73,6 +73,12 @@ interface PlexEpisode extends PlexMedia {
   parentIndex: number;
 }
 
+// Rate limiting store for authentication attempts
+const authAttempts = new Map<string, { count: number; lastAttempt: number; blocked: boolean }>();
+const MAX_AUTH_ATTEMPTS = 5;
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+const BLOCK_DURATION = 30 * 60 * 1000; // 30 minutes
+
 export class PlexAPI {
   private accessToken: string;
   private server: {
@@ -106,7 +112,8 @@ export class PlexAPI {
       'X-Plex-Version': '2.0.0',
       'X-Plex-Client-Identifier': 'rg14zekk3pa5zp4safjwaa8z',
       'X-Plex-Platform': 'Node.js',
-      'X-Plex-Platform-Version': process.version
+      'X-Plex-Platform-Version': process.version,
+      'User-Agent': 'TwentyFour/Seven/2.0.0'
     };
   }
 
@@ -115,36 +122,203 @@ export class PlexAPI {
   }
 
   /**
-   * Sign in to Plex with username/password
+   * Rate limiting check for authentication attempts
    */
-  async signIn(username: string, password: string): Promise<PlexUser> {
+  private checkRateLimit(identifier: string): { allowed: boolean; retryAfter?: number } {
+    const now = Date.now();
+    const attempt = authAttempts.get(identifier);
+
+    if (!attempt) {
+      authAttempts.set(identifier, { count: 1, lastAttempt: now, blocked: false });
+      return { allowed: true };
+    }
+
+    // Check if user is currently blocked
+    if (attempt.blocked && (now - attempt.lastAttempt) < BLOCK_DURATION) {
+      return { allowed: false, retryAfter: Math.ceil((BLOCK_DURATION - (now - attempt.lastAttempt)) / 1000) };
+    }
+
+    // Reset if window has passed
+    if ((now - attempt.lastAttempt) > RATE_LIMIT_WINDOW) {
+      authAttempts.set(identifier, { count: 1, lastAttempt: now, blocked: false });
+      return { allowed: true };
+    }
+
+    // Increment attempt count
+    attempt.count++;
+    attempt.lastAttempt = now;
+
+    if (attempt.count > MAX_AUTH_ATTEMPTS) {
+      attempt.blocked = true;
+      console.warn(`Rate limit exceeded for identifier: ${identifier}. Blocking for ${BLOCK_DURATION / 1000} seconds.`);
+      return { allowed: false, retryAfter: Math.ceil(BLOCK_DURATION / 1000) };
+    }
+
+    authAttempts.set(identifier, attempt);
+    return { allowed: true };
+  }
+
+  /**
+   * Validate and sanitize input credentials
+   */
+  private validateCredentials(username: string, password: string): { valid: boolean; error?: string } {
+    // Basic validation
     if (!username || !password) {
-      throw new Error("Username and password are required for Plex sign in");
+      return { valid: false, error: "Username and password are required" };
     }
 
-    const response = await fetch('https://plex.tv/users/sign_in.json', {
-      method: 'POST',
-      headers: {
-        ...this.headers,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        'user[login]': username,
-        'user[password]': password
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error("Invalid username/password combination");
-    }
-
-    const data = await response.json();
-    this.accessToken = data.user.authToken;
+    // Username validation (email or username format)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const usernameRegex = /^[a-zA-Z0-9._-]{3,50}$/;
     
-    return {
-      authToken: this.accessToken,
-      user: data.user
-    };
+    if (!emailRegex.test(username) && !usernameRegex.test(username)) {
+      return { valid: false, error: "Invalid username format" };
+    }
+
+    // Password validation
+    if (password.length < 1 || password.length > 256) {
+      return { valid: false, error: "Invalid password length" };
+    }
+
+    // Check for common injection patterns
+    const dangerousPatterns = [
+      /<script/i,
+      /javascript:/i,
+      /on\w+\s*=/i,
+      /\${/,
+      /\{\{/
+    ];
+
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(username) || pattern.test(password)) {
+        return { valid: false, error: "Invalid characters detected" };
+      }
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Secure fetch wrapper with timeout and error handling
+   */
+  private async secureFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          ...this.headers,
+          ...options.headers,
+        },
+      });
+
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Request timeout');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Sign in to Plex with username/password using security best practices
+   */
+  async signIn(username: string, password: string, clientIp?: string): Promise<PlexUser> {
+    // Create identifier for rate limiting (use IP + username hash for privacy)
+    const identifier = clientIp ? `${clientIp}:${username}` : username;
+    
+    // Check rate limiting
+    const rateLimitCheck = this.checkRateLimit(identifier);
+    if (!rateLimitCheck.allowed) {
+      const error = new Error(`Too many authentication attempts. Please try again in ${rateLimitCheck.retryAfter} seconds.`);
+      (error as any).code = 'RATE_LIMITED';
+      (error as any).retryAfter = rateLimitCheck.retryAfter;
+      throw error;
+    }
+
+    // Validate input credentials
+    const validation = this.validateCredentials(username, password);
+    if (!validation.valid) {
+      const error = new Error('Invalid credentials format');
+      (error as any).code = 'INVALID_INPUT';
+      throw error;
+    }
+
+    try {
+      console.log(`[PlexAPI] Attempting authentication for user: ${username.substring(0, 3)}***`);
+
+      const response = await this.secureFetch('https://plex.tv/users/sign_in.json', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Forwarded-For': clientIp || 'unknown',
+        },
+        body: new URLSearchParams({
+          'user[login]': username,
+          'user[password]': password
+        })
+      });
+
+      if (!response.ok) {
+        // Log failed attempt for monitoring
+        console.warn(`[PlexAPI] Authentication failed for user: ${username.substring(0, 3)}*** - Status: ${response.status}`);
+        
+        if (response.status === 401) {
+          throw new Error("Invalid username or password");
+        } else if (response.status === 429) {
+          throw new Error("Rate limit exceeded. Please try again later.");
+        } else if (response.status >= 500) {
+          throw new Error("Plex service temporarily unavailable. Please try again later.");
+        } else {
+          throw new Error("Authentication failed. Please check your credentials.");
+        }
+      }
+
+      const data = await response.json();
+      
+      if (!data.user || !data.user.authToken) {
+        throw new Error("Invalid response from Plex authentication service");
+      }
+
+      this.accessToken = data.user.authToken;
+      
+      console.log(`[PlexAPI] Authentication successful for user: ${username.substring(0, 3)}***`);
+      
+      // Reset rate limiting on successful authentication
+      authAttempts.delete(identifier);
+      
+      return {
+        authToken: this.accessToken,
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          username: data.user.username
+        }
+      };
+    } catch (error) {
+      // Enhanced error logging for security monitoring
+      console.error(`[PlexAPI] Authentication error for user: ${username.substring(0, 3)}***`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+        clientIp: clientIp || 'unknown'
+      });
+
+      if (error instanceof Error) {
+        // Don't expose internal error details to client
+        if (error.message.includes('fetch') || error.message.includes('network')) {
+          throw new Error("Network error. Please check your connection and try again.");
+        }
+        throw error;
+      }
+      
+      throw new Error("Authentication failed due to an unexpected error");
+    }
   }
 
   /**
@@ -155,36 +329,55 @@ export class PlexAPI {
       throw new Error("No access token available. Please sign in first.");
     }
 
-    const response = await fetch('https://plex.tv/pms/servers.xml', {
-      headers: {
-        ...this.headers,
-        'X-Plex-Token': this.accessToken
+    try {
+      const response = await this.secureFetch('https://plex.tv/pms/servers.xml', {
+        headers: {
+          'X-Plex-Token': this.accessToken
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Access token has expired. Please sign in again.");
+        }
+        throw new Error("Failed to fetch Plex servers");
       }
-    });
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch Plex servers");
+      const xmlText = await response.text();
+      return this.parseServersXML(xmlText);
+    } catch (error) {
+      console.error('[PlexAPI] Error fetching servers:', error);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error("Failed to retrieve server list");
     }
-
-    const xmlText = await response.text();
-    // Parse XML response to extract server information
-    // For now, return mock data that would match the real structure
-    return this.parseServersXML(xmlText);
   }
 
   /**
-   * Test connection to a Plex server
+   * Test connection to a Plex server with enhanced security
    */
   async testConnection(uri: string, token: string): Promise<boolean> {
+    if (!uri || !token) {
+      return false;
+    }
+
+    // Validate URI format
     try {
-      const response = await fetch(`${uri}/identity`, {
+      new URL(uri);
+    } catch {
+      return false;
+    }
+
+    try {
+      const response = await this.secureFetch(`${uri}/identity`, {
         headers: {
-          ...this.headers,
           'X-Plex-Token': token
         }
       });
       return response.ok;
-    } catch {
+    } catch (error) {
+      console.warn(`[PlexAPI] Connection test failed for ${uri}:`, error);
       return false;
     }
   }
