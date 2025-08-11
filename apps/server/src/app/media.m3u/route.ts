@@ -26,11 +26,12 @@ export async function GET(request: NextRequest) {
       baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
     }
     
-    let m3u = '#EXTM3U\n';
+    // Include EPG URL hints for players that support different keys
+    let m3u = `#EXTM3U url-tvg="${baseUrl}/media.xml" x-tvg-url="${baseUrl}/media.xml"\n`;
     
     for (const channel of channels) {
-      // Format: #EXTINF:-1 tvg-id="1" tvg-name="Channel Name" group-title="Group" tvg-logo="icon",Channel Name
-      let extinf = `#EXTINF:-1 tvg-id="${channel.number}" tvg-name="${channel.name}"`;
+      // Align tvg-id with XMLTV channel id: use the exact channel name
+      let extinf = `#EXTINF:-1 tvg-id="${channel.name}" tvg-name="${channel.name}" tvg-chno="${channel.number}"`;
       
       if (channel.groupTitle) {
         extinf += ` group-title="${channel.groupTitle}"`;

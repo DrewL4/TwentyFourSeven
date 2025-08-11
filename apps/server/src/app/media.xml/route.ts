@@ -91,8 +91,8 @@ export async function GET(request: NextRequest) {
     xmltv += '<!DOCTYPE tv SYSTEM "xmltv.dtd">\n';
     xmltv += '<tv generator-info-name="TwentyFourSeven" generator-info-url="https://github.com/vexorian/TwentyFourSeven" source-info-name="TwentyFourSeven">\n';
     for (const channel of channels) {
-      // Use lowercase channel name with underscores for XML id
-      const channelId = escapeXml(channel.name.toLowerCase().replace(/\s+/g, '_'));
+      // Use the exact channel name for XML id to align with M3U tvg-id
+      const channelId = escapeXml(channel.name);
       xmltv += `  <channel id="${channelId}">\n`;
       xmltv += `    <display-name lang="en">${escapeXml(channel.name)}</display-name>\n`;
       xmltv += `    <display-name>${escapeXml(channel.number.toString())}</display-name>\n`;
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
       const programStartTime = new Date(program.startTime);
       const programEndTime = new Date(programStartTime.getTime() + program.duration);
       // Use the same channelId logic for programme channel reference
-      const channelId = escapeXml(program.channel.name.toLowerCase().replace(/\s+/g, '_'));
+      const channelId = escapeXml(program.channel.name);
       xmltv += `  <programme start="${formatXmltvTime(programStartTime)}" stop="${formatXmltvTime(programEndTime)}" channel="${channelId}">\n`;
       if (program.episode) {
         const show = program.episode.show;

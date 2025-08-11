@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { TimingService } from '@/lib/timing-service';
 import { PlexAPI } from '@/lib/plex';
-import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import { PassThrough } from 'stream';
 
 // This is a requirement for using readable streams in a NextResponse.
@@ -47,10 +47,12 @@ async function getProgramInfo(channelNumber: number) {
   return { programInfo, server, timing };
 }
 
-async function buildFfmpegArgs(streamUrl: string, seekSeconds: number): Promise<string[]> {
+async function buildFfmpegArgs(streamUrl: string, seekSeconds: number, options?: { forceSoftware?: boolean }): Promise<string[]> {
     const ffmpegSettings = await prisma.ffmpegSettings.findUnique({
         where: { id: "singleton" },
     });
+
+    const forceSoftware = options?.forceSoftware === true;
 
     // Smart fallback: use environment detection if database settings not available
     const useEnvironmentFallback = !ffmpegSettings;
@@ -70,13 +72,13 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number): Promise<
     const args: string[] = [];
 
     // Smart hardware acceleration detection
-    const enableHardwareAccel = useEnvironmentFallback ? 
+    const enableHardwareAccel = !forceSoftware && (useEnvironmentFallback ? 
         (process.env.FFMPEG_HWACCEL_METHOD && process.env.FFMPEG_HWACCEL_METHOD !== 'none' && process.env.FFMPEG_HWACCEL_METHOD !== 'cpu') : 
-        (ffmpegSettings?.enableHardwareAccel && ffmpegSettings?.hardwareAccelType !== 'none');
+        (ffmpegSettings?.enableHardwareAccel && ffmpegSettings?.hardwareAccelType !== 'none'));
     
-    const hardwareAccelType = useEnvironmentFallback ? 
+    const hardwareAccelType = !forceSoftware ? (useEnvironmentFallback ? 
         process.env.FFMPEG_HWACCEL_METHOD : 
-        ffmpegSettings?.hardwareAccelType;
+        ffmpegSettings?.hardwareAccelType) : 'none';
 
     // Global options
     if (ffmpegSettings?.globalOptions) {
@@ -115,7 +117,9 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number): Promise<
 
     // Video codec selection with smart fallbacks
     let videoCodec: string;
-    if (useEnvironmentFallback) {
+    if (forceSoftware) {
+        videoCodec = 'libx264';
+    } else if (useEnvironmentFallback) {
         // Environment-based codec selection
         switch (hardwareAccelType) {
             case 'nvenc': videoCodec = 'h264_nvenc'; break;
@@ -133,13 +137,13 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number): Promise<
     
     if (ffmpegSettings?.videoBitrate) {
         args.push('-b:v', ffmpegSettings.videoBitrate);
-    } else if (useEnvironmentFallback) {
+    } else if (useEnvironmentFallback && !forceSoftware) {
         args.push('-b:v', '8000k'); // Default for hardware acceleration
     }
     
     if (ffmpegSettings?.videoBufSize) {
         args.push('-bufsize', ffmpegSettings.videoBufSize);
-    } else if (useEnvironmentFallback) {
+    } else if (useEnvironmentFallback && !forceSoftware) {
         args.push('-bufsize', '16000k'); // Default for hardware acceleration
     }
     
@@ -194,9 +198,9 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number): Promise<
 
     // Log the transcoding method being used
     if (useEnvironmentFallback) {
-        console.log(`[FFmpeg] Using environment fallback - Hardware: ${hardwareAccelType || 'cpu'}, Codec: ${videoCodec}`);
+        console.log(`[FFmpeg] Using environment fallback - Hardware: ${forceSoftware ? 'disabled' : (hardwareAccelType || 'cpu')}, Codec: ${videoCodec}`);
     } else {
-        console.log(`[FFmpeg] Using database settings - Hardware: ${ffmpegSettings?.enableHardwareAccel ? ffmpegSettings.hardwareAccelType : 'disabled'}, Codec: ${videoCodec}`);
+        console.log(`[FFmpeg] Using database settings - Hardware: ${forceSoftware ? 'disabled' : (ffmpegSettings?.enableHardwareAccel ? ffmpegSettings.hardwareAccelType : 'disabled')}, Codec: ${videoCodec}`);
     }
 
     return args;
@@ -229,28 +233,80 @@ export async function GET(request: NextRequest) {
     const streamUrl = `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`;
     const seekSeconds = timing.seekOffsetMs > 0 ? Math.floor(timing.seekOffsetMs / 1000) : 0;
 
-    const ffmpegArgs = await buildFfmpegArgs(streamUrl, seekSeconds);
-
-    console.log(`[FFmpeg] Spawning FFmpeg with args: ${ffmpegArgs.join(' ')}`);
-
-    const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-
-    // We need a PassThrough stream to pipe FFmpeg's stdout to the NextResponse
+    // Shared passthrough for the lifetime of the HTTP response
     const passthrough = new PassThrough();
-    ffmpeg.stdout.pipe(passthrough);
-    
-    ffmpeg.stderr.on('data', (data) => {
-      console.error(`[FFmpeg] stderr: ${data}`);
-    });
 
-    ffmpeg.on('close', (code) => {
-      console.log(`[FFmpeg] process exited with code ${code}`);
-      passthrough.end();
-    });
-    
+    // Simple GPU fail-safe: try hardware first, on failure auto-restart with software encoder (once)
+    let restartedToSoftware = false;
+    let currentFfmpeg: ChildProcess | null = null;
+
+    const gpuErrorPatterns = [
+      /nvenc/i,
+      /cuInit/i,
+      /cuda/i,
+      /qsv/i,
+      /vaapi/i,
+      /videotoolbox/i,
+      /No such device/i,
+      /device not present/i,
+      /resource temporarily unavailable/i,
+      /initializ/i,
+      /failed/i,
+    ];
+
+    const startFfmpeg = async (forceSoftware: boolean) => {
+      const ffmpegArgs = await buildFfmpegArgs(streamUrl, seekSeconds, { forceSoftware });
+      console.log(`[FFmpeg] Spawning FFmpeg with args: ${ffmpegArgs.join(' ')}`);
+      const child = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+      child.stdout.pipe(passthrough, { end: false });
+
+      child.stderr.on('data', (data) => {
+        const text = data.toString();
+        console.error(`[FFmpeg] stderr: ${text}`);
+        // If we detect GPU-related errors and haven't switched yet, restart with software
+        if (!restartedToSoftware && gpuErrorPatterns.some((p) => p.test(text))) {
+          restartedToSoftware = true;
+          console.warn('[FFmpeg] Detected hardware acceleration error; restarting with software encoder...');
+          try { child.kill('SIGKILL'); } catch {}
+          // Start software fallback
+          startFfmpeg(true).catch((err) => {
+            console.error('[FFmpeg] Software fallback failed to start:', err);
+            passthrough.end();
+          });
+        }
+      });
+
+      child.on('close', (code) => {
+        console.log(`[FFmpeg] process exited with code ${code}`);
+        // If this is an old process (we already restarted), ignore this close event based on PID
+        if (!currentFfmpeg || currentFfmpeg.pid !== child.pid) {
+          return;
+        }
+        // If hardware run exited non-zero and we have not restarted, try software
+        if (code !== 0 && !restartedToSoftware) {
+          restartedToSoftware = true;
+          console.warn('[FFmpeg] FFmpeg exited with error; restarting with software encoder...');
+          startFfmpeg(true).catch((err) => {
+            console.error('[FFmpeg] Software fallback failed to start:', err);
+            passthrough.end();
+          });
+          return;
+        }
+        // Normal end (client abort or final process finished)
+        passthrough.end();
+      });
+
+      currentFfmpeg = child;
+      return child;
+    };
+
+    // Start with hardware (if available)
+    await startFfmpeg(false);
+
+    // Handle client abort
     request.signal.onabort = () => {
-        console.log('[FFmpeg] Client aborted request. Killing FFmpeg.');
-        ffmpeg.kill();
+      console.log('[FFmpeg] Client aborted request. Killing FFmpeg.');
+      try { currentFfmpeg?.kill('SIGKILL'); } catch {}
     };
     
     return new NextResponse(passthrough as any, {

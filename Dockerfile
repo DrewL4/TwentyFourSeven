@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Multi-stage build for production
 FROM node:20-alpine AS base
 
@@ -9,14 +10,15 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat && \
     corepack enable
 
-# Copy package files
+# Copy package files (monorepo-aware to maximize Docker cache hits)
 COPY package*.json ./
+COPY turbo.json ./
+# App manifests
 COPY apps/web/package*.json ./apps/web/
 COPY apps/server/package*.json ./apps/server/
-COPY turbo.json ./
 
-# Install dependencies
-RUN npm ci --prefer-offline --no-audit --progress=false
+# Install dependencies (use BuildKit cache for npm)
+RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit --progress=false
 
 # Copy source code
 COPY . .
@@ -70,14 +72,14 @@ RUN apt-get update && apt-get install -y \
 RUN ln -sf /usr/local/bin/ffmpeg /usr/bin/ffmpeg \
     && ln -sf /usr/local/bin/ffprobe /usr/bin/ffprobe
 
-# Copy package files for production install
+# Copy package files for production install (monorepo-aware for cache)
 COPY package*.json ./
+COPY turbo.json ./
 COPY apps/web/package*.json ./apps/web/
 COPY apps/server/package*.json ./apps/server/
-COPY turbo.json ./
 
-# Install only production dependencies
-RUN npm ci --only=production --prefer-offline --no-audit --progress=false && \
+# Install only production dependencies (use BuildKit cache for npm)
+RUN --mount=type=cache,target=/root/.npm npm ci --only=production --prefer-offline --no-audit --progress=false && \
     npm cache clean --force
 
 # Copy built applications with proper ownership (abc user like Plex)
@@ -137,9 +139,6 @@ RUN echo '#!/bin/bash' > /app/init-gpu-permissions.sh && \
     echo '' >> /app/init-gpu-permissions.sh && \
     echo 'echo "✅ GPU device permissions setup complete"' >> /app/init-gpu-permissions.sh && \
     chmod +x /app/init-gpu-permissions.sh
-
-# Ensure abc user owns all app directories
-RUN chown -R abc:users /app
 
 # Set hardware acceleration environment variables (TwentyFourSeven pattern)
 ENV NVIDIA_VISIBLE_DEVICES=all
