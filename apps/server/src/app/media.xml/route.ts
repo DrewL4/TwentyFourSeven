@@ -94,13 +94,10 @@ export async function GET(request: NextRequest) {
       // Use the exact channel name for XML id to align with M3U tvg-id
       const channelId = escapeXml(channel.name);
       xmltv += `  <channel id="${channelId}">\n`;
-      xmltv += `    <display-name lang="en">${escapeXml(channel.name)}</display-name>\n`;
-      xmltv += `    <display-name>${escapeXml(channel.number.toString())}</display-name>\n`;
+      // Emit a single display-name without attributes to avoid list/dict parsing in xmltodict
+      xmltv += `    <display-name>${escapeXml(channel.name)}</display-name>\n`;
       if (channel.icon) {
         xmltv += `    <icon src="${escapeXml(channel.icon)}" />\n`;
-      }
-      if (channel.groupTitle) {
-        xmltv += `    <display-name>${escapeXml(channel.groupTitle)}</display-name>\n`;
       }
       xmltv += '  </channel>\n';
     }
