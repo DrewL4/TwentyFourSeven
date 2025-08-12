@@ -118,13 +118,42 @@ export async function GET(request: NextRequest) {
         }
         const seasonStr = program.episode.seasonNumber.toString().padStart(2, '0');
         const episodeStr = program.episode.episodeNumber.toString().padStart(2, '0');
-        let desc = `Season ${program.episode.seasonNumber}, Episode ${program.episode.episodeNumber}`;
+
+        // Build enriched description: SXX EXX, blank line, summary, blank line, Cast
+        let summary = '';
         if (program.episode.summary && program.episode.summary.trim() !== '') {
-          desc += `\n\n${program.episode.summary}`;
+          summary = program.episode.summary;
         } else if (show.summary && show.summary.trim() !== '') {
-          desc += `\n\n${show.summary}`;
+          summary = show.summary;
         }
-        xmltv += `    <desc lang="en">${escapeXml(desc)}</desc>\n`;
+
+        let actorList: string[] = [];
+        if (show.actors && show.actors.trim() !== '') {
+          try {
+            const actors = JSON.parse(show.actors);
+            if (Array.isArray(actors)) {
+              actorList = actors.filter((a: any) => typeof a === 'string' && a.trim() !== '');
+            }
+          } catch (e) {
+            actorList = show.actors
+              .split(',')
+              .map((a: string) => a.trim())
+              .filter((a: string) => a);
+          }
+        }
+
+        const descLines: string[] = [];
+        descLines.push(`S${seasonStr} E${episodeStr}`);
+        if (summary) {
+          descLines.push('');
+          descLines.push(summary);
+        }
+        if (actorList.length > 0) {
+          descLines.push('');
+          descLines.push(`Cast: ${actorList.join(', ')}`);
+        }
+        xmltv += `    <desc lang="en">${escapeXml(descLines.join('\n'))}</desc>\n`;
+
         xmltv += `    <category lang="en">Series</category>\n`;
         if (show.genres && show.genres.trim() !== '') {
           try {
@@ -146,41 +175,114 @@ export async function GET(request: NextRequest) {
         if (show.poster) {
           xmltv += `    <icon src="${escapeXml(show.poster)}" />\n`;
         }
-        if (show.actors && show.actors.trim() !== '') {
+        if (actorList.length > 0) {
           xmltv += '    <credits>\n';
-          try {
-            const actors = JSON.parse(show.actors);
-            if (Array.isArray(actors)) {
-              actors.forEach((actor: string) => {
-                xmltv += `      <actor>${escapeXml(actor)}</actor>\n`;
-              });
-            }
-          } catch (e) {
-            const actors = show.actors.split(',').map((a: string) => a.trim()).filter((a: string) => a);
-            actors.forEach((actor: string) => {
-              xmltv += `      <actor>${escapeXml(actor)}</actor>\n`;
-            });
-          }
+          actorList.forEach((actor: string) => {
+            xmltv += `      <actor>${escapeXml(actor)}</actor>\n`;
+          });
           xmltv += '    </credits>\n';
         }
         if (show.contentRating) {
-          xmltv += `    <rating system="MPAA">\n`;
+          // Use VCHIP for TV ratings like "TV-PG", fallback to MPAA otherwise
+          const ratingSystem = show.contentRating.startsWith('TV-') ? 'VCHIP' : 'MPAA';
+          xmltv += `    <rating system="${ratingSystem}">\n`;
           xmltv += `      <value>${escapeXml(show.contentRating)}</value>\n`;
           xmltv += `    </rating>\n`;
         }
       } else if (program.movie) {
         xmltv += `    <title lang="en">${escapeXml(program.movie.title)}</title>\n`;
-        let desc = '';
-        if (program.movie.summary && program.movie.summary.trim() !== '') {
-          desc = program.movie.summary;
+
+        // Enriched movie description: summary, blank line, Credits (Cast/Director)
+        const movieSummary = (program.movie.summary && program.movie.summary.trim() !== '') ? program.movie.summary : '';
+
+        let movieActors: string[] = [];
+        if (program.movie.actors && program.movie.actors.trim() !== '') {
+          try {
+            const actors = JSON.parse(program.movie.actors);
+            if (Array.isArray(actors)) {
+              movieActors = actors.filter((a: any) => typeof a === 'string' && a.trim() !== '');
+            }
+          } catch (e) {
+            movieActors = program.movie.actors
+              .split(',')
+              .map((a: string) => a.trim())
+              .filter((a: string) => a);
+          }
         }
-        if (desc) {
-          xmltv += `    <desc lang="en">${escapeXml(desc)}</desc>\n`;
+
+        let movieDirectors: string[] = [];
+        if (program.movie.directors && program.movie.directors.trim() !== '') {
+          try {
+            const directors = JSON.parse(program.movie.directors);
+            if (Array.isArray(directors)) {
+              movieDirectors = directors.filter((d: any) => typeof d === 'string' && d.trim() !== '');
+            }
+          } catch (e) {
+            movieDirectors = program.movie.directors
+              .split(',')
+              .map((d: string) => d.trim())
+              .filter((d: string) => d);
+          }
         }
+
+        const movieDescLines: string[] = [];
+        if (movieSummary) {
+          movieDescLines.push(movieSummary);
+        }
+        if (movieActors.length > 0 || movieDirectors.length > 0) {
+          if (movieDescLines.length > 0) movieDescLines.push('');
+          if (movieActors.length > 0) movieDescLines.push(`Cast: ${movieActors.join(', ')}`);
+          if (movieDirectors.length > 0) movieDescLines.push(`Director: ${movieDirectors.join(', ')}`);
+        }
+        if (movieDescLines.length > 0) {
+          xmltv += `    <desc lang="en">${escapeXml(movieDescLines.join('\n'))}</desc>\n`;
+        }
+
         if (program.movie.year) {
           xmltv += `    <date>${program.movie.year}</date>\n`;
         }
-        // Add any additional movie fields here if needed
+
+        // Movie categories from genres
+        if (program.movie.genres && program.movie.genres.trim() !== '') {
+          try {
+            const genres = JSON.parse(program.movie.genres);
+            if (Array.isArray(genres)) {
+              genres.forEach((genre: string) => {
+                xmltv += `    <category lang="en">${escapeXml(genre)}</category>\n`;
+              });
+            }
+          } catch (e) {
+            const genres = program.movie.genres.split(',').map((g: string) => g.trim()).filter((g: string) => g);
+            genres.forEach((genre: string) => {
+              xmltv += `    <category lang="en">${escapeXml(genre)}</category>\n`;
+            });
+          }
+        }
+
+        // Movie poster as icon if available
+        if (program.movie.poster) {
+          xmltv += `    <icon src="${escapeXml(program.movie.poster)}" />\n`;
+        }
+
+        // Movie credits (actors/directors)
+        if (movieActors.length > 0 || movieDirectors.length > 0) {
+          xmltv += '    <credits>\n';
+          movieActors.forEach((actor: string) => {
+            xmltv += `      <actor>${escapeXml(actor)}</actor>\n`;
+          });
+          movieDirectors.forEach((director: string) => {
+            xmltv += `      <director>${escapeXml(director)}</director>\n`;
+          });
+          xmltv += '    </credits>\n';
+        }
+
+        // Rating for movies: prefer MPAA
+        if (program.movie.contentRating) {
+          const ratingSystem = program.movie.contentRating.startsWith('TV-') ? 'VCHIP' : 'MPAA';
+          xmltv += `    <rating system="${ratingSystem}">\n`;
+          xmltv += `      <value>${escapeXml(program.movie.contentRating)}</value>\n`;
+          xmltv += `    </rating>\n`;
+        }
         // Close the programme element for movies
       }
       // Optionally add <live /> or <new /> tags as in the original logic if needed

@@ -33,25 +33,25 @@ ENV DISABLE_FONT_OPTIMIZATION=1
 RUN npm run build
 
 # Production stage - use NVIDIA-enabled FFmpeg base (following TwentyFourSeven pattern)
-FROM jrottenberg/ffmpeg:4.4-nvidia2004 AS runner
+FROM node:20-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install Node.js and other dependencies on the NVIDIA FFmpeg base
+# Install system dependencies, Nginx, and Debian ffmpeg with VAAPI like ESPG
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
     nginx \
-    # Node.js 20.x
     ca-certificates \
-    gnupg \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    # GPU utilities
-    && apt-get install -y pciutils usbutils \
-    # Clean up
+    ffmpeg \
+    vainfo \
+    libva2 \
+    libva-drm2 \
+    intel-media-va-driver \
+    mesa-va-drivers \
+    pciutils usbutils \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     # Create user and groups following Plex/Unraid best practices (abc user pattern)
@@ -68,9 +68,7 @@ RUN apt-get update && apt-get install -y \
     # Ensure GPU device access permissions
     && mkdir -p /dev/dri
 
-# Link ffmpeg to standard location (TwentyFourSeven pattern)
-RUN ln -sf /usr/local/bin/ffmpeg /usr/bin/ffmpeg \
-    && ln -sf /usr/local/bin/ffprobe /usr/bin/ffprobe
+# ffmpeg is installed via Debian package and available at /usr/bin/ffmpeg and /usr/bin/ffprobe
 
 # Copy package files for production install (monorepo-aware for cache)
 COPY package*.json ./
@@ -93,11 +91,11 @@ COPY --from=builder --chown=abc:users /app/apps/server/package.json ./apps/serve
 COPY --from=builder --chown=abc:users /app/apps/server/prisma ./apps/server/prisma
 COPY --from=builder --chown=abc:users /app/apps/server/prisma.config.ts ./apps/server/
 
-# Verify NVENC support is available (should be built into the NVIDIA base image)
-RUN echo "🔍 Checking NVENC support in NVIDIA FFmpeg base image..." \
-    && /usr/local/bin/ffmpeg -encoders 2>/dev/null | grep nvenc || \
-    (echo "⚠️  NVENC encoders not found - this may indicate NVIDIA runtime issues" && \
-     /usr/local/bin/ffmpeg -encoders 2>/dev/null | head -20)
+# Verify ffmpeg is installed and check for common hardware accel encoders
+RUN echo "🔍 Checking ffmpeg installation..." \
+    && /usr/bin/ffmpeg -version || (echo "⚠️  ffmpeg not found" && exit 1) \
+    && echo "🔍 Listing encoders (looking for vaapi/qsv/videotoolbox if available)..." \
+    && /usr/bin/ffmpeg -encoders 2>/dev/null | grep -E "vaapi|qsv|videotoolbox" || /usr/bin/ffmpeg -encoders 2>/dev/null | head -20
 
 # Copy nginx configuration
 COPY --chown=abc:users nginx.conf /etc/nginx/nginx.conf
@@ -143,9 +141,9 @@ RUN echo '#!/bin/bash' > /app/init-gpu-permissions.sh && \
 # Set hardware acceleration environment variables (TwentyFourSeven pattern)
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=all
-ENV HARDWARE_ACCEL_DEVICE=/dev/nvidia0
-ENV FFMPEG_PATH=/usr/local/bin/ffmpeg
-ENV FFPROBE_PATH=/usr/local/bin/ffprobe
+ENV HARDWARE_ACCEL_DEVICE=/dev/dri/renderD128
+ENV FFMPEG_PATH=/usr/bin/ffmpeg
+ENV FFPROBE_PATH=/usr/bin/ffprobe
 # Set PUID/PGID like Plex for Unraid compatibility
 ENV PUID=99
 ENV PGID=100
