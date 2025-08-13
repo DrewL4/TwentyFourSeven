@@ -93,11 +93,14 @@ export class PlexService {
   static async addPlexServer(config: PlexServerConfig): Promise<MediaServer> {
     // Test the connection first
     const plex = new PlexAPI({ uri: config.uri });
-    const connectionValid = await plex.testConnection(config.uri, config.accessToken);
-    
-    if (!connectionValid) {
-      throw new Error('Unable to connect to Plex server with provided configuration');
+    let connectionValid = false;
+    try {
+      connectionValid = await plex.testConnection(config.uri, config.accessToken);
+    } catch (e) {
+      connectionValid = false;
     }
+ 
+    // If test fails, still allow adding the server as inactive so the user can fix the URL/token
 
     // Check if server already exists
     const existingServer = await prisma.mediaServer.findFirst({
@@ -114,7 +117,7 @@ export class PlexService {
         data: {
           name: config.name,
           token: config.accessToken,
-          active: true
+          active: connectionValid
         }
       });
     }
@@ -126,13 +129,15 @@ export class PlexService {
         url: config.uri,
         token: config.accessToken,
         type: 'PLEX',
-        active: true
+        active: connectionValid
       }
     });
 
     // Automatically sync libraries after adding the server
     try {
-      await this.syncLibraries(newServer.id);
+      if (connectionValid) {
+        await this.syncLibraries(newServer.id);
+      }
     } catch (error) {
       console.warn('Failed to auto-sync libraries after adding server:', error);
       // Don't fail the server creation if library sync fails

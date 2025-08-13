@@ -46,6 +46,8 @@ import { toast } from "sonner";
 import { Autocomplete } from "@/components/ui/combobox"
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+// Dialog components not available; using inline panel instead
+import { Separator } from "@/components/ui/separator";
 
 type Channel = {
   id: string;
@@ -2811,6 +2813,12 @@ function ChannelsPageContent() {
             <CardDescription>Configure a new TV channel</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <Tabs defaultValue="single">
+              <TabsList className="mb-4">
+                <TabsTrigger value="single">Single Channel</TabsTrigger>
+                <TabsTrigger value="collections">From Collections</TabsTrigger>
+              </TabsList>
+              <TabsContent value="single">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="number">Channel Number</Label>
@@ -2889,6 +2897,12 @@ function ChannelsPageContent() {
               </div>
             </div>
             
+              </TabsContent>
+              <TabsContent value="collections">
+                <BulkCreateFromCollections />
+              </TabsContent>
+            </Tabs>
+
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
               <Button variant="outline" onClick={() => setShowCreateForm(false)} className="touch-manipulation">
                 Cancel
@@ -3976,6 +3990,8 @@ function ChannelsPageContent() {
         />
       )}
 
+
+
     </div>
   );
 }
@@ -3985,5 +4001,217 @@ export default function ChannelsPage() {
     <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
       <ChannelsPageContent />
     </Suspense>
+  );
+}
+
+function InlineBulkCreateFromCollections() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-4">
+      <div className="flex justify-end">
+        <Button variant="secondary" size="sm" className="touch-manipulation" onClick={() => setOpen(o => !o)}>
+          <Folder className="w-4 h-4 mr-2" /> {open ? 'Close' : 'Create from Collections'}
+        </Button>
+      </div>
+      {open && (
+        <Card className="mt-3">
+          <CardHeader>
+            <CardTitle>Create Channels from Collections</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BulkCreateFromCollections />
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function BulkCreateFromCollections() {
+  const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const [groupTitle, setGroupTitle] = useState("");
+  const collectionsQuery = useQuery(orpc.library.collections.queryOptions({ input: { search, limit: 200, offset: 0 } }));
+  const [previewPlan, setPreviewPlan] = useState<any[] | null>(null);
+  const [conflicts, setConflicts] = useState<any[] | null>(null);
+  const [showResolve, setShowResolve] = useState(false);
+  const [resolutions, setResolutions] = useState<Record<string, { action: 'rename'|'merge'|'skip'|'create'; newName?: string; targetChannelId?: string }>>({});
+
+  const previewMutation = useMutation(orpc.channels.createFromCollections.mutationOptions({
+    onSuccess: (data: any) => {
+      setPreviewPlan(data.plan || []);
+      setConflicts(data.conflicts || []);
+      if ((data.conflicts || []).length > 0) {
+        setShowResolve(true);
+      }
+    },
+    onError: () => toast.error("Preview failed")
+  }));
+
+  const executeMutation = useMutation(orpc.channels.createFromCollections.mutationOptions({
+    onSuccess: async () => {
+      toast.success("Bulk creation complete");
+      setPreviewPlan(null);
+      setConflicts(null);
+      setShowResolve(false);
+      await qc.invalidateQueries();
+    },
+    onError: () => toast.error("Bulk creation failed")
+  }));
+
+  const handlePreview = () => {
+    previewMutation.mutate({ collections: selected.length ? selected : undefined, groupTitle: groupTitle || undefined, preview: true });
+  };
+  const handleExecute = () => {
+    // If conflicts exist, require resolutions
+    if (conflicts && conflicts.length > 0) {
+      setShowResolve(true);
+      toast.error('Resolve conflicts before creating');
+      return;
+    }
+    executeMutation.mutate({ collections: selected.length ? selected : undefined, groupTitle: groupTitle || undefined, preview: false });
+  };
+
+  // Live preview on selection changes
+  useEffect(() => {
+    if (selected.length === 0) {
+      setPreviewPlan(null);
+      setConflicts(null);
+      return;
+    }
+    previewMutation.mutate({ collections: selected, groupTitle: groupTitle || undefined, preview: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(selected), groupTitle]);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+        <div className="space-y-2">
+          <Label>Group Title (optional)</Label>
+          <Input value={groupTitle} onChange={(e) => setGroupTitle(e.target.value)} placeholder="e.g. Collections" />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Select Collections (optional)</Label>
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search collections" />
+        <div className="flex items-center justify-between py-1">
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSelected((collectionsQuery.data || []).map((c:any)=> c.name))}>Select All</Button>
+            <Button variant="outline" size="sm" onClick={() => setSelected([])}>Select None</Button>
+          </div>
+          <Badge variant="outline">{selected.length} selected</Badge>
+        </div>
+        <div className="max-h-56 overflow-auto border rounded p-2 space-y-1">
+          {(collectionsQuery.data || []).map((c: any) => {
+            const checked = selected.includes(c.name);
+            return (
+              <label key={c.name} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="checkbox"
+                  checked={checked}
+                  onChange={(e) => {
+                    setSelected(prev => e.target.checked ? [...prev, c.name] : prev.filter(x => x !== c.name));
+                  }}
+                />
+                <span className="flex-1 truncate">{c.name}</span>
+                <span className="text-muted-foreground">{c.count}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+      {/* Live Preview */}
+      <div className="border rounded p-3 text-sm">
+        <div className="font-medium mb-2">Live Preview</div>
+        {previewPlan && previewPlan.length > 0 ? (
+          <ul className="space-y-1 max-h-40 overflow-auto">
+            {previewPlan.map((p: any, idx: number) => (
+              <li key={idx} className="flex gap-2">
+                <Badge>{p.proposedNumber}</Badge>
+                <span className="truncate">{p.proposedName}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-muted-foreground">No channels will be created</div>
+        )}
+        {conflicts && conflicts.length > 0 && (
+          <div className="mt-3 p-2 border rounded bg-amber-50">
+            <div className="font-medium mb-1">Conflicts detected</div>
+            <div className="text-xs text-muted-foreground">Resolve before creating.</div>
+          </div>
+        )}
+      </div>
+      <Separator />
+      <div className="flex gap-2 justify-end">
+        <Button onClick={() => setShowResolve(true)} variant="outline" disabled={!conflicts || conflicts.length === 0}>Resolve</Button>
+        <Button onClick={handleExecute} disabled={executeMutation.isPending || (conflicts && conflicts.length > 0)}>Create</Button>
+      </div>
+      {/* Resolve Conflicts Modal (simple inline card) */}
+      {showResolve && conflicts && conflicts.length > 0 && (
+        <Card className="border-2 border-amber-200 bg-amber-50/40">
+          <CardHeader>
+            <CardTitle>Resolve Conflicts</CardTitle>
+            <CardDescription>Fix duplicate or similar names before creating channels</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {conflicts.map((c, idx) => {
+              const r = resolutions[c.original] || { action: 'rename' as const, newName: `${c.original} (2)` };
+              return (
+                <div key={idx} className="p-2 border rounded">
+                  <div className="font-medium">{c.original}</div>
+                  <div className="text-xs text-muted-foreground mb-2">Matches: {[...c.exactMatches, ...c.closeMatches].map((m:any)=>m.name).join(', ')}</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                    <div className="space-y-1">
+                      <Label>Action</Label>
+                      <Select value={r.action} onValueChange={(v:any)=> setResolutions(prev=>({ ...prev, [c.original]: { ...prev[c.original], action: v }}))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="rename">Rename and create</SelectItem>
+                          <SelectItem value="merge">Merge into existing</SelectItem>
+                          <SelectItem value="skip">Skip</SelectItem>
+                          <SelectItem value="create">Create as-is</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {(r.action === 'rename' || r.action === 'create') && (
+                      <div className="space-y-1">
+                        <Label>Channel Name</Label>
+                        <Input value={r.newName || c.original} onChange={(e)=> setResolutions(prev=>({ ...prev, [c.original]: { ...prev[c.original], newName: e.target.value }}))} />
+                      </div>
+                    )}
+                    {r.action === 'merge' && (
+                      <div className="space-y-1">
+                        <Label>Target Channel</Label>
+                        <Select value={r.targetChannelId} onValueChange={(v)=> setResolutions(prev=>({ ...prev, [c.original]: { ...prev[c.original], targetChannelId: v }}))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {(orpc.channels.list.useQuery().data || []).map((ch:any)=> (
+                              <SelectItem key={ch.id} value={ch.id}>{ch.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={()=> setShowResolve(false)}>Close</Button>
+              <Button onClick={()=> {
+                // Convert resolutions map to API shape and call execute with resolutions
+                const payload = Object.entries(resolutions).map(([original, r]) => ({ original, ...(r as any) }));
+                executeMutation.mutate({ collections: selected.length ? selected : undefined, groupTitle: groupTitle || undefined, preview: false, conflictResolutions: payload });
+              }}>Apply and Create</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

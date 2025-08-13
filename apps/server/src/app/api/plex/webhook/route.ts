@@ -180,62 +180,75 @@ async function handleLibraryEvent(webhookData: PlexWebhookPayload) {
 async function syncSingleMovie(plexServer: any, metadata: any) {
   try {
     console.log(`🎬 Syncing movie: ${metadata.title}`);
-    
     // Find the library this movie belongs to
     const library = await prisma.mediaLibrary.findFirst({
-      where: {
-        serverId: plexServer.id,
-        key: metadata.librarySectionID.toString()
-      }
+      where: { serverId: plexServer.id, key: metadata.librarySectionID.toString() }
     });
-
     if (!library) {
       console.log(`⚠️ Library not found for section ID: ${metadata.librarySectionID}`);
       return;
     }
-
-    // Import Plex service and sync this specific movie
     const { PlexAPI } = await import('@/lib/plex');
     const plex = new PlexAPI({ uri: plexServer.url });
-    
     if (!plexServer.token) {
       console.log('⚠️ No token for Plex server');
       return;
     }
+    // Attempt to fetch full metadata for collections, genres, etc.
+    let collectionsJson = '[]';
+    let genresJson = '[]';
+    let directorsJson = '[]';
+    let writersJson = '[]';
+    let actorsJson = '[]';
+    let countriesJson = '[]';
+    try {
+      const detail = await fetch(`${plexServer.url}/library/metadata/${metadata.ratingKey}`, {
+        headers: { 'X-Plex-Token': plexServer.token }
+      });
+      if (detail.ok) {
+        const data = await detail.json();
+        const m = data?.MediaContainer?.Metadata?.[0] || {};
+        collectionsJson = JSON.stringify((m.Collection || []).map((c: any) => c.tag));
+        genresJson = JSON.stringify((m.Genre || []).map((c: any) => c.tag));
+        directorsJson = JSON.stringify((m.Director || []).map((c: any) => c.tag));
+        writersJson = JSON.stringify((m.Writer || []).map((c: any) => c.tag));
+        actorsJson = JSON.stringify((m.Role || []).map((c: any) => c.tag));
+        countriesJson = JSON.stringify((m.Country || []).map((c: any) => c.tag));
+      }
+    } catch {}
 
-    // Use webhook metadata (simplified sync for real-time updates)
     await prisma.mediaMovie.upsert({
-      where: {
-        libraryId_ratingKey: {
-          libraryId: library.id,
-          ratingKey: metadata.ratingKey
-        }
-      },
+      where: { libraryId_ratingKey: { libraryId: library.id, ratingKey: metadata.ratingKey } },
       update: {
         title: metadata.title,
         year: metadata.year,
         summary: metadata.summary,
-        // Basic fields from webhook - full sync will happen on next scheduled sync
         poster: metadata.thumb && plexServer.token ? plex.getThumbnailUrl(plexServer.url, plexServer.token, metadata.thumb) : null,
         backdrop: metadata.art && plexServer.token ? plex.getThumbnailUrl(plexServer.url, plexServer.token, metadata.art) : null,
-        contentRating: metadata.contentRating
+        contentRating: metadata.contentRating,
+        genres: genresJson,
+        directors: directorsJson,
+        writers: writersJson,
+        actors: actorsJson,
+        countries: countriesJson,
+        collections: collectionsJson
       },
       create: {
         libraryId: library.id,
         title: metadata.title,
         year: metadata.year || 0,
         summary: metadata.summary,
-        duration: 0, // Will be updated on full sync
+        duration: 0,
         poster: metadata.thumb && plexServer.token ? plex.getThumbnailUrl(plexServer.url, plexServer.token, metadata.thumb) : null,
         backdrop: metadata.art && plexServer.token ? plex.getThumbnailUrl(plexServer.url, plexServer.token, metadata.art) : null,
         ratingKey: metadata.ratingKey,
         contentRating: metadata.contentRating,
-        // Basic empty metadata - will be updated on full sync
-        genres: '[]',
-        directors: '[]',
-        writers: '[]',
-        actors: '[]',
-        countries: '[]'
+        genres: genresJson,
+        directors: directorsJson,
+        writers: writersJson,
+        actors: actorsJson,
+        countries: countriesJson,
+        collections: collectionsJson
       }
     });
 
@@ -248,44 +261,57 @@ async function syncSingleMovie(plexServer: any, metadata: any) {
 async function syncSingleShow(plexServer: any, metadata: any) {
   try {
     console.log(`📺 Syncing show: ${metadata.title}`);
-    
-    // Find the library this show belongs to
     const library = await prisma.mediaLibrary.findFirst({
-      where: {
-        serverId: plexServer.id,
-        key: metadata.librarySectionID.toString()
-      }
+      where: { serverId: plexServer.id, key: metadata.librarySectionID.toString() }
     });
-
     if (!library) {
       console.log(`⚠️ Library not found for section ID: ${metadata.librarySectionID}`);
       return;
     }
-
-    // Import Plex service and sync this specific show
     const { PlexAPI } = await import('@/lib/plex');
     const plex = new PlexAPI({ uri: plexServer.url });
-    
     if (!plexServer.token) {
       console.log('⚠️ No token for Plex server');
       return;
     }
 
-    // Use webhook metadata (simplified sync for real-time updates)
+    let collectionsJson = '[]';
+    let genresJson = '[]';
+    let directorsJson = '[]';
+    let writersJson = '[]';
+    let actorsJson = '[]';
+    let countriesJson = '[]';
+    try {
+      const detail = await fetch(`${plexServer.url}/library/metadata/${metadata.ratingKey}`, {
+        headers: { 'X-Plex-Token': plexServer.token }
+      });
+      if (detail.ok) {
+        const data = await detail.json();
+        const m = data?.MediaContainer?.Metadata?.[0] || {};
+        collectionsJson = JSON.stringify((m.Collection || []).map((c: any) => c.tag));
+        genresJson = JSON.stringify((m.Genre || []).map((c: any) => c.tag));
+        directorsJson = JSON.stringify((m.Director || []).map((c: any) => c.tag));
+        writersJson = JSON.stringify((m.Writer || []).map((c: any) => c.tag));
+        actorsJson = JSON.stringify((m.Role || []).map((c: any) => c.tag));
+        countriesJson = JSON.stringify((m.Country || []).map((c: any) => c.tag));
+      }
+    } catch {}
+
     await prisma.mediaShow.upsert({
-      where: {
-        libraryId_ratingKey: {
-          libraryId: library.id,
-          ratingKey: metadata.ratingKey
-        }
-      },
+      where: { libraryId_ratingKey: { libraryId: library.id, ratingKey: metadata.ratingKey } },
       update: {
         title: metadata.title,
         year: metadata.year,
         summary: metadata.summary,
         poster: metadata.thumb && plexServer.token ? plex.getThumbnailUrl(plexServer.url, plexServer.token, metadata.thumb) : null,
         backdrop: metadata.art && plexServer.token ? plex.getThumbnailUrl(plexServer.url, plexServer.token, metadata.art) : null,
-        contentRating: metadata.contentRating
+        contentRating: metadata.contentRating,
+        genres: genresJson,
+        directors: directorsJson,
+        writers: writersJson,
+        actors: actorsJson,
+        countries: countriesJson,
+        collections: collectionsJson
       },
       create: {
         libraryId: library.id,
@@ -296,12 +322,12 @@ async function syncSingleShow(plexServer: any, metadata: any) {
         backdrop: metadata.art && plexServer.token ? plex.getThumbnailUrl(plexServer.url, plexServer.token, metadata.art) : null,
         ratingKey: metadata.ratingKey,
         contentRating: metadata.contentRating,
-        // Basic empty metadata - will be updated on full sync
-        genres: '[]',
-        directors: '[]',
-        writers: '[]',
-        actors: '[]',
-        countries: '[]'
+        genres: genresJson,
+        directors: directorsJson,
+        writers: writersJson,
+        actors: actorsJson,
+        countries: countriesJson,
+        collections: collectionsJson
       }
     });
 

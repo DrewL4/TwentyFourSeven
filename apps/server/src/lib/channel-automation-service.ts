@@ -648,6 +648,30 @@ export class ChannelAutomationService {
             return a.title.localeCompare(b.title);
           });
           break;
+        case 'timeline-mcu': {
+          const { findUniverseIndex } = await import('./universe-timelines');
+          allContent.sort((a, b) => {
+            const ai = findUniverseIndex('mcu', a.title, a.year);
+            const bi = findUniverseIndex('mcu', b.title, b.year);
+            if (ai === -1 && bi === -1) return (a.year || 0) - (b.year || 0);
+            if (ai === -1) return 1;
+            if (bi === -1) return -1;
+            return ai - bi;
+          });
+          break;
+        }
+        case 'timeline-star-wars': {
+          const { findUniverseIndex } = await import('./universe-timelines');
+          allContent.sort((a, b) => {
+            const ai = findUniverseIndex('star-wars', a.title, a.year);
+            const bi = findUniverseIndex('star-wars', b.title, b.year);
+            if (ai === -1 && bi === -1) return (a.year || 0) - (b.year || 0);
+            if (ai === -1) return 1;
+            if (bi === -1) return -1;
+            return ai - bi;
+          });
+          break;
+        }
         default:
           return; // Unknown sort method
       }

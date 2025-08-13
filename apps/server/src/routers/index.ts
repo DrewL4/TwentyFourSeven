@@ -46,6 +46,156 @@ export const appRouter = {
       });
     }),
 
+    createFromCollections: protectedProcedure
+      .input(z.object({
+        collections: z.array(z.string()).optional(),
+        groupTitle: z.string().optional(),
+        preview: z.boolean().optional().default(false),
+        conflictResolutions: z.array(z.object({
+          original: z.string(),
+          action: z.enum(['rename','merge','skip','create']),
+          newName: z.string().optional(),
+          targetChannelId: z.string().optional()
+        })).optional()
+      }))
+      .handler(async ({ input }) => {
+        // Determine source collections: provided list or all unique collections
+        let sourceCollections: string[] = input.collections || [];
+        if (sourceCollections.length === 0) {
+          // Build list from DB
+          const [movieCollections, showCollections] = await Promise.all([
+            prisma.mediaMovie.findMany({ where: { collections: { not: null } }, select: { collections: true } }),
+            prisma.mediaShow.findMany({ where: { collections: { not: null } }, select: { collections: true } }),
+          ]);
+          const set = new Set<string>();
+          const add = (rows: { collections: string | null }[]) => {
+            for (const r of rows) {
+              if (!r.collections) continue;
+              try {
+                for (const c of JSON.parse(r.collections) as string[]) {
+                  if (typeof c === 'string' && c.trim()) set.add(c.trim());
+                }
+              } catch {}
+            }
+          };
+          add(movieCollections); add(showCollections);
+          sourceCollections = Array.from(set).sort();
+        }
+
+        // Helpers
+        const normalize = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        const jaccard = (a: string, b: string): number => {
+          const as = new Set(normalize(a).split(' ').filter(Boolean));
+          const bs = new Set(normalize(b).split(' ').filter(Boolean));
+          const inter = new Set([...as].filter(x => bs.has(x))).size;
+          const uni = new Set([...as, ...bs]).size || 1;
+          return inter / uni;
+        };
+
+        // Load existing channels once
+        const existingChannels = await prisma.channel.findMany({ select: { id: true, name: true, number: true, filterCollections: true } });
+        const usedNumbers = new Set(existingChannels.map(c => c.number));
+        const nextNumber = () => { let n = 1; while (usedNumbers.has(n)) n++; usedNumbers.add(n); return n; };
+
+        // Build plan and detect conflicts
+        type PlanItem = { original: string; action: 'create'; proposedName: string; proposedNumber: number };
+        const plan: PlanItem[] = [];
+        const conflicts: Array<{ original: string; exactMatches: { id: string; name: string }[]; closeMatches: { id: string; name: string; score: number }[] }>= [];
+
+        for (const collection of sourceCollections) {
+          const exact = existingChannels.filter(c => normalize(c.name) === normalize(collection));
+          const close = existingChannels
+            .filter(c => normalize(c.name) !== normalize(collection))
+            .map(c => ({ id: c.id, name: c.name, score: jaccard(c.name, collection) }))
+            .filter(x => x.score >= 0.85 || normalize(x.name).includes(normalize(collection)) || normalize(collection).includes(normalize(x.name)));
+
+          if (exact.length > 0 || close.length > 0) {
+            conflicts.push({ original: collection, exactMatches: exact.map(e => ({ id: e.id, name: e.name })), closeMatches: close });
+            continue;
+          }
+
+          plan.push({ original: collection, action: 'create', proposedName: collection, proposedNumber: nextNumber() });
+        }
+
+        if (input.preview || (conflicts.length > 0 && !input.conflictResolutions)) {
+          return { preview: true, plan, conflicts };
+        }
+
+        // Apply conflict resolutions and create
+        const results = await prisma.$transaction(async (tx) => {
+          const res: Array<{ name: string; id?: string; action: string }> = [];
+
+          // First, create all non-conflict planned items
+          for (const p of plan) {
+            const ch = await tx.channel.create({
+              data: {
+                number: p.proposedNumber,
+                name: p.proposedName,
+                groupTitle: input.groupTitle || null,
+                autoFilterEnabled: true,
+                filterType: 'both',
+                filterCollections: JSON.stringify([p.original])
+              }
+            });
+            res.push({ name: ch.name, id: ch.id, action: 'create' });
+          }
+
+          // Then handle conflicts if provided
+          for (const r of input.conflictResolutions || []) {
+            const originalName = r.original;
+            if (r.action === 'skip') {
+              res.push({ name: originalName, action: 'skip' });
+              continue;
+            }
+            if (r.action === 'merge') {
+              if (!r.targetChannelId) {
+                res.push({ name: originalName, action: 'merge-missing-target' });
+                continue;
+              }
+              const target = await tx.channel.findUnique({ where: { id: r.targetChannelId }, select: { id: true, filterCollections: true, name: true } });
+              if (!target) { res.push({ name: originalName, action: 'merge-target-not-found' }); continue; }
+              let existing: string[] = [];
+              try { existing = target.filterCollections ? JSON.parse(target.filterCollections) : []; } catch {}
+              if (!existing.includes(originalName)) existing.push(originalName);
+              await tx.channel.update({ where: { id: target.id }, data: { filterCollections: JSON.stringify(existing), autoFilterEnabled: true } });
+              res.push({ name: target.name, id: target.id, action: 'merge' });
+              continue;
+            }
+            if (r.action === 'rename' || r.action === 'create') {
+              const finalName = r.newName && r.newName.trim() ? r.newName.trim() : originalName;
+              // Ensure a unique channel number
+              const number = nextNumber();
+              const ch = await tx.channel.create({
+                data: {
+                  number,
+                  name: finalName,
+                  groupTitle: input.groupTitle || null,
+                  autoFilterEnabled: true,
+                  filterType: 'both',
+                  filterCollections: JSON.stringify([originalName])
+                }
+              });
+              res.push({ name: ch.name, id: ch.id, action: r.action });
+              continue;
+            }
+          }
+
+          return res;
+        });
+
+        // Trigger automation (do not block)
+        setImmediate(async () => {
+          try {
+            const { channelAutomationService } = await import('@/lib/channel-automation-service');
+            await channelAutomationService.processAutomatedChannels();
+          } catch (e) {
+            console.error('Failed to run automation after bulk create:', e);
+          }
+        });
+
+        return { preview: false, results };
+      }),
+
     get: publicProcedure
       .input(z.object({ id: z.string() }))
       .handler(async ({ input }) => {

@@ -281,7 +281,7 @@ export default function PlexSettingsPage() {
   const addServerWithLibrariesMutation = useMutation({
     mutationFn: async (variables: { name: string; uri: string; accessToken: string; selectedLibraries: string[] }) => {
       const { client } = await import("@/utils/orpc");
-      // For now, we'll add the server and then sync only selected libraries
+      // Add the server first
       const server = await client.servers.addPlexServer({
         name: variables.name,
         uri: variables.uri,
@@ -289,7 +289,20 @@ export default function PlexSettingsPage() {
       });
       return server;
     },
-    onSuccess: () => {
+    onSuccess: async (server: any, variables) => {
+      try {
+        // Persist the initial library selection immediately
+        const { client } = await import("@/utils/orpc");
+        if (variables?.selectedLibraries && variables.selectedLibraries.length > 0) {
+          await client.servers.updateLibrarySelection({
+            serverId: server.id,
+            selectedLibraryKeys: variables.selectedLibraries
+          });
+        }
+      } catch (e: any) {
+        console.error('Failed to persist initial library selection:', e);
+        toast.error('Added server, but failed to save library selection');
+      }
       queryClient.invalidateQueries({ queryKey: ['servers', 'list'] });
       setShowLibrarySelection(false);
       setLibrarySelectionServer(null);
@@ -331,20 +344,21 @@ export default function PlexSettingsPage() {
   };
 
   const handleAddServer = async (server: any) => {
-    if (!server.bestConnection) {
-      toast.error('No valid connection found for this server');
+    const uriCandidate = server.bestConnection?.uri || server.allConnections?.[0]?.uri;
+    if (!uriCandidate) {
+      toast.error('No connection available for this server');
       return;
     }
 
     // First get libraries for selection
     setLibrarySelectionServer({
       name: server.name,
-      uri: server.bestConnection.uri,
+      uri: uriCandidate,
       accessToken: server.accessToken
     });
     
     getLibrariesMutation.mutate({
-      url: server.bestConnection.uri,
+      url: uriCandidate,
       token: server.accessToken
     });
   };
@@ -583,7 +597,7 @@ export default function PlexSettingsPage() {
                     <div>
                       <p className="font-medium">{server.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {server.bestConnection?.uri || 'No connection available'}
+                        {server.bestConnection?.uri || server.allConnections?.[0]?.uri || 'No connection available'}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
                         {server.bestConnection ? (
@@ -603,10 +617,10 @@ export default function PlexSettingsPage() {
                       </div>
                     </div>
                     <Button
-                      onClick={() => handleAddServer(server)}
-                      disabled={!server.bestConnection || addServerMutation.isPending}
-                      size="sm"
-                    >
+                          onClick={() => handleAddServer(server)}
+                          disabled={!(server.bestConnection || (server.allConnections && server.allConnections.length > 0)) || addServerMutation.isPending}
+                          size="sm"
+                        >
                       {addServerMutation.isPending ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (

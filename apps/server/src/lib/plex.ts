@@ -1,3 +1,5 @@
+import type { NextConfig } from "next";
+
 interface PlexOptions {
   accessToken?: string;
   uri?: string;
@@ -148,13 +150,37 @@ export class PlexAPI {
   }
 
   /**
-   * Get available Plex servers for the authenticated user
+   * Get available Plex servers for the authenticated user (Resources API)
    */
   async getServers(): Promise<PlexServer[]> {
     if (!this.accessToken) {
       throw new Error("No access token available. Please sign in first.");
     }
 
+    // Prefer Resources API for stable accessToken + connections
+    try {
+      const res = await fetch('https://plex.tv/api/resources?includeHttps=1', {
+        headers: {
+          ...this.headers,
+          'Accept': 'application/xml',
+          'X-Plex-Token': this.accessToken
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch Plex resources');
+      }
+
+      const xmlText = await res.text();
+      const servers = this.parseResourcesXML(xmlText);
+      if (servers.length > 0) {
+        return servers;
+      }
+    } catch (e) {
+      // Fall back below
+    }
+
+    // Fallback to servers.xml
     const response = await fetch('https://plex.tv/pms/servers.xml', {
       headers: {
         ...this.headers,
@@ -167,8 +193,6 @@ export class PlexAPI {
     }
 
     const xmlText = await response.text();
-    // Parse XML response to extract server information
-    // For now, return mock data that would match the real structure
     return this.parseServersXML(xmlText);
   }
 
@@ -294,7 +318,51 @@ export class PlexAPI {
   }
 
   /**
-   * Parse servers XML response
+   * Parse resources XML response
+   */
+  private parseResourcesXML(xmlText: string): PlexServer[] {
+    const { XMLParser } = require('fast-xml-parser');
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: ''
+    });
+
+    try {
+      const result = parser.parse(xmlText);
+      const devices = result?.MediaContainer?.Device;
+      if (!devices) return [];
+
+      const deviceList = Array.isArray(devices) ? devices : [devices];
+      const servers: PlexServer[] = [];
+
+      for (const dev of deviceList) {
+        if (!dev.provides || !String(dev.provides).includes('server')) continue;
+        const connectionsXml = dev.Connection ? (Array.isArray(dev.Connection) ? dev.Connection : [dev.Connection]) : [];
+        const connections: PlexConnection[] = connectionsXml.map((conn: any) => ({
+          protocol: conn.protocol || 'http',
+          address: conn.address,
+          port: parseInt(conn.port, 10),
+          uri: conn.uri,
+          local: conn.local === '1' || conn.local === true
+        }));
+
+        servers.push({
+          name: dev.name,
+          machineIdentifier: dev.clientIdentifier || dev.machineIdentifier,
+          accessToken: dev.accessToken,
+          connections
+        });
+      }
+
+      return servers;
+    } catch (error) {
+      console.error('Error parsing Plex resources XML:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Parse servers XML response (fallback)
    */
   private parseServersXML(xmlText: string): PlexServer[] {
     const { XMLParser } = require('fast-xml-parser');
@@ -334,7 +402,7 @@ export class PlexAPI {
           servers.push({
             name: server.name,
             machineIdentifier: server.machineIdentifier,
-            accessToken: server.accessToken,
+            accessToken: server.accessToken, // may be missing for shared servers
             connections
           });
         }
