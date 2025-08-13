@@ -48,6 +48,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
               <h1 className="text-lg font-semibold text-foreground">
                 {pathname === "/" && "Dashboard"}
+                {pathname === "/dashboard" && "Dashboard"}
                 {pathname === "/guide" && "TV Guide"}
                 {pathname === "/channels" && "Channels"}
                 {pathname === "/library" && "Library"}

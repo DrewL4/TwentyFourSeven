@@ -29,7 +29,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       
       // If user is authenticated and trying to access login page, redirect to home
       if (session && pathname === "/login") {
-        router.push("/");
+        router.replace("/");
         return;
       }
     }

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tv, Library, Settings, Play, Radio, FileText } from "lucide-react";
+import { getServerUrl } from "@/utils/server-url";
 
 // Type for channel data from the API
 type Channel = {
@@ -22,6 +23,7 @@ export default function Home() {
   const channelsQuery = useQuery(orpc.channels.list.queryOptions());
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
   const serversQuery = useQuery(orpc.servers.list.queryOptions());
+  const serverUrl = getServerUrl();
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -48,13 +50,13 @@ export default function Home() {
           {/* Quick Links */}
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>
-              <Link href="/media.m3u">
+              <Link href={`${serverUrl}/media.m3u`}>
                 <Radio className="w-4 h-4 mr-1" />
                 M3U
               </Link>
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <Link href="/media.xml">
+              <Link href={`${serverUrl}/media.xml`}>
                 <FileText className="w-4 h-4 mr-1" />
                 XMLTV
               </Link>

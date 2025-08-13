@@ -46,6 +46,20 @@ export async function GET(request: NextRequest) {
     const settings = await prisma.settings.findUnique({ where: { id: "singleton" } });
     const guideDays = settings?.guideDays || 3;
     const channels = await prisma.channel.findMany({ where: { stealth: false }, orderBy: { number: 'asc' } });
+
+    // Helper to ensure absolute URLs
+    const isAbsolute = (url?: string | null) => !!url && /^(https?:)?\/\//i.test(url);
+    const toPlexProxy = (baseUrl: string, url: string): string => {
+      const u = new URL(url);
+      u.searchParams.delete('X-Plex-Token');
+      const pathWithQuery = u.pathname + (u.search ? u.search : '');
+      return `${baseUrl}/images/plex?origin=${encodeURIComponent(u.origin)}&path=${encodeURIComponent(pathWithQuery)}`;
+    };
+
+    // Force HTTPS for all URLs
+    const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '247.midweststreams.us';
+    const baseUrl = `https://${forwardedHost}`;
+
     const now = new Date();
     const startTime = new Date(now.getTime() - 4 * 60 * 60 * 1000);
     const endTime = new Date(now.getTime() + guideDays * 24 * 60 * 60 * 1000);
@@ -54,6 +68,25 @@ export async function GET(request: NextRequest) {
       include: { channel: true, episode: { include: { show: true } }, movie: true },
       orderBy: [ { channel: { number: 'asc' } }, { startTime: 'asc' } ]
     });
+
+    // Pre-compute channel icon fallbacks from programme posters when needed
+    const channelIconMap = new Map<string, string>();
+    for (const channel of channels) {
+      if (isAbsolute(channel.icon)) {
+        try {
+          const u = new URL(channel.icon as string);
+          channelIconMap.set(channel.id, u.searchParams.has('X-Plex-Token') ? toPlexProxy(baseUrl, channel.icon as string) : (channel.icon as string));
+          continue;
+        } catch {}
+      }
+      // Fallback: first programme poster for channel
+      const program = programs.find(p => p.channelId === channel.id);
+      const poster = program?.episode?.show?.poster || program?.movie?.poster || null;
+      if (isAbsolute(poster)) {
+        channelIconMap.set(channel.id, toPlexProxy(baseUrl, poster as string));
+      }
+    }
+
     let xmltv = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xmltv += '<!DOCTYPE tv SYSTEM "xmltv.dtd">\n';
     xmltv += '<tv generator-info-name="TwentyFourSeven" generator-info-url="https://github.com/vexorian/TwentyFourSeven" source-info-name="TwentyFourSeven">\n';
@@ -63,8 +96,16 @@ export async function GET(request: NextRequest) {
       xmltv += `  <channel id="${channelId}">\n`;
       // Emit a single display-name without attributes to avoid list/dict parsing in xmltodict
       xmltv += `    <display-name>${escapeXml(channel.name)}</display-name>\n`;
-      if (channel.icon) {
-        xmltv += `    <icon src="${escapeXml(channel.icon)}" />\n`;
+      const iconUrl = channelIconMap.get(channel.id) || (isAbsolute(channel.icon) ? (() => {
+        try {
+          const u = new URL(channel.icon as string);
+          return u.searchParams.has('X-Plex-Token') ? toPlexProxy(baseUrl, channel.icon as string) : (channel.icon as string);
+        } catch {
+          return undefined;
+        }
+      })() : undefined);
+      if (iconUrl) {
+        xmltv += `    <icon src="${escapeXml(iconUrl)}" />\n`;
       }
       xmltv += '  </channel>\n';
     }
@@ -136,8 +177,8 @@ export async function GET(request: NextRequest) {
         }
         xmltv += `    <episode-num system="onscreen">S${seasonStr}E${episodeStr}</episode-num>\n`;
         xmltv += `    <episode-num system="xmltv_ns">${program.episode.seasonNumber - 1}.${program.episode.episodeNumber - 1}.</episode-num>\n`;
-        if (show.poster) {
-          xmltv += `    <icon src="${escapeXml(show.poster)}" />\n`;
+        if (show.poster && isAbsolute(show.poster)) {
+          xmltv += `    <icon src="${escapeXml(toPlexProxy(baseUrl, show.poster))}" />\n`;
         }
         if (actorList.length > 0) {
           xmltv += '    <credits>\n';
@@ -224,8 +265,8 @@ export async function GET(request: NextRequest) {
         }
 
         // Movie poster as icon if available
-        if (program.movie.poster) {
-          xmltv += `    <icon src="${escapeXml(program.movie.poster)}" />\n`;
+        if (program.movie.poster && isAbsolute(program.movie.poster)) {
+          xmltv += `    <icon src="${escapeXml(toPlexProxy(baseUrl, program.movie.poster))}" />\n`;
         }
 
         // Movie credits (actors/directors)

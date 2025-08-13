@@ -116,7 +116,7 @@ export default function LoginPage() {
         console.log('Login response data:', data);
         
         if (data.success) {
-          console.log('Login successful, redirecting to dashboard...');
+          console.log('Login successful, redirecting to home...');
           
           if (data.requiresRefresh) {
             // Show a message and then refresh
@@ -124,14 +124,14 @@ export default function LoginPage() {
             window.location.reload();
           } else {
             // For local development, use full URL to ensure proper redirect
-            const dashboardUrl = process.env.NODE_ENV === 'development' 
-              ? `${window.location.origin}/dashboard`
-              : '/dashboard';
+            const homeUrl = process.env.NODE_ENV === 'development' 
+              ? `${window.location.origin}/`
+              : '/';
             
-            console.log('Redirecting to:', dashboardUrl);
+            console.log('Redirecting to:', homeUrl);
             
             // Use window.location.href for a full page redirect
-            window.location.href = dashboardUrl;
+            window.location.href = homeUrl;
           }
         } else {
           console.error('Login response indicates failure:', data);

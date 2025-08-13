@@ -8,23 +8,53 @@ export async function GET(request: NextRequest) {
       orderBy: { number: 'asc' }
     });
 
-    // Auto-detect the correct base URL from the request
-    // Priority: X-Forwarded-Host (proxy) > Host header > fallback to environment
-    const forwardedHost = request.headers.get('x-forwarded-host');
-    const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
-    const host = request.headers.get('host');
-    
-    let baseUrl: string;
-    if (forwardedHost) {
-      // Behind a proxy (like Nginx Proxy Manager)
-      baseUrl = `${forwardedProto}://${forwardedHost}`;
-    } else if (host) {
-      // Direct access
-      baseUrl = `${request.nextUrl.protocol}//${host}`;
-    } else {
-      // Fallback to environment or localhost
-      baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-    }
+    // Force HTTPS for all URLs
+    const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '247.midweststreams.us';
+    const baseUrl = `https://${forwardedHost}`;
+
+    console.log('🔍 M3U Generated baseUrl:', baseUrl);
+
+    // Helpers
+    const isAbsolute = (url?: string | null) => !!url && /^(https?:)?\/\//i.test(url);
+    const toPlexProxy = (url: string): string => {
+      const u = new URL(url);
+      u.searchParams.delete('X-Plex-Token');
+      const pathWithQuery = u.pathname + (u.search ? u.search : '');
+      return `${baseUrl}/images/plex?origin=${encodeURIComponent(u.origin)}&path=${encodeURIComponent(pathWithQuery)}`;
+    };
+
+    // Pre-compute best icon for each channel using Plex posters where available
+    const channelIconMap = new Map<string, string>();
+
+    await Promise.all(
+      channels.map(async (channel) => {
+        // Prefer existing absolute channel icon if present and not a Plex URL with token
+        if (isAbsolute(channel.icon)) {
+          try {
+            const u = new URL(channel.icon as string);
+            if (!u.searchParams.has('X-Plex-Token')) {
+              channelIconMap.set(channel.id, channel.icon as string);
+              return;
+            }
+          } catch {}
+        }
+
+        // Fallback: use the first available poster from current/any programme for this channel
+        const program = await prisma.program.findFirst({
+          where: { channelId: channel.id },
+          orderBy: { startTime: 'asc' },
+          include: {
+            episode: { include: { show: true } },
+            movie: true,
+          },
+        });
+
+        const poster = program?.episode?.show?.poster || program?.movie?.poster || null;
+        if (isAbsolute(poster)) {
+          channelIconMap.set(channel.id, toPlexProxy(poster as string));
+        }
+      })
+    );
     
     // Include EPG URL hints for players that support different keys
     let m3u = `#EXTM3U url-tvg="${baseUrl}/media.xml" x-tvg-url="${baseUrl}/media.xml"\n`;
@@ -37,8 +67,16 @@ export async function GET(request: NextRequest) {
         extinf += ` group-title="${channel.groupTitle}"`;
       }
       
-      if (channel.icon) {
-        extinf += ` tvg-logo="${channel.icon}"`;
+      const iconUrl = channelIconMap.get(channel.id) || (isAbsolute(channel.icon) ? (() => {
+        try {
+          const u = new URL(channel.icon as string);
+          return u.searchParams.has('X-Plex-Token') ? toPlexProxy(channel.icon as string) : (channel.icon as string);
+        } catch {
+          return undefined;
+        }
+      })() : undefined);
+      if (iconUrl) {
+        extinf += ` tvg-logo="${iconUrl}"`;
       }
       
       extinf += `,${channel.name}\n`;
