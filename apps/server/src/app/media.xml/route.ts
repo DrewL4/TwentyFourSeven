@@ -4,25 +4,12 @@ import { prisma } from "@/lib/prisma";
 /**
  * XMLTV Guide Generator - Timezone Best Practices Implementation
  * 
- * This implementation follows XMLTV specification best practices for time handling:
+ * We emit all programme times in UTC with an explicit +0000 offset. While XMLTV
+ * allows local wall time plus an offset, using UTC avoids DST edge cases and
+ * ensures consistent interpretation across clients.
  * 
- * 1. XMLTV times are UTC by definition - The format includes local wall time + UTC offset
- * 2. Two timezone considerations:
- *    - Source timezone: Where the TV guide data originates (server timezone)
- *    - Target timezone: Where the user/IPTV player is located
- * 
- * 3. Our approach:
- *    - Generate times in server's local timezone (source) with proper UTC offset
- *    - IPTV players handle conversion to user's timezone (target)
- *    - This ensures compatibility with all XMLTV-compliant applications
- * 
- * 4. Format: yyyyMMddhhmmss +/-hhmm
- *    - First part: Local wall time at source
- *    - Second part: UTC offset for conversion
- *    - Example: "20240101120000 -0500" = 12:00 local time, UTC-5 offset
- * 
- * This approach ensures maximum compatibility with IPTV players, PVRs, and other
- * XMLTV consumers while following W3C timezone best practices.
+ * Format: yyyyMMddhhmmss +0000 (UTC time with UTC offset)
+ * Example: "20240101120000 +0000" = 2024-01-01 12:00:00 UTC
  */
 
 function escapeXml(text: string | number): string {
@@ -35,42 +22,22 @@ function escapeXml(text: string | number): string {
 }
 
 /**
- * Formats a Date object into XMLTV time format following best practices.
- * 
- * XMLTV Best Practices for Time:
- * - Times should be in UTC by definition according to XMLTV specification
- * - Format: yyyyMMddhhmmss +/-hhmm (local time + UTC offset)
- * - The first part represents the local wall time at the source
- * - The second part is the UTC offset to convert to actual UTC time
- * - This allows IPTV players to correctly handle timezone conversion
- * 
- * Example: "20240101120000 -0500" means:
- * - Local time: 2024-01-01 12:00:00 in a timezone that is UTC-5
- * - Actual UTC time: 2024-01-01 17:00:00
- * 
+ * Formats a Date object into XMLTV time format (UTC best practice).
+ *
+ * - We output UTC clock time with a +0000 offset to avoid DST ambiguity.
+ * - Format: yyyyMMddhhmmss +0000
+ *
  * @param date - The Date object to format
- * @returns XMLTV formatted time string
+ * @returns XMLTV formatted UTC time string
  */
 function formatXmltvTime(date: Date): string {
-  // Get the server's timezone offset in minutes
-  const serverTimezoneOffset = -date.getTimezoneOffset();
-  
-  // Format the offset as +/-hhmm
-  const sign = serverTimezoneOffset >= 0 ? '+' : '-';
-  const offsetHours = Math.floor(Math.abs(serverTimezoneOffset) / 60).toString().padStart(2, '0');
-  const offsetMinutes = (Math.abs(serverTimezoneOffset) % 60).toString().padStart(2, '0');
-  const timezoneOffset = `${sign}${offsetHours}${offsetMinutes}`;
-  
-  // Format the date in local time (what users see on their wall clock)
-  // This represents the "wall time" in the server's timezone
-  const year = date.getFullYear().toString();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  const seconds = date.getSeconds().toString().padStart(2, '0');
-  
-  // Return in XMLTV format: yyyyMMddhhmmss +/-hhmm
+  const year = date.getUTCFullYear().toString();
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = date.getUTCDate().toString().padStart(2, '0');
+  const hours = date.getUTCHours().toString().padStart(2, '0');
+  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+  const seconds = date.getUTCSeconds().toString().padStart(2, '0');
+  const timezoneOffset = "+0000";
   return `${year}${month}${day}${hours}${minutes}${seconds} ${timezoneOffset}`;
 }
 

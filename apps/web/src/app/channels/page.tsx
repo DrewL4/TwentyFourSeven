@@ -4034,6 +4034,7 @@ function BulkCreateFromCollections() {
 
   const [groupTitle, setGroupTitle] = useState("");
   const collectionsQuery = useQuery(orpc.library.collections.queryOptions({ input: { search, limit: 200, offset: 0 } }));
+  const channelsForMerge = useQuery(orpc.channels.list.queryOptions());
   const [previewPlan, setPreviewPlan] = useState<any[] | null>(null);
   const [conflicts, setConflicts] = useState<any[] | null>(null);
   const [showResolve, setShowResolve] = useState(false);
@@ -4190,7 +4191,7 @@ function BulkCreateFromCollections() {
                         <Select value={r.targetChannelId} onValueChange={(v)=> setResolutions(prev=>({ ...prev, [c.original]: { ...prev[c.original], targetChannelId: v }}))}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {(orpc.channels.list.useQuery().data || []).map((ch:any)=> (
+                            {(channelsForMerge.data || []).map((ch:any)=> (
                               <SelectItem key={ch.id} value={ch.id}>{ch.name}</SelectItem>
                             ))}
                           </SelectContent>

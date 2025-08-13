@@ -52,6 +52,8 @@ export default function GuidePage() {
   const channelsQuery = useQuery(orpc.channels.list.queryOptions());
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
 
+  const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
   const generateProgramsMutation = useMutation(orpc.programming.generateForAllChannels.mutationOptions({
     onSuccess: () => {
       toast.success("Programs generated successfully!");
@@ -448,6 +450,7 @@ export default function GuidePage() {
           </h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             {isMobileView ? "Current and upcoming programs" : "Traditional TV guide with channels and time slots"}
+            <span className="ml-2 text-xs">(Times shown in your timezone: {userTimeZone})</span>
           </p>
         </div>
         
