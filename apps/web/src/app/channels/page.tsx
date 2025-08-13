@@ -4149,7 +4149,7 @@ function BulkCreateFromCollections() {
       <Separator />
       <div className="flex gap-2 justify-end">
         <Button onClick={() => setShowResolve(true)} variant="outline" disabled={!conflicts || conflicts.length === 0}>Resolve</Button>
-        <Button onClick={handleExecute} disabled={executeMutation.isPending || (conflicts && conflicts.length > 0)}>Create</Button>
+        <Button onClick={handleExecute} disabled={executeMutation.isPending || !!(conflicts && conflicts.length > 0)}>Create</Button>
       </div>
       {/* Resolve Conflicts Modal (simple inline card) */}
       {showResolve && conflicts && conflicts.length > 0 && (
