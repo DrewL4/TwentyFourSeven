@@ -54,14 +54,30 @@ export async function GET(request: NextRequest) {
 
     // Find the matching Plex server to get its token
     console.log('🔍 Looking for Plex server with origin:', targetOrigin);
-    const server = await prisma.mediaServer.findFirst({
+    let server = await prisma.mediaServer.findFirst({
       where: {
         type: 'PLEX',
         url: targetOrigin
       }
     });
 
-    console.log('🔍 Found server:', server ? { id: server.id, name: server.name, hasToken: !!server.token } : 'none');
+    // Fallback: match by host (protocol/port agnostic)
+    if (!server) {
+      try {
+        const targetHost = new URL(targetOrigin).host; // e.g., 192-168-1-7...plex.direct:32400
+        server = await prisma.mediaServer.findFirst({
+          where: {
+            type: 'PLEX',
+            url: { contains: targetHost }
+          }
+        });
+        console.log('🔍 Fallback host match result:', server ? { id: server.id, name: server.name } : 'none');
+      } catch (e) {
+        console.warn('⚠️ Failed to parse target origin for host match', e);
+      }
+    }
+
+    console.log('🔍 Found server:', server ? { id: server.id, name: server.name, hasToken: !!server?.token } : 'none');
 
     if (!server || !server.token) {
       console.log('❌ Server not found or no token');

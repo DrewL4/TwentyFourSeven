@@ -260,7 +260,16 @@ export class ChannelAutomationService {
     }
 
     // CONSERVATIVE APPROACH: Only auto-find content if explicit filters are set OR franchise automation is enabled
-    const hasExplicitFilters = channel.filterYearStart || channel.filterYearEnd || 
+    const hasCollectionsFilter = (() => {
+      try {
+        const arr = JSON.parse(channel.filterCollections || '[]');
+        return Array.isArray(arr) && arr.length > 0;
+      } catch {
+        return false;
+      }
+    })();
+
+    const hasExplicitFilters = hasCollectionsFilter || channel.filterYearStart || channel.filterYearEnd || 
                               channel.filterRating || channel.filterStudios || 
                               channel.filterGenres || channel.filterActors || channel.filterDirectors;
 

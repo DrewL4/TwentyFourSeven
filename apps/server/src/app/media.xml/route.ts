@@ -71,6 +71,37 @@ export async function GET(request: NextRequest) {
 
     // Pre-compute channel icon fallbacks from programme posters when needed
     const channelIconMap = new Map<string, string>();
+
+    // Helper to resolve collection artwork via Plex and proxy it
+    const resolveCollectionIcon = async (collectionNames: string[]): Promise<string | null> => {
+      if (!collectionNames || collectionNames.length === 0) return null;
+      try {
+        const servers = await prisma.mediaServer.findMany({
+          where: { type: 'PLEX', active: true },
+          include: { libraries: true }
+        });
+        for (const server of servers) {
+          if (!server.token) continue;
+          for (const lib of server.libraries) {
+            try {
+              const res = await fetch(`${server.url}/library/sections/${lib.key}/collections`, {
+                headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token }
+              });
+              if (!res.ok) continue;
+              const data = await res.json();
+              const directories = data?.MediaContainer?.Directory || [];
+              for (const d of directories) {
+                if (collectionNames.includes(d.title) && d.thumb) {
+                  return `${baseUrl}/images/plex?origin=${encodeURIComponent(server.url)}&path=${encodeURIComponent(d.thumb)}`;
+                }
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+      return null;
+    };
+
     for (const channel of channels) {
       if (isAbsolute(channel.icon)) {
         try {
@@ -79,6 +110,21 @@ export async function GET(request: NextRequest) {
           continue;
         } catch {}
       }
+
+      // Prefer collection artwork if channel uses collection filters
+      let collections: string[] = [];
+      try {
+        collections = channel.filterCollections ? JSON.parse(channel.filterCollections) : [];
+        if (!Array.isArray(collections)) collections = [];
+      } catch { collections = []; }
+      if (collections.length > 0) {
+        const iconFromCollection = await resolveCollectionIcon(collections);
+        if (iconFromCollection) {
+          channelIconMap.set(channel.id, iconFromCollection);
+          continue;
+        }
+      }
+
       // Fallback: first programme poster for channel
       const program = programs.find(p => p.channelId === channel.id);
       const poster = program?.episode?.show?.poster || program?.movie?.poster || null;

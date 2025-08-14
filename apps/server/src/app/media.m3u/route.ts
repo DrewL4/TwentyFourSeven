@@ -26,6 +26,39 @@ export async function GET(request: NextRequest) {
     // Pre-compute best icon for each channel using Plex posters where available
     const channelIconMap = new Map<string, string>();
 
+    // Helper to resolve collection artwork via Plex and proxy it
+    const resolveCollectionIcon = async (collectionNames: string[]): Promise<string | null> => {
+      if (!collectionNames || collectionNames.length === 0) return null;
+      try {
+        const servers = await prisma.mediaServer.findMany({
+          where: { type: 'PLEX', active: true },
+          include: { libraries: true }
+        });
+        for (const server of servers) {
+          if (!server.token) continue;
+          for (const lib of server.libraries) {
+            try {
+              const res = await fetch(`${server.url}/library/sections/${lib.key}/collections`, {
+                headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token }
+              });
+              if (!res.ok) continue;
+              const data = await res.json();
+              const directories = data?.MediaContainer?.Directory || [];
+              for (const d of directories) {
+                if (collectionNames.includes(d.title) && d.thumb) {
+                  const u = new URL(`${server.url}${d.thumb}`);
+                  u.searchParams.set('X-Plex-Token', server.token);
+                  // Route will strip token; provide origin+path
+                  return `${baseUrl}/images/plex?origin=${encodeURIComponent(server.url)}&path=${encodeURIComponent(d.thumb)}`;
+                }
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+      return null;
+    };
+
     await Promise.all(
       channels.map(async (channel) => {
         // Prefer existing absolute channel icon if present and not a Plex URL with token
@@ -37,6 +70,20 @@ export async function GET(request: NextRequest) {
               return;
             }
           } catch {}
+        }
+
+        // If channel uses collection filters, prefer the collection artwork
+        let collections: string[] = [];
+        try {
+          collections = channel.filterCollections ? JSON.parse(channel.filterCollections) : [];
+          if (!Array.isArray(collections)) collections = [];
+        } catch { collections = []; }
+        if (collections.length > 0) {
+          const iconFromCollection = await resolveCollectionIcon(collections);
+          if (iconFromCollection) {
+            channelIconMap.set(channel.id, iconFromCollection);
+            return;
+          }
         }
 
         // Fallback: use the first available poster from current/any programme for this channel
