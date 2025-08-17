@@ -336,7 +336,18 @@ export async function GET(request: NextRequest) {
         }
         // Close the programme element for movies
       }
-      // Optionally add <live /> or <new /> tags as in the original logic if needed
+      // Add length and status indicators per guidelines
+      const lengthMinutes = Math.round(program.duration / 60000);
+      if (lengthMinutes > 0) {
+        xmltv += `    <length units="minutes">${lengthMinutes}</length>\n`;
+      }
+      const isLive = now >= programStartTime && now < programEndTime;
+      const isNewSoon = programStartTime > now && (programStartTime.getTime() - now.getTime()) <= 24 * 60 * 60 * 1000;
+      if (isLive) {
+        xmltv += '    <live />\n';
+      } else if (isNewSoon) {
+        xmltv += '    <new />\n';
+      }
       xmltv += '  </programme>\n';
     }
     xmltv += '</tv>';
