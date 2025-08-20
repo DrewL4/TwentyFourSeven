@@ -893,6 +893,35 @@ export const appRouter = {
         }
       }),
 
+    ensureAllChannelsHaveProgramming: protectedProcedure
+      .handler(async () => {
+        try {
+          const { programmingService } = await import('@/lib/programming-service');
+          await programmingService.ensureAllChannelsHaveProgramming();
+          console.log('Successfully ensured all channels have programming');
+          return { success: true, message: "All channels now have programming. XMLTV should be fully populated." };
+        } catch (error) {
+          console.error('Failed to ensure programming for all channels:', error);
+          throw new Error(`Failed to ensure programming: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }),
+
+    cacheChannelCollectionIcons: protectedProcedure
+      .handler(async () => {
+        try {
+          const { programmingService } = await import('@/lib/programming-service');
+          await programmingService.cacheChannelCollectionIcons();
+          console.log('Successfully cached channel collection icons');
+          return {
+            success: true,
+            message: "Channel collection icons have been cached. XMLTV generation will now be much faster and won't require Plex API calls."
+          };
+        } catch (error) {
+          console.error('Failed to cache channel collection icons:', error);
+          throw new Error(`Failed to cache icons: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }),
+
     shuffleAllContent: protectedProcedure
       .input(z.object({ channelId: z.string() }))
       .handler(async ({ input }) => {
@@ -1498,6 +1527,26 @@ export const appRouter = {
         hasPrograms: futurePrograms > 0
       };
     })
+  },
+
+  // System Management
+  system: {
+    fixXmltvProgramming: publicProcedure
+      .handler(async () => {
+        try {
+          const { programmingService } = await import('@/lib/programming-service');
+          await programmingService.ensureAllChannelsHaveProgramming();
+          console.log('Successfully fixed XMLTV programming via system endpoint');
+          return {
+            success: true,
+            message: "XMLTV programming has been fixed. All channels now have programming data.",
+            details: "This ensures that the /media.xml endpoint will return complete guide data for all channels."
+          };
+        } catch (error) {
+          console.error('Failed to fix XMLTV programming:', error);
+          throw new Error(`Failed to fix XMLTV programming: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      })
   },
 
   // Settings Management

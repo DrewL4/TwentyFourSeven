@@ -1973,6 +1973,7 @@ export const ChannelScalarFieldEnum = {
   number: 'number',
   name: 'name',
   icon: 'icon',
+  cachedCollectionIcon: 'cachedCollectionIcon',
   stealth: 'stealth',
   groupTitle: 'groupTitle',
   startTime: 'startTime',

@@ -125,6 +125,7 @@ model Channel {
   number      Int @unique
   name        String
   icon        String?
+  cachedCollectionIcon String? // Cache Plex collection artwork for performance
   stealth     Boolean @default(false)
   groupTitle  String?
   

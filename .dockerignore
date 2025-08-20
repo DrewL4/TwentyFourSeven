@@ -1,44 +1,66 @@
-# VCS
-.git
-.gitignore
-
-# Node/npm/yarn/pnpm cache and installs
-**/node_modules
-**/.pnpm-store
-**/.yarn/cache
-**/.yarn/unplugged
-**/.yarn/install-state.gz
+# Dependencies
+node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
+.pnpm-debug.log*
 
-# Next.js build outputs
+# Production builds
+dist
 .next
-**/.next
 out
 
-# Build artifacts
-**/dist
-**/build
-**/coverage
-.turbo
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Editor files
-.vscode
-.idea
+# Git
+.git
+.gitignore
 
-# Docker itself
+# Docker
 Dockerfile*
+docker-compose*
+.dockerignore
 
-# Env files (keep root .env if you pass it explicitly; comment out to include)
-#.env
-#.env.local
+# Documentation
+README.md
+docs
+*.md
 
-# Misc
-*.swp
-*.swo 
+# Testing
+coverage
+.nyc_output
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Cache directories
+.cache
+.parcel-cache
+.eslintcache
+.stylelintcache
+
+# Temporary folders
+tmp
+temp

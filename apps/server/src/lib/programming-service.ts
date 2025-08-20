@@ -662,7 +662,7 @@ export class ProgrammingService {
   async generateProgramsForAllChannels(customHours?: number) {
     const guideDays = await this.getGuideDays();
     const hours = customHours || (guideDays * 24); // Use guideDays setting unless overridden
-    
+
     const channels = await prisma.channel.findMany({
       select: { id: true, name: true }
     });
@@ -679,8 +679,75 @@ export class ProgrammingService {
   }
 
   /**
+   * Ensure all channels have programming by checking and generating if needed
+   */
+  async ensureAllChannelsHaveProgramming(customHours?: number) {
+    const guideDays = await this.getGuideDays();
+    const hours = customHours || (guideDays * 24);
+
+    const channels = await prisma.channel.findMany({
+      include: {
+        _count: {
+          select: { programs: true }
+        }
+      }
+    });
+
+    const channelsWithoutPrograms = channels.filter(c => c._count.programs === 0);
+    const channelsWithOldPrograms = await this.findChannelsWithInsufficientProgramming();
+
+    console.log(`Found ${channelsWithoutPrograms.length} channels without any programs`);
+    console.log(`Found ${channelsWithOldPrograms.length} channels with insufficient programming`);
+
+    const allChannelsToGenerate = [...channelsWithoutPrograms, ...channelsWithOldPrograms];
+
+    if (allChannelsToGenerate.length === 0) {
+      console.log('All channels have sufficient programming');
+      return;
+    }
+
+    console.log(`Generating programs for ${allChannelsToGenerate.length} channels that need programming`);
+
+    for (const channel of allChannelsToGenerate) {
+      try {
+        console.log(`Ensuring programming for channel: ${channel.name}`);
+        await this.generateProgramsForChannel(channel.id, hours);
+      } catch (error) {
+        console.error(`Error generating programs for channel ${channel.name}:`, error);
+      }
+    }
+
+    console.log(`✅ Ensured programming for ${allChannelsToGenerate.length} channels`);
+  }
+
+  /**
+   * Find channels that have programming but not enough to cover the guide period
+   */
+  private async findChannelsWithInsufficientProgramming(): Promise<Array<{id: string, name: string}>> {
+    const guideDays = await this.getGuideDays();
+    const now = new Date();
+    const futureTime = new Date(now.getTime() + (guideDays * 24 * 60 * 60 * 1000));
+
+    const channels = await prisma.channel.findMany({
+      include: {
+        programs: {
+          where: {
+            startTime: { gte: now, lte: futureTime }
+          },
+          orderBy: { startTime: 'desc' },
+          take: 1
+        }
+      }
+    });
+
+    return channels
+      .filter(channel => channel.programs.length === 0)
+      .map(channel => ({ id: channel.id, name: channel.name }));
+  }
+
+  /**
    * Enhanced programming maintenance with comprehensive gap prevention and automatic recovery
-   * 
+   *
    * This is the core method that ensures channels never end. Enhanced features:
    * 1. Validates content durations before scheduling
    * 2. Cleans up overlaps without creating gaps
@@ -688,13 +755,24 @@ export class ProgrammingService {
    * 4. Regenerates schedules automatically if gaps persist
    * 5. Ensures programming extends to at least 'guideDays' into the future
    * 6. Maintains content rotation order across extensions
-   * 
+   * 7. Ensures ALL channels have programming (fixes XMLTV issue)
+   *
    * This method is called:
    * - On server startup (if programs exist)
    * - Every hour via the scheduler
    * - Manually via API endpoints
    */
   async maintainPrograms() {
+    console.log('🔄 Starting comprehensive programming maintenance...');
+
+    // First, ensure all channels have programming (this fixes the XMLTV issue!)
+    try {
+      await this.ensureAllChannelsHaveProgramming();
+      console.log('✅ Ensured all channels have programming');
+    } catch (error) {
+      console.error('❌ Failed to ensure programming for all channels:', error);
+    }
+
     const guideDays = await this.getGuideDays();
     const now = new Date();
     const lookAhead = new Date(now.getTime() + (guideDays * 24 * 60 * 60 * 1000));
@@ -917,6 +995,87 @@ export class ProgrammingService {
 
     console.log(`Total overlaps cleaned up across all channels: ${totalOverlapsFixed}`);
     return totalOverlapsFixed;
+  }
+
+  /**
+   * Cache Plex collection artwork for channels to improve XMLTV performance
+   * This should be called when channels are created/updated, not during XMLTV generation
+   */
+  async cacheChannelCollectionIcons() {
+    console.log('🎨 Caching Plex collection artwork for channels...');
+
+    const channels = await prisma.channel.findMany({
+      where: {
+        filterCollections: { not: null },
+        cachedCollectionIcon: null // Only update channels without cached icons
+      }
+    });
+
+    if (channels.length === 0) {
+      console.log('✅ All channels have cached collection icons');
+      return;
+    }
+
+    console.log(`📺 Updating collection icons for ${channels.length} channels`);
+
+    // Get base URL (you'll need to pass this or get it from config)
+    const baseUrl = 'https://247.midweststreams.us'; // Use your actual base URL
+
+    for (const channel of channels) {
+      try {
+        let collections: string[] = [];
+        try {
+          collections = channel.filterCollections ? JSON.parse(channel.filterCollections) : [];
+          if (!Array.isArray(collections)) collections = [];
+        } catch { collections = []; }
+
+        if (collections.length === 0) continue;
+
+        // Resolve collection icon
+        const iconUrl = await this.resolveCollectionIcon(collections, baseUrl);
+
+        if (iconUrl) {
+          await prisma.channel.update({
+            where: { id: channel.id },
+            data: { cachedCollectionIcon: iconUrl }
+          });
+          console.log(`✅ Cached icon for channel: ${channel.name}`);
+        }
+      } catch (error) {
+        console.error(`❌ Failed to cache icon for channel ${channel.name}:`, error);
+      }
+    }
+
+    console.log('🎨 Channel collection icon caching completed');
+  }
+
+  private async resolveCollectionIcon(collectionNames: string[], baseUrl: string): Promise<string | null> {
+    try {
+      const servers = await prisma.mediaServer.findMany({
+        where: { type: 'PLEX', active: true },
+        include: { libraries: true }
+      });
+
+      for (const server of servers) {
+        if (!server.token) continue;
+        for (const lib of server.libraries) {
+          try {
+            const res = await fetch(`${server.url}/library/sections/${lib.key}/collections`, {
+              headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token }
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            const directories = data?.MediaContainer?.Directory || [];
+            for (const d of directories) {
+              if (collectionNames.includes(d.title) && d.thumb) {
+                return `${baseUrl}/images/plex?origin=${encodeURIComponent(server.url)}&path=${encodeURIComponent(d.thumb)}`;
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+    return null;
   }
 }
 

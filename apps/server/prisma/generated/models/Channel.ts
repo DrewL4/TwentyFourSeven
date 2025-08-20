@@ -52,6 +52,7 @@ export type ChannelMinAggregateOutputType = {
   number: number | null
   name: string | null
   icon: string | null
+  cachedCollectionIcon: string | null
   stealth: boolean | null
   groupTitle: string | null
   startTime: string | null
@@ -89,6 +90,7 @@ export type ChannelMaxAggregateOutputType = {
   number: number | null
   name: string | null
   icon: string | null
+  cachedCollectionIcon: string | null
   stealth: boolean | null
   groupTitle: string | null
   startTime: string | null
@@ -126,6 +128,7 @@ export type ChannelCountAggregateOutputType = {
   number: number
   name: number
   icon: number
+  cachedCollectionIcon: number
   stealth: number
   groupTitle: number
   startTime: number
@@ -187,6 +190,7 @@ export type ChannelMinAggregateInputType = {
   number?: true
   name?: true
   icon?: true
+  cachedCollectionIcon?: true
   stealth?: true
   groupTitle?: true
   startTime?: true
@@ -224,6 +228,7 @@ export type ChannelMaxAggregateInputType = {
   number?: true
   name?: true
   icon?: true
+  cachedCollectionIcon?: true
   stealth?: true
   groupTitle?: true
   startTime?: true
@@ -261,6 +266,7 @@ export type ChannelCountAggregateInputType = {
   number?: true
   name?: true
   icon?: true
+  cachedCollectionIcon?: true
   stealth?: true
   groupTitle?: true
   startTime?: true
@@ -385,6 +391,7 @@ export type ChannelGroupByOutputType = {
   number: number
   name: string
   icon: string | null
+  cachedCollectionIcon: string | null
   stealth: boolean
   groupTitle: string | null
   startTime: string | null
@@ -445,6 +452,7 @@ export type ChannelWhereInput = {
   number?: Prisma.IntFilter<"Channel"> | number
   name?: Prisma.StringFilter<"Channel"> | string
   icon?: Prisma.StringNullableFilter<"Channel"> | string | null
+  cachedCollectionIcon?: Prisma.StringNullableFilter<"Channel"> | string | null
   stealth?: Prisma.BoolFilter<"Channel"> | boolean
   groupTitle?: Prisma.StringNullableFilter<"Channel"> | string | null
   startTime?: Prisma.StringNullableFilter<"Channel"> | string | null
@@ -485,6 +493,7 @@ export type ChannelOrderByWithRelationInput = {
   number?: Prisma.SortOrder
   name?: Prisma.SortOrder
   icon?: Prisma.SortOrderInput | Prisma.SortOrder
+  cachedCollectionIcon?: Prisma.SortOrderInput | Prisma.SortOrder
   stealth?: Prisma.SortOrder
   groupTitle?: Prisma.SortOrderInput | Prisma.SortOrder
   startTime?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -528,6 +537,7 @@ export type ChannelWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.ChannelWhereInput | Prisma.ChannelWhereInput[]
   name?: Prisma.StringFilter<"Channel"> | string
   icon?: Prisma.StringNullableFilter<"Channel"> | string | null
+  cachedCollectionIcon?: Prisma.StringNullableFilter<"Channel"> | string | null
   stealth?: Prisma.BoolFilter<"Channel"> | boolean
   groupTitle?: Prisma.StringNullableFilter<"Channel"> | string | null
   startTime?: Prisma.StringNullableFilter<"Channel"> | string | null
@@ -568,6 +578,7 @@ export type ChannelOrderByWithAggregationInput = {
   number?: Prisma.SortOrder
   name?: Prisma.SortOrder
   icon?: Prisma.SortOrderInput | Prisma.SortOrder
+  cachedCollectionIcon?: Prisma.SortOrderInput | Prisma.SortOrder
   stealth?: Prisma.SortOrder
   groupTitle?: Prisma.SortOrderInput | Prisma.SortOrder
   startTime?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -613,6 +624,7 @@ export type ChannelScalarWhereWithAggregatesInput = {
   number?: Prisma.IntWithAggregatesFilter<"Channel"> | number
   name?: Prisma.StringWithAggregatesFilter<"Channel"> | string
   icon?: Prisma.StringNullableWithAggregatesFilter<"Channel"> | string | null
+  cachedCollectionIcon?: Prisma.StringNullableWithAggregatesFilter<"Channel"> | string | null
   stealth?: Prisma.BoolWithAggregatesFilter<"Channel"> | boolean
   groupTitle?: Prisma.StringNullableWithAggregatesFilter<"Channel"> | string | null
   startTime?: Prisma.StringNullableWithAggregatesFilter<"Channel"> | string | null
@@ -650,6 +662,7 @@ export type ChannelCreateInput = {
   number: number
   name: string
   icon?: string | null
+  cachedCollectionIcon?: string | null
   stealth?: boolean
   groupTitle?: string | null
   startTime?: string | null
@@ -690,6 +703,7 @@ export type ChannelUncheckedCreateInput = {
   number: number
   name: string
   icon?: string | null
+  cachedCollectionIcon?: string | null
   stealth?: boolean
   groupTitle?: string | null
   startTime?: string | null
@@ -730,6 +744,7 @@ export type ChannelUpdateInput = {
   number?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cachedCollectionIcon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stealth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   groupTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startTime?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -770,6 +785,7 @@ export type ChannelUncheckedUpdateInput = {
   number?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cachedCollectionIcon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stealth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   groupTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startTime?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -810,6 +826,7 @@ export type ChannelCreateManyInput = {
   number: number
   name: string
   icon?: string | null
+  cachedCollectionIcon?: string | null
   stealth?: boolean
   groupTitle?: string | null
   startTime?: string | null
@@ -847,6 +864,7 @@ export type ChannelUpdateManyMutationInput = {
   number?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cachedCollectionIcon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stealth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   groupTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startTime?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -884,6 +902,7 @@ export type ChannelUncheckedUpdateManyInput = {
   number?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cachedCollectionIcon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stealth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   groupTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startTime?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -921,6 +940,7 @@ export type ChannelCountOrderByAggregateInput = {
   number?: Prisma.SortOrder
   name?: Prisma.SortOrder
   icon?: Prisma.SortOrder
+  cachedCollectionIcon?: Prisma.SortOrder
   stealth?: Prisma.SortOrder
   groupTitle?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
@@ -969,6 +989,7 @@ export type ChannelMaxOrderByAggregateInput = {
   number?: Prisma.SortOrder
   name?: Prisma.SortOrder
   icon?: Prisma.SortOrder
+  cachedCollectionIcon?: Prisma.SortOrder
   stealth?: Prisma.SortOrder
   groupTitle?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
@@ -1006,6 +1027,7 @@ export type ChannelMinOrderByAggregateInput = {
   number?: Prisma.SortOrder
   name?: Prisma.SortOrder
   icon?: Prisma.SortOrder
+  cachedCollectionIcon?: Prisma.SortOrder
   stealth?: Prisma.SortOrder
   groupTitle?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
@@ -1101,6 +1123,7 @@ export type ChannelCreateWithoutProgramsInput = {
   number: number
   name: string
   icon?: string | null
+  cachedCollectionIcon?: string | null
   stealth?: boolean
   groupTitle?: string | null
   startTime?: string | null
@@ -1140,6 +1163,7 @@ export type ChannelUncheckedCreateWithoutProgramsInput = {
   number: number
   name: string
   icon?: string | null
+  cachedCollectionIcon?: string | null
   stealth?: boolean
   groupTitle?: string | null
   startTime?: string | null
@@ -1195,6 +1219,7 @@ export type ChannelUpdateWithoutProgramsInput = {
   number?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cachedCollectionIcon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stealth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   groupTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startTime?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1234,6 +1259,7 @@ export type ChannelUncheckedUpdateWithoutProgramsInput = {
   number?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cachedCollectionIcon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stealth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   groupTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startTime?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1273,6 +1299,7 @@ export type ChannelCreateWithoutChannelShowsInput = {
   number: number
   name: string
   icon?: string | null
+  cachedCollectionIcon?: string | null
   stealth?: boolean
   groupTitle?: string | null
   startTime?: string | null
@@ -1312,6 +1339,7 @@ export type ChannelUncheckedCreateWithoutChannelShowsInput = {
   number: number
   name: string
   icon?: string | null
+  cachedCollectionIcon?: string | null
   stealth?: boolean
   groupTitle?: string | null
   startTime?: string | null
@@ -1367,6 +1395,7 @@ export type ChannelUpdateWithoutChannelShowsInput = {
   number?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cachedCollectionIcon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stealth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   groupTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startTime?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1406,6 +1435,7 @@ export type ChannelUncheckedUpdateWithoutChannelShowsInput = {
   number?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cachedCollectionIcon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stealth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   groupTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startTime?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1445,6 +1475,7 @@ export type ChannelCreateWithoutChannelMoviesInput = {
   number: number
   name: string
   icon?: string | null
+  cachedCollectionIcon?: string | null
   stealth?: boolean
   groupTitle?: string | null
   startTime?: string | null
@@ -1484,6 +1515,7 @@ export type ChannelUncheckedCreateWithoutChannelMoviesInput = {
   number: number
   name: string
   icon?: string | null
+  cachedCollectionIcon?: string | null
   stealth?: boolean
   groupTitle?: string | null
   startTime?: string | null
@@ -1539,6 +1571,7 @@ export type ChannelUpdateWithoutChannelMoviesInput = {
   number?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cachedCollectionIcon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stealth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   groupTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startTime?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1578,6 +1611,7 @@ export type ChannelUncheckedUpdateWithoutChannelMoviesInput = {
   number?: Prisma.IntFieldUpdateOperationsInput | number
   name?: Prisma.StringFieldUpdateOperationsInput | string
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cachedCollectionIcon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   stealth?: Prisma.BoolFieldUpdateOperationsInput | boolean
   groupTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startTime?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1666,6 +1700,7 @@ export type ChannelSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   number?: boolean
   name?: boolean
   icon?: boolean
+  cachedCollectionIcon?: boolean
   stealth?: boolean
   groupTitle?: boolean
   startTime?: boolean
@@ -1707,6 +1742,7 @@ export type ChannelSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   number?: boolean
   name?: boolean
   icon?: boolean
+  cachedCollectionIcon?: boolean
   stealth?: boolean
   groupTitle?: boolean
   startTime?: boolean
@@ -1744,6 +1780,7 @@ export type ChannelSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   number?: boolean
   name?: boolean
   icon?: boolean
+  cachedCollectionIcon?: boolean
   stealth?: boolean
   groupTitle?: boolean
   startTime?: boolean
@@ -1781,6 +1818,7 @@ export type ChannelSelectScalar = {
   number?: boolean
   name?: boolean
   icon?: boolean
+  cachedCollectionIcon?: boolean
   stealth?: boolean
   groupTitle?: boolean
   startTime?: boolean
@@ -1813,7 +1851,7 @@ export type ChannelSelectScalar = {
   updatedAt?: boolean
 }
 
-export type ChannelOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "number" | "name" | "icon" | "stealth" | "groupTitle" | "startTime" | "iconWidth" | "iconDuration" | "iconPosition" | "guideFlexPlaceholder" | "guideMinimumDurationSeconds" | "isOnDemand" | "onDemandModulo" | "episodeMemoryEnabled" | "autoFilterEnabled" | "filterGenres" | "filterActors" | "filterDirectors" | "filterStudios" | "filterCollections" | "filterYearStart" | "filterYearEnd" | "filterRating" | "filterType" | "lastAutoScanAt" | "defaultEpisodeOrder" | "respectEpisodeOrder" | "blockShuffle" | "blockShuffleSize" | "autoSortMethod" | "franchiseAutomation" | "createdAt" | "updatedAt", ExtArgs["result"]["channel"]>
+export type ChannelOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "number" | "name" | "icon" | "cachedCollectionIcon" | "stealth" | "groupTitle" | "startTime" | "iconWidth" | "iconDuration" | "iconPosition" | "guideFlexPlaceholder" | "guideMinimumDurationSeconds" | "isOnDemand" | "onDemandModulo" | "episodeMemoryEnabled" | "autoFilterEnabled" | "filterGenres" | "filterActors" | "filterDirectors" | "filterStudios" | "filterCollections" | "filterYearStart" | "filterYearEnd" | "filterRating" | "filterType" | "lastAutoScanAt" | "defaultEpisodeOrder" | "respectEpisodeOrder" | "blockShuffle" | "blockShuffleSize" | "autoSortMethod" | "franchiseAutomation" | "createdAt" | "updatedAt", ExtArgs["result"]["channel"]>
 export type ChannelInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   programs?: boolean | Prisma.Channel$programsArgs<ExtArgs>
   channelShows?: boolean | Prisma.Channel$channelShowsArgs<ExtArgs>
@@ -1835,6 +1873,7 @@ export type $ChannelPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     number: number
     name: string
     icon: string | null
+    cachedCollectionIcon: string | null
     stealth: boolean
     groupTitle: string | null
     startTime: string | null
@@ -2295,6 +2334,7 @@ export interface ChannelFieldRefs {
   readonly number: Prisma.FieldRef<"Channel", 'Int'>
   readonly name: Prisma.FieldRef<"Channel", 'String'>
   readonly icon: Prisma.FieldRef<"Channel", 'String'>
+  readonly cachedCollectionIcon: Prisma.FieldRef<"Channel", 'String'>
   readonly stealth: Prisma.FieldRef<"Channel", 'Boolean'>
   readonly groupTitle: Prisma.FieldRef<"Channel", 'String'>
   readonly startTime: Prisma.FieldRef<"Channel", 'String'>

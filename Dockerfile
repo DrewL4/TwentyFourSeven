@@ -2,8 +2,14 @@
 # Multi-stage build for production
 FROM node:20-alpine AS base
 
-# Build stage - install and build in one stage
-FROM base AS builder
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create app directory
+WORKDIR /app
+
+# Dependencies stage - install deps separately for better caching
+FROM base AS deps
 WORKDIR /app
 
 # Install system dependencies and enable corepack
@@ -17,8 +23,29 @@ COPY turbo.json ./
 COPY apps/web/package*.json ./apps/web/
 COPY apps/server/package*.json ./apps/server/
 
-# Install dependencies (use BuildKit cache for npm)
-RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit --progress=false
+# Install dependencies including devDependencies (needed for turbo build)
+# Using npm ci with optimizations for faster installs
+RUN --mount=type=cache,target=/root/.npm \
+    --mount=type=cache,target=/root/.cache \
+    npm ci --prefer-offline --no-audit --progress=false --no-fund --parallel=4
+
+# Build stage - separate from deps for faster rebuilds
+FROM base AS builder
+WORKDIR /app
+
+# Copy installed node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+
+# Enable corepack in builder stage too
+RUN corepack enable
+
+# Copy package files for build context
+COPY package*.json ./
+COPY turbo.json ./
+COPY apps/web/package*.json ./apps/web/
+COPY apps/server/package*.json ./apps/server/
 
 # Copy source code
 COPY . .
@@ -77,7 +104,9 @@ COPY apps/web/package*.json ./apps/web/
 COPY apps/server/package*.json ./apps/server/
 
 # Install only production dependencies (use BuildKit cache for npm)
-RUN --mount=type=cache,target=/root/.npm npm ci --only=production --prefer-offline --no-audit --progress=false && \
+RUN --mount=type=cache,target=/root/.npm \
+    --mount=type=cache,target=/root/.cache \
+    npm ci --prefer-offline --no-audit --progress=false --no-fund --omit=dev --parallel=4 && \
     npm cache clean --force
 
 # Copy built applications with proper ownership (abc user like Plex)
