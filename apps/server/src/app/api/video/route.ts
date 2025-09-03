@@ -236,6 +236,11 @@ export async function GET(request: NextRequest) {
     // Shared passthrough for the lifetime of the HTTP response
     const passthrough = new PassThrough();
 
+    // Track cleanup state
+    let isDestroyed = false;
+    let cleanupTimeout: NodeJS.Timeout | null = null;
+    const maxStreamDuration = 8 * 60 * 60 * 1000; // 8 hours max
+
     // Simple GPU fail-safe: try hardware first, on failure auto-restart with software encoder (once)
     let restartedToSoftware = false;
     let currentFfmpeg: ChildProcess | null = null;
@@ -254,10 +259,48 @@ export async function GET(request: NextRequest) {
       /failed/i,
     ];
 
+    // Cleanup function to prevent memory leaks
+    const cleanup = () => {
+      if (isDestroyed) return;
+      isDestroyed = true;
+
+      console.log('[FFmpeg] Cleaning up stream resources...');
+
+      // Clear timeout
+      if (cleanupTimeout) {
+        clearTimeout(cleanupTimeout);
+        cleanupTimeout = null;
+      }
+
+      // Kill FFmpeg process
+      if (currentFfmpeg && !currentFfmpeg.killed) {
+        try {
+          currentFfmpeg.kill('SIGKILL');
+          console.log(`[FFmpeg] Killed process ${currentFfmpeg.pid}`);
+        } catch (error) {
+          console.error('[FFmpeg] Error killing process:', error);
+        }
+      }
+
+      // Destroy passthrough stream
+      if (!passthrough.destroyed) {
+        passthrough.destroy();
+      }
+    };
+
     const startFfmpeg = async (forceSoftware: boolean) => {
+      if (isDestroyed) return;
+
       const ffmpegArgs = await buildFfmpegArgs(streamUrl, seekSeconds, { forceSoftware });
       console.log(`[FFmpeg] Spawning FFmpeg with args: ${ffmpegArgs.join(' ')}`);
       const child = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+
+      // Handle process errors
+      child.on('error', (error) => {
+        console.error('[FFmpeg] Process error:', error);
+        cleanup();
+      });
+
       child.stdout.pipe(passthrough, { end: false });
 
       child.stderr.on('data', (data) => {
@@ -271,7 +314,7 @@ export async function GET(request: NextRequest) {
           // Start software fallback
           startFfmpeg(true).catch((err) => {
             console.error('[FFmpeg] Software fallback failed to start:', err);
-            passthrough.end();
+            cleanup();
           });
         }
       });
@@ -288,12 +331,12 @@ export async function GET(request: NextRequest) {
           console.warn('[FFmpeg] FFmpeg exited with error; restarting with software encoder...');
           startFfmpeg(true).catch((err) => {
             console.error('[FFmpeg] Software fallback failed to start:', err);
-            passthrough.end();
+            cleanup();
           });
           return;
         }
-        // Normal end (client abort or final process finished)
-        passthrough.end();
+        // Normal end - cleanup resources
+        cleanup();
       });
 
       currentFfmpeg = child;
@@ -303,11 +346,29 @@ export async function GET(request: NextRequest) {
     // Start with hardware (if available)
     await startFfmpeg(false);
 
+    // Set maximum stream duration to prevent infinite running processes
+    cleanupTimeout = setTimeout(() => {
+      console.log('[FFmpeg] Stream timeout reached, cleaning up...');
+      cleanup();
+    }, maxStreamDuration);
+
     // Handle client abort
     request.signal.onabort = () => {
-      console.log('[FFmpeg] Client aborted request. Killing FFmpeg.');
-      try { currentFfmpeg?.kill('SIGKILL'); } catch {}
+      console.log('[FFmpeg] Client aborted request. Cleaning up...');
+      cleanup();
     };
+
+    // Handle passthrough stream errors
+    passthrough.on('error', (error) => {
+      console.error('[FFmpeg] Passthrough stream error:', error);
+      cleanup();
+    });
+
+    // Cleanup when response ends
+    passthrough.on('close', () => {
+      console.log('[FFmpeg] Passthrough stream closed');
+      cleanup();
+    });
     
     return new NextResponse(passthrough as any, {
       status: 200,
