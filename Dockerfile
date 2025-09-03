@@ -35,6 +35,8 @@ WORKDIR /app
 
 # Copy installed node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 
 # Enable corepack in builder stage too
 RUN corepack enable
