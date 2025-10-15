@@ -33,10 +33,8 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM base AS builder
 WORKDIR /app
 
-# Copy installed node_modules from deps stage
+# Copy installed node_modules from deps stage (Turbo monorepo uses root node_modules)
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 
 # Enable corepack in builder stage too
 RUN corepack enable

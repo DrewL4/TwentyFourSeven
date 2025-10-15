@@ -2,13 +2,26 @@ import { prisma } from '@/lib/prisma';
 import type { Channel, MediaMovie, MediaShow } from '../../prisma/generated';
 
 export class ChannelAutomationService {
+  private automationLocks = new Set<string>();
+
+  private safeParseList(json?: string): string[] {
+    if (!json) return [];
+    try {
+      const arr = JSON.parse(json);
+      return Array.isArray(arr) ? arr.map((s: any) => String(s).trim().toLowerCase()) : [];
+    } catch {
+      return [];
+    }
+  }
   /**
    * Check all channels with automation enabled and apply filters to new content
    */
   async processAutomatedChannels(): Promise<void> {
     const automatedChannels = await prisma.channel.findMany({
       where: {
-        autoFilterEnabled: true
+        autoFilterEnabled: true,
+        stealth: false,
+        isOnDemand: false
       },
       include: {
         channelMovies: {
@@ -34,6 +47,16 @@ export class ChannelAutomationService {
    */
   async processChannelAutomation(channel: any): Promise<void> {
     try {
+      if (channel.stealth || channel.isOnDemand) {
+        return;
+      }
+
+      if (this.automationLocks.has(channel.id)) {
+        // Already processing this channel
+        return;
+      }
+      this.automationLocks.add(channel.id);
+
       const { filterType } = channel;
       let contentAdded = false;
 
@@ -65,6 +88,8 @@ export class ChannelAutomationService {
     } catch (error) {
       console.error(`Error processing automation for channel ${channel.id}:`, error);
       throw error;
+    } finally {
+      this.automationLocks.delete(channel.id);
     }
   }
 
@@ -149,7 +174,7 @@ export class ChannelAutomationService {
 
     // Collection filter - if specified, only get movies from specific collections
     if (channel.filterCollections) {
-      const collections = JSON.parse(channel.filterCollections);
+      const collections = this.safeParseList(channel.filterCollections);
       if (collections.length > 0) {
         whereClause.OR = collections.map((collection: string) => ({
           collections: {
@@ -177,7 +202,7 @@ export class ChannelAutomationService {
 
     // Studio filter
     if (channel.filterStudios) {
-      const studios = JSON.parse(channel.filterStudios);
+      const studios = this.safeParseList(channel.filterStudios);
       if (studios.length > 0) {
         // If we already have OR conditions from collections, we need to combine them
         if (whereClause.OR) {
@@ -207,9 +232,7 @@ export class ChannelAutomationService {
     });
 
     // Apply additional filters that require JSON parsing
-    return movies.filter(movie => {
-      return this.matchesFilters(movie, channel);
-    });
+    return movies.filter(movie => this.matchesFilters(movie, channel));
   }
 
   /**
@@ -220,7 +243,7 @@ export class ChannelAutomationService {
 
     // Collection filter - if specified, only get shows from specific collections
     if (channel.filterCollections) {
-      const collections = JSON.parse(channel.filterCollections);
+      const collections = this.safeParseList(channel.filterCollections);
       if (collections.length > 0) {
         whereClause.OR = collections.map((collection: string) => ({
           collections: {
@@ -248,14 +271,27 @@ export class ChannelAutomationService {
 
     // Studio filter
     if (channel.filterStudios) {
-      const studios = JSON.parse(channel.filterStudios);
+      const studios = this.safeParseList(channel.filterStudios);
       if (studios.length > 0) {
-        whereClause.OR = studios.map((studio: string) => ({
-          studio: {
-            contains: studio,
-            mode: 'insensitive'
-          }
-        }));
+        if (whereClause.OR) {
+          whereClause.AND = [
+            { OR: whereClause.OR },
+            { OR: studios.map((studio: string) => ({
+              studio: {
+                contains: studio,
+                mode: 'insensitive'
+              }
+            }))}
+          ];
+          delete whereClause.OR;
+        } else {
+          whereClause.OR = studios.map((studio: string) => ({
+            studio: {
+              contains: studio,
+              mode: 'insensitive'
+            }
+          }));
+        }
       }
     }
 
@@ -289,9 +325,7 @@ export class ChannelAutomationService {
     });
 
     // Apply additional filters that require JSON parsing
-    return shows.filter(show => {
-      return this.matchesFilters(show, channel);
-    });
+    return shows.filter(show => this.matchesFilters(show, channel));
   }
 
   /**
@@ -519,60 +553,36 @@ export class ChannelAutomationService {
    * Check if a media item matches the channel's filter criteria
    */
   private matchesFilters(media: MediaMovie | MediaShow, channel: any): boolean {
-    // Collection filter
-    if (channel.filterCollections) {
-      const filterCollections = JSON.parse(channel.filterCollections);
-      if (filterCollections.length > 0 && media.collections) {
-        const mediaCollections = JSON.parse(media.collections);
-        const hasMatchingCollection = filterCollections.some((filterCollection: string) =>
-          mediaCollections.some((collection: string) =>
-            collection.toLowerCase().includes(filterCollection.toLowerCase())
-          )
-        );
-        if (!hasMatchingCollection) return false;
-      }
+    // Collection filter (collection-first)
+    const filterCollections = this.safeParseList(channel.filterCollections);
+    if (filterCollections.length > 0) {
+      const mediaCollections = this.safeParseList(media.collections || undefined);
+      const hasMatchingCollection = mediaCollections.some(c => filterCollections.includes(c));
+      if (!hasMatchingCollection) return false;
     }
 
     // Genre filter
-    if (channel.filterGenres) {
-      const filterGenres = JSON.parse(channel.filterGenres);
-      if (filterGenres.length > 0 && media.genres) {
-        const mediaGenres = JSON.parse(media.genres);
-        const hasMatchingGenre = filterGenres.some((filterGenre: string) =>
-          mediaGenres.some((genre: string) =>
-            genre.toLowerCase().includes(filterGenre.toLowerCase())
-          )
-        );
-        if (!hasMatchingGenre) return false;
-      }
+    const filterGenres = this.safeParseList(channel.filterGenres);
+    if (filterGenres.length > 0) {
+      const mediaGenres = this.safeParseList(media.genres || undefined);
+      const hasMatchingGenre = mediaGenres.some(g => filterGenres.includes(g));
+      if (!hasMatchingGenre) return false;
     }
 
     // Actor filter
-    if (channel.filterActors) {
-      const filterActors = JSON.parse(channel.filterActors);
-      if (filterActors.length > 0 && media.actors) {
-        const mediaActors = JSON.parse(media.actors);
-        const hasMatchingActor = filterActors.some((filterActor: string) =>
-          mediaActors.some((actor: string) =>
-            actor.toLowerCase().includes(filterActor.toLowerCase())
-          )
-        );
-        if (!hasMatchingActor) return false;
-      }
+    const filterActors = this.safeParseList(channel.filterActors);
+    if (filterActors.length > 0) {
+      const mediaActors = this.safeParseList(media.actors || undefined);
+      const hasMatchingActor = mediaActors.some(a => filterActors.includes(a));
+      if (!hasMatchingActor) return false;
     }
 
     // Director filter
-    if (channel.filterDirectors) {
-      const filterDirectors = JSON.parse(channel.filterDirectors);
-      if (filterDirectors.length > 0 && media.directors) {
-        const mediaDirectors = JSON.parse(media.directors);
-        const hasMatchingDirector = filterDirectors.some((filterDirector: string) =>
-          mediaDirectors.some((director: string) =>
-            director.toLowerCase().includes(filterDirector.toLowerCase())
-          )
-        );
-        if (!hasMatchingDirector) return false;
-      }
+    const filterDirectors = this.safeParseList(channel.filterDirectors);
+    if (filterDirectors.length > 0) {
+      const mediaDirectors = this.safeParseList(media.directors || undefined);
+      const hasMatchingDirector = mediaDirectors.some(d => filterDirectors.includes(d));
+      if (!hasMatchingDirector) return false;
     }
 
     return true;

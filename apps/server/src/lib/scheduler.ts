@@ -5,6 +5,7 @@ class SchedulerService {
   private static instance: SchedulerService;
   private watchTowerInterval: ReturnType<typeof setInterval> | null = null;
   private programmingMaintenanceInterval: ReturnType<typeof setInterval> | null = null;
+  private automationInterval: ReturnType<typeof setInterval> | null = null;
 
   public static getInstance(): SchedulerService {
     if (!SchedulerService.instance) {
@@ -94,6 +95,48 @@ class SchedulerService {
   }
 
   /**
+   * Start periodic channel automation sweep to catch missed events and bulk metadata changes
+   * Default cadence: every 15 minutes
+   */
+  async startChannelAutomationSweep() {
+    if (this.automationInterval) {
+      clearInterval(this.automationInterval);
+    }
+
+    console.log("📅 Starting periodic channel automation sweep...");
+
+    // Run once on startup
+    try {
+      const { channelAutomationService } = await import('./channel-automation-service');
+      await channelAutomationService.processAutomatedChannels();
+      console.log("✅ Initial automation sweep completed");
+    } catch (error) {
+      console.error("❌ Initial automation sweep failed:", error);
+    }
+
+    this.automationInterval = setInterval(async () => {
+      try {
+        console.log("🔄 Running scheduled channel automation sweep...");
+        const { channelAutomationService } = await import('./channel-automation-service');
+        await channelAutomationService.processAutomatedChannels();
+        console.log("✅ Channel automation sweep completed");
+      } catch (error) {
+        console.error("❌ Channel automation sweep failed:", error);
+      }
+    }, 15 * 60 * 1000);
+
+    console.log("📅 Scheduled channel automation sweep to run every 15 minutes");
+  }
+
+  stopChannelAutomationSweep() {
+    if (this.automationInterval) {
+      clearInterval(this.automationInterval);
+      this.automationInterval = null;
+      console.log("⏹️ Channel automation sweep scheduler stopped");
+    }
+  }
+
+  /**
    * Stop programming maintenance
    */
   stopProgrammingMaintenance() {
@@ -118,6 +161,7 @@ class SchedulerService {
   stopAll() {
     this.stopWatchTowerSync();
     this.stopProgrammingMaintenance();
+    this.stopChannelAutomationSweep();
   }
 }
 

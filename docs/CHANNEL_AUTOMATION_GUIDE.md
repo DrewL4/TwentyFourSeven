@@ -1,3 +1,39 @@
+# Channel Automation Guide
+
+## Overview
+
+This system auto-adds newly discovered Plex items to channels using collection-first rules plus optional genre/actor/director/studio/year/rating filters. When matching content is added, the channel schedule is regenerated and EPG/M3U update automatically.
+
+## How it works
+
+- Plex webhooks (`apps/server/src/app/api/plex/webhook/route.ts`) sync new and updated media into local tables.
+- Automation service (`apps/server/src/lib/channel-automation-service.ts`) evaluates channels with `autoFilterEnabled = true` and `stealth = false` and `isOnDemand = false`:
+  - Primary: intersection of item collections and `Channel.filterCollections`.
+  - Secondary: `filterGenres`, `filterActors`, `filterDirectors`, `filterStudios`, `filterYearStart/End`, `filterRating`, `filterType`.
+  - Adds matches to `channelMovies`/`channelShows` (idempotent), applies `autoSortMethod` if set.
+  - Triggers schedule generation only if content was added.
+- Scheduler runs a periodic sweep every 15 minutes to catch missed events.
+
+## Configure a channel
+
+1. Enable automation: set `autoFilterEnabled` true on the channel.
+2. Set `filterCollections` to a JSON array, e.g. `["Pixar","Marvel Cinematic Universe"]`.
+3. Optionally set other filters: `filterGenres`, `filterActors`, `filterDirectors`, `filterStudios`, `filterYearStart`, `filterYearEnd`, `filterRating`, `filterType`.
+4. Optionally set `autoSortMethod` (e.g., `title-asc`, `year-newest`, `timeline-mcu`).
+
+## Best practices
+
+- Prefer precise collection names to avoid false positives.
+- Keep `filterType` aligned to intended content (movies/shows/both).
+- Avoid enabling automation for `stealth` or `isOnDemand` channels.
+- Ensure items have valid durations in Plex; invalid durations are filtered from programming.
+
+## Troubleshooting
+
+- Verify Plex webhook delivery and that `webhookEnabled` is true in `PlexSettings`.
+- Check logs for automation decisions and schedule generation.
+- Use the Channels UI to edit automation filters and clear or set `autoSortMethod`.
+
 # Channel Automation Feature Guide
 
 ## Overview

@@ -56,6 +56,9 @@ export class StartupService {
       // Initialize programming maintenance to ensure channels never end
       await this.initializeProgrammingMaintenance();
 
+      // Initialize periodic channel automation sweep
+      await this.initializeChannelAutomation();
+
       console.log('✅ TwentyFour/Seven server initialized successfully');
     } catch (error) {
       console.error('❌ Error during server initialization:', error);
@@ -164,6 +167,18 @@ export class StartupService {
       console.log('📺 Programming maintenance initialized - channels will never end!');
     } catch (error) {
       console.error('❌ Error initializing programming maintenance:', error);
+    }
+  }
+
+  /**
+   * Initialize periodic channel automation sweep
+   */
+  private static async initializeChannelAutomation() {
+    try {
+      await scheduler.startChannelAutomationSweep();
+      console.log('🤖 Channel automation initialized - collections and filters stay in sync');
+    } catch (error) {
+      console.error('❌ Error initializing channel automation:', error);
     }
   }
 
