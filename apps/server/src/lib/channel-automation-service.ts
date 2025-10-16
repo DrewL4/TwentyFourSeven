@@ -178,7 +178,8 @@ export class ChannelAutomationService {
       if (collections.length > 0) {
         whereClause.OR = collections.map((collection: string) => ({
           collections: {
-            contains: `"${collection}"`
+            contains: `"${collection}"`,
+            mode: 'insensitive'
           }
         }));
       }
@@ -247,7 +248,8 @@ export class ChannelAutomationService {
       if (collections.length > 0) {
         whereClause.OR = collections.map((collection: string) => ({
           collections: {
-            contains: `"${collection}"`
+            contains: `"${collection}"`,
+            mode: 'insensitive'
           }
         }));
       }
