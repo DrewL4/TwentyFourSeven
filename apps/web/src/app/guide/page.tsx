@@ -8,6 +8,7 @@ import { Tv, Clock, Calendar, Play, Film, RefreshCw, Zap, Settings, ChevronLeft,
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import VideoPlayer from "@/components/video-player";
 
 type Program = {
   id: string;
@@ -46,6 +47,8 @@ export default function GuidePage() {
     return now;
   });
   const [isMobileView, setIsMobileView] = useState(false);
+  const [isPlayerOpen, setIsPlayerOpen] = useState(false);
+  const [playingChannel, setPlayingChannel] = useState<{ number: number; name: string; icon?: string | null } | null>(null);
   const queryClient = useQueryClient();
   
   const guideQuery = useQuery(orpc.guide.current.queryOptions());
@@ -305,10 +308,16 @@ export default function GuidePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" asChild className="h-8 w-8 p-0">
-                      <Link href={`/player?channel=${channel.number}`}>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0"
+                      onClick={() => {
+                        setPlayingChannel({ number: channel.number, name: channel.name, icon: channel.icon });
+                        setIsPlayerOpen(true);
+                      }}
+                    >
                         <Play className="w-4 h-4" />
-                      </Link>
                     </Button>
                     <Button
                       variant="ghost"
@@ -697,10 +706,16 @@ export default function GuidePage() {
                                       `}</style>
                                     </p>
                                   </div>
-                                  <Button variant="ghost" size="sm" asChild className="flex-shrink-0 h-6 w-6 p-0">
-                                    <Link href={`/player?channel=${channel.number}`}>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="flex-shrink-0 h-6 w-6 p-0"
+                                    onClick={() => {
+                                      setPlayingChannel({ number: channel.number, name: channel.name, icon: channel.icon });
+                                      setIsPlayerOpen(true);
+                                    }}
+                                  >
                                       <Play className="w-3 h-3" />
-                                    </Link>
                                   </Button>
                                   <Button
                                     variant="ghost"
@@ -902,6 +917,23 @@ export default function GuidePage() {
             </Card>
           )}
         </div>
+      )}
+
+      {/* Video Player */}
+      {isPlayerOpen && playingChannel && (
+        <VideoPlayer
+          url=""
+          title={playingChannel.name}
+          isOpen={isPlayerOpen}
+          onClose={() => {
+            setIsPlayerOpen(false);
+            setPlayingChannel(null);
+          }}
+          posterImage={playingChannel.icon || undefined}
+          autoPlay={true}
+          isLiveTV={true}
+          channelNumber={playingChannel.number}
+        />
       )}
     </div>
   );

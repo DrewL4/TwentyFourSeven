@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error generating discovery:', error);
+    
     return NextResponse.json({ error: 'Failed to generate discovery' }, { status: 500 });
   }
 } 

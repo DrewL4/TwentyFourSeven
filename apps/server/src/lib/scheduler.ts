@@ -30,13 +30,10 @@ class SchedulerService {
 
     const intervalMs = settings.watchTowerSyncInterval * 60 * 60 * 1000; // Convert hours to milliseconds
     
-    console.log(`📅 Scheduling WatchTower sync every ${settings.watchTowerSyncInterval} hours`);
 
     this.watchTowerInterval = setInterval(async () => {
       try {
-        console.log("🔄 Starting scheduled WatchTower sync...");
         const results = await watchTowerService.syncUsers();
-        console.log(`✅ WatchTower sync completed: ${results.created} created, ${results.updated} updated, ${results.skipped} skipped`);
       } catch (error) {
         console.error("❌ Scheduled WatchTower sync failed:", error);
       }
@@ -47,7 +44,6 @@ class SchedulerService {
     if (this.watchTowerInterval) {
       clearInterval(this.watchTowerInterval);
       this.watchTowerInterval = null;
-      console.log("⏹️ WatchTower sync scheduler stopped");
     }
   }
 
@@ -66,12 +62,10 @@ class SchedulerService {
       clearInterval(this.programmingMaintenanceInterval);
     }
 
-    console.log("📅 Starting automatic programming maintenance...");
 
     // Run immediately on startup
     try {
       await programmingService.maintainPrograms();
-      console.log("✅ Initial programming maintenance completed");
     } catch (error) {
       console.error("❌ Initial programming maintenance failed:", error);
     }
@@ -79,19 +73,16 @@ class SchedulerService {
     // Schedule to run every hour
     this.programmingMaintenanceInterval = setInterval(async () => {
       try {
-        console.log("🔄 Running scheduled programming maintenance...");
         await programmingService.maintainPrograms();
         
         // Also cleanup old programs to prevent database bloat
         await programmingService.cleanupOldPrograms();
         
-        console.log("✅ Programming maintenance completed");
       } catch (error) {
         console.error("❌ Programming maintenance failed:", error);
       }
     }, 60 * 60 * 1000); // Run every hour
 
-    console.log("📅 Scheduled programming maintenance to run every hour");
   }
 
   /**
@@ -103,36 +94,30 @@ class SchedulerService {
       clearInterval(this.automationInterval);
     }
 
-    console.log("📅 Starting periodic channel automation sweep...");
 
     // Run once on startup
     try {
       const { channelAutomationService } = await import('./channel-automation-service');
       await channelAutomationService.processAutomatedChannels();
-      console.log("✅ Initial automation sweep completed");
     } catch (error) {
       console.error("❌ Initial automation sweep failed:", error);
     }
 
     this.automationInterval = setInterval(async () => {
       try {
-        console.log("🔄 Running scheduled channel automation sweep...");
         const { channelAutomationService } = await import('./channel-automation-service');
         await channelAutomationService.processAutomatedChannels();
-        console.log("✅ Channel automation sweep completed");
       } catch (error) {
         console.error("❌ Channel automation sweep failed:", error);
       }
     }, 15 * 60 * 1000);
 
-    console.log("📅 Scheduled channel automation sweep to run every 15 minutes");
   }
 
   stopChannelAutomationSweep() {
     if (this.automationInterval) {
       clearInterval(this.automationInterval);
       this.automationInterval = null;
-      console.log("⏹️ Channel automation sweep scheduler stopped");
     }
   }
 
@@ -143,7 +128,6 @@ class SchedulerService {
     if (this.programmingMaintenanceInterval) {
       clearInterval(this.programmingMaintenanceInterval);
       this.programmingMaintenanceInterval = null;
-      console.log("⏹️ Programming maintenance scheduler stopped");
     }
   }
 
@@ -156,12 +140,37 @@ class SchedulerService {
   }
 
   /**
+   * Start stream watchdog for monitoring and auto-recovery
+   */
+  async startStreamWatchdog() {
+    try {
+      const { streamWatchdog } = await import('./stream-watchdog');
+      streamWatchdog.start();
+    } catch (error) {
+      console.error('❌ Failed to start stream watchdog:', error);
+    }
+  }
+
+  /**
+   * Stop stream watchdog
+   */
+  stopStreamWatchdog() {
+    try {
+      const { streamWatchdog } = require('./stream-watchdog');
+      streamWatchdog.stop();
+    } catch (error) {
+      console.error('❌ Failed to stop stream watchdog:', error);
+    }
+  }
+
+  /**
    * Stop all scheduled tasks
    */
   stopAll() {
     this.stopWatchTowerSync();
     this.stopProgrammingMaintenance();
     this.stopChannelAutomationSweep();
+    this.stopStreamWatchdog();
   }
 }
 

@@ -28,7 +28,7 @@ export const auth = betterAuth({
       secure: false, // Allow cookies over HTTP in development
       httpOnly: true,
     }
-  }
+  },
 });
 
 // Export auth options for compatibility with next-auth patterns

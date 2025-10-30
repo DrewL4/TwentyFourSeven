@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const now = new Date();
 
     if (debug) {
-      console.log(`[M3U8] Generating playlist for channel ${channelNumber} at ${now.toISOString()}`);
+      
     }
 
     // Get channel with current and upcoming programs
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     const relevantPrograms = TimingService.filterRelevantPrograms(channel.programs, 1, 4, now);
 
     if (debug) {
-      console.log(`[M3U8] Found ${channel.programs.length} total programs, ${relevantPrograms.length} relevant for time window`);
+      
     }
 
     // Generate M3U8 playlist with proper timing
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
       // Skip programs that have completely ended
       if (!timing.isActive && timing.remainingMs === 0) {
         if (debug) {
-          console.log(`[M3U8] Skipping ended program: ${program.episode?.show?.title || program.movie?.title || 'Unknown'}`);
+          
         }
         continue;
       }
@@ -120,38 +120,28 @@ export async function GET(request: NextRequest) {
         
         if (videoUrl) {
           const effectiveDuration = TimingService.calculateEffectiveDuration(
-            program.startTime, 
-            program.duration, 
+            program.startTime,
+            program.duration,
             now
           );
-          
+
           m3u8 += `#EXTINF:${effectiveDuration},${title}\n`;
           m3u8 += `${videoUrl}\n`;
           programCount++;
-          
+
           if (debug) {
             TimingService.debugTiming(program.startTime, program.duration, title, now);
-            console.log(`[M3U8] Added program: ${title} (${effectiveDuration}s effective duration)`);
           }
-        } else if (debug) {
-          console.log(`[M3U8] No valid stream URL for program: ${title}`);
         }
       } catch (error) {
-        console.error(`[M3U8] Error processing program: ${title}`, error);
-        if (debug) {
-          console.error(`[M3U8] Program details:`, {
-            startTime: program.startTime,
-            duration: program.duration,
-            timing
-          });
-        }
+        console.error(`Error processing program: ${title}`, error);
       }
     }
     
     m3u8 += '#EXT-X-ENDLIST\n';
 
     if (debug) {
-      console.log(`[M3U8] Generated playlist with ${programCount} programs for channel ${channel.name}`);
+      
     }
 
     return new NextResponse(m3u8, {
@@ -162,7 +152,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error generating M3U8:', error);
+    
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 

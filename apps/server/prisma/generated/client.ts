@@ -143,6 +143,16 @@ export type PlexSettings = Prisma.PlexSettingsModel
  * 
  */
 export type WebhookActivity = Prisma.WebhookActivityModel
+/**
+ * Model Viewer
+ * 
+ */
+export type Viewer = Prisma.ViewerModel
+/**
+ * Model ViewingHistory
+ * 
+ */
+export type ViewingHistory = Prisma.ViewingHistoryModel
 
 export type ServerType = $Enums.ServerType
 export const ServerType = $Enums.ServerType

@@ -8,7 +8,6 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 // Function to clear cache (useful for debugging)
 function clearXmltvCache() {
   xmltvCache = null;
-  console.log('🗑️ XMLTV cache cleared');
 }
 
 /**
@@ -59,7 +58,6 @@ export async function GET(request: NextRequest) {
     // Check cache first (unless bypassing)
     const now = Date.now();
     if (!bypassCache && xmltvCache && (now - xmltvCache.timestamp) < CACHE_DURATION) {
-      console.log('🎯 XMLTV cache hit - serving cached data');
       return new NextResponse(xmltvCache.data, {
         headers: {
           'Content-Type': 'application/xml; charset=utf-8',
@@ -70,17 +68,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    console.log('🔄 XMLTV cache miss - generating fresh data');
     const startTime = performance.now();
 
     const settings = await prisma.settings.findUnique({ where: { id: "singleton" } });
     const guideDays = settings?.guideDays || 3;
     const settingsLoadTime = performance.now();
-    console.log(`⚙️ Settings loaded in ${(settingsLoadTime - startTime).toFixed(2)}ms`);
-    console.log(`📅 Guide days setting: ${guideDays} (from ${settings?.guideDays ? 'database' : 'default'})`);
 
     const channels = await prisma.channel.findMany({ where: { stealth: false }, orderBy: { number: 'asc' } });
-    console.log(`📺 Channels loaded (${channels.length}) in ${(performance.now() - startTime).toFixed(2)}ms`);
 
     // Helper to ensure absolute URLs
     const isAbsolute = (url?: string | null) => !!url && /^(https?:)?\/\//i.test(url);
@@ -99,8 +93,6 @@ export async function GET(request: NextRequest) {
     const queryStartTime = new Date(queryNow.getTime() - 4 * 60 * 60 * 1000);
     const queryEndTime = new Date(queryNow.getTime() + guideDays * 24 * 60 * 60 * 1000);
 
-    console.log(`📅 Query time range: ${queryStartTime.toISOString()} to ${queryEndTime.toISOString()}`);
-    console.log(`⏱️ Time span: ${Math.round((queryEndTime.getTime() - queryStartTime.getTime()) / (1000 * 60 * 60))} hours`);
     const programs = await prisma.program.findMany({
       where: { startTime: { gte: queryStartTime, lte: queryEndTime } },
       include: {
@@ -138,16 +130,12 @@ export async function GET(request: NextRequest) {
       orderBy: [ { channel: { number: 'asc' } }, { startTime: 'asc' } ]
     });
     const programsLoadTime = performance.now();
-    console.log(`📋 Programs loaded (${programs.length}) in ${(programsLoadTime - startTime).toFixed(2)}ms`);
 
     const expectedProgramsPerChannel = Math.round(programs.length / channels.length);
     const programsPerDay = Math.round(programs.length / guideDays);
-    console.log(`📊 Programs per channel: ${expectedProgramsPerChannel}, per day: ${programsPerDay}`);
 
     // Log warning for large datasets that may cause slow XMLTV generation
     if (programs.length > 1000) {
-      console.log(`⚠️ Large dataset (${programs.length} programs) - XMLTV generation may be slow`);
-      console.log('💡 Consider reducing guideDays setting to improve performance');
     }
 
     // Check for channels without programming and log warnings
@@ -163,7 +151,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Use pre-cached channel icons for maximum performance
-    console.log('🎨 Using cached channel icons for maximum performance');
     const channelIconMap = new Map<string, string>();
 
     // Process channel icons using cached/optimized data
@@ -233,7 +220,6 @@ export async function GET(request: NextRequest) {
       channelIdMap.set(channel.id, escapeXml(channel.name));
     }
 
-    console.log(`🚀 Starting XML generation for ${programs.length} programs`);
     const xmlStartTime = performance.now();
 
     for (const program of programs) {
@@ -337,7 +323,6 @@ export async function GET(request: NextRequest) {
 
         // Debug: Log progress every 100 programs
         if (xmltvParts.length % 100 === 0) {
-          console.log(`📊 Processed ${xmltvParts.length} XML elements in ${(performance.now() - xmlStartTime).toFixed(2)}ms`);
         }
       } else if (program.movie) {
         const movie = program.movie;
@@ -437,7 +422,6 @@ export async function GET(request: NextRequest) {
 
         // Debug: Log progress every 100 programs
         if (xmltvParts.length % 100 === 0) {
-          console.log(`📊 Processed ${xmltvParts.length} XML elements in ${(performance.now() - xmlStartTime).toFixed(2)}ms`);
         }
         // Close the programme element for movies
       }
@@ -468,14 +452,11 @@ export async function GET(request: NextRequest) {
     const xmltv = xmltvParts.join('\n');
     const xmlGeneratedTime = performance.now();
     const xmlGenerationDuration = xmlGeneratedTime - programsLoadTime;
-    console.log(`📄 XMLTV generated (${(xmltv.length / 1024 / 1024).toFixed(2)}MB) in ${xmlGenerationDuration.toFixed(2)}ms`);
 
     // Cache the generated XMLTV data
     xmltvCache = { data: xmltv, timestamp: Date.now() };
-    console.log('💾 XMLTV data cached successfully');
 
     const totalTime = performance.now() - startTime;
-    console.log(`🏁 Total XMLTV generation completed in ${totalTime.toFixed(2)}ms`);
     return new NextResponse(xmltv, {
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',

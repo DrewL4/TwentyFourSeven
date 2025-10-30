@@ -11,7 +11,6 @@ async function checkAdminAuthOrAllowConfigCheck(request: NextRequest) {
 
 // GET /api/admin/watchtower/status
 export async function GET(request: NextRequest) {
-  console.log('📊 WatchTower status endpoint called');
   
   const authError = await checkAdminAuthOrAllowConfigCheck(request);
   if (authError) return authError;
@@ -32,7 +31,6 @@ export async function GET(request: NextRequest) {
     }, {});
 
     const isConfigured = !!(configMap.watchtower_url && configMap.watchtower_api_token);
-    console.log('🔧 WatchTower configured:', isConfigured);
 
     if (!isConfigured) {
       return NextResponse.json({
@@ -44,7 +42,6 @@ export async function GET(request: NextRequest) {
 
     // Test connection to WatchTower using CrossAppToken validation
     try {
-      console.log('🌐 Testing connection to WatchTower...');
       const response = await fetch(`${configMap.watchtower_url}/api/v1/auth/validate-api-token/`, {
         method: 'POST',
         headers: {
@@ -56,7 +53,6 @@ export async function GET(request: NextRequest) {
       });
 
       const connected = response.ok;
-      console.log('📡 WatchTower connection test result:', connected);
       let connectionDetails = null;
 
       if (connected) {

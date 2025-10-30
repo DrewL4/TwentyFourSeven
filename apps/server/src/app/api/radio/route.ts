@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
     return handleOfflineAudio(channel);
 
   } catch (error) {
-    console.error('Error streaming radio:', error);
+    
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

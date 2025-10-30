@@ -1,0 +1,32 @@
+model Viewer {
+  id        String   @id @default(cuid()) @map("_id")
+  ipAddress String   @unique
+  name      String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?  // Admin user ID who created the mapping
+
+  @@index([ipAddress])
+  @@map("viewer")
+}
+
+model ViewingHistory {
+  id           String    @id @default(cuid()) @map("_id")
+  ipAddress    String
+  channelNumber Int
+  channelName  String?
+  programTitle String?
+  startTime    DateTime  @default(now())
+  endTime      DateTime?
+  duration     Int?      // Duration in seconds
+  status       String    @default("active") // active, completed, failed
+  sessionId    String?   // Reference to stream session ID
+
+  @@index([ipAddress])
+  @@index([startTime])
+  @@index([channelNumber])
+  @@index([status])
+  @@map("viewing_history")
+}
+

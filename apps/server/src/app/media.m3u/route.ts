@@ -12,7 +12,6 @@ export async function GET(request: NextRequest) {
     const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '247.midweststreams.us';
     const baseUrl = `https://${forwardedHost}`;
 
-    console.log('🔍 M3U Generated baseUrl:', baseUrl);
 
     // Helpers
     const isAbsolute = (url?: string | null) => !!url && /^(https?:)?\/\//i.test(url);

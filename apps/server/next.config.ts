@@ -9,12 +9,16 @@ const nextConfig: NextConfig = {
       return [];
     }
 
+    // Use CORS_ORIGIN env var if available, otherwise default to web port 3001
+    // (since server is typically on 3000 and web on 3001)
+    const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3001';
+    
     return [
       {
         // Apply CORS headers to all API routes (development only)
         source: '/api/:path*',
         headers: [
-          { key: 'Access-Control-Allow-Origin', value: 'http://localhost:3000' },
+          { key: 'Access-Control-Allow-Origin', value: corsOrigin },
           { key: 'Access-Control-Allow-Credentials', value: 'true' },
           { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
           { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, Cookie' },

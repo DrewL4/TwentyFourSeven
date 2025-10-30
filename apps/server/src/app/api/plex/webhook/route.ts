@@ -51,7 +51,6 @@ interface PlexWebhookPayload {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('📡 Received Plex webhook');
     
     // Check if webhooks are enabled
     const plexSettings = await prisma.plexSettings.findUnique({
@@ -59,7 +58,6 @@ export async function POST(request: NextRequest) {
     });
     
     if (!plexSettings?.webhookEnabled) {
-      console.log('⚠️ Plex webhooks are disabled, ignoring request');
       return NextResponse.json({ message: 'Webhooks disabled' }, { status: 200 });
     }
     
@@ -68,7 +66,6 @@ export async function POST(request: NextRequest) {
     const payloadEntry = formData.get('payload');
     
     if (!payloadEntry) {
-      console.log('❌ No payload in webhook');
       return NextResponse.json({ error: 'No payload' }, { status: 400 });
     }
 
@@ -77,15 +74,12 @@ export async function POST(request: NextRequest) {
     if (payloadEntry instanceof File) {
       // If it's a File object, read the text content
       payload = await payloadEntry.text();
-      console.log('📄 Received payload as File, extracted text content');
     } else {
       // If it's already a string, use it directly
       payload = payloadEntry as string;
-      console.log('📝 Received payload as string');
     }
 
     const webhookData: PlexWebhookPayload = JSON.parse(payload);
-    console.log(`📺 Plex webhook event: ${webhookData.event} for ${webhookData.Metadata?.title || 'unknown'}`);
 
     // Log webhook activity
     const webhookActivity = await prisma.webhookActivity.create({
@@ -150,11 +144,9 @@ async function handleLibraryEvent(webhookData: PlexWebhookPayload) {
     });
 
     if (!plexServer) {
-      console.log(`⚠️ Webhook from unknown Plex server: ${Server.title}`);
       return;
     }
 
-    console.log(`🔄 Processing ${webhookData.event} for ${Metadata.title} on server ${Server.title}`);
 
     // Trigger selective sync based on content type
     if (Metadata.librarySectionType === 'movie' && Metadata.type === 'movie') {
@@ -170,7 +162,6 @@ async function handleLibraryEvent(webhookData: PlexWebhookPayload) {
     // Trigger channel automation after webhook processing
     const { channelAutomationService } = await import('@/lib/channel-automation-service');
     await channelAutomationService.processAutomatedChannels();
-    console.log('✅ Channel automation processed after webhook');
 
   } catch (error) {
     console.error('❌ Error handling library event:', error);
@@ -179,19 +170,16 @@ async function handleLibraryEvent(webhookData: PlexWebhookPayload) {
 
 async function syncSingleMovie(plexServer: any, metadata: any) {
   try {
-    console.log(`🎬 Syncing movie: ${metadata.title}`);
     // Find the library this movie belongs to
     const library = await prisma.mediaLibrary.findFirst({
       where: { serverId: plexServer.id, key: metadata.librarySectionID.toString() }
     });
     if (!library) {
-      console.log(`⚠️ Library not found for section ID: ${metadata.librarySectionID}`);
       return;
     }
     const { PlexAPI } = await import('@/lib/plex');
     const plex = new PlexAPI({ uri: plexServer.url });
     if (!plexServer.token) {
-      console.log('⚠️ No token for Plex server');
       return;
     }
     // Attempt to fetch full metadata for collections, genres, etc.
@@ -252,7 +240,6 @@ async function syncSingleMovie(plexServer: any, metadata: any) {
       }
     });
 
-    console.log(`✅ Movie synced: ${metadata.title}`);
   } catch (error) {
     console.error(`❌ Error syncing movie ${metadata.title}:`, error);
   }
@@ -260,18 +247,15 @@ async function syncSingleMovie(plexServer: any, metadata: any) {
 
 async function syncSingleShow(plexServer: any, metadata: any) {
   try {
-    console.log(`📺 Syncing show: ${metadata.title}`);
     const library = await prisma.mediaLibrary.findFirst({
       where: { serverId: plexServer.id, key: metadata.librarySectionID.toString() }
     });
     if (!library) {
-      console.log(`⚠️ Library not found for section ID: ${metadata.librarySectionID}`);
       return;
     }
     const { PlexAPI } = await import('@/lib/plex');
     const plex = new PlexAPI({ uri: plexServer.url });
     if (!plexServer.token) {
-      console.log('⚠️ No token for Plex server');
       return;
     }
 
@@ -331,7 +315,6 @@ async function syncSingleShow(plexServer: any, metadata: any) {
       }
     });
 
-    console.log(`✅ Show synced: ${metadata.title}`);
   } catch (error) {
     console.error(`❌ Error syncing show ${metadata.title}:`, error);
   }
@@ -339,7 +322,6 @@ async function syncSingleShow(plexServer: any, metadata: any) {
 
 async function syncSingleEpisode(plexServer: any, metadata: any) {
   try {
-    console.log(`📺 Syncing episode: ${metadata.grandparentTitle} - ${metadata.title}`);
     
     // First, find the parent show
     const show = await prisma.mediaShow.findFirst({
@@ -352,7 +334,6 @@ async function syncSingleEpisode(plexServer: any, metadata: any) {
     });
 
     if (!show) {
-      console.log(`⚠️ Parent show not found for episode: ${metadata.title}`);
       return;
     }
 
@@ -361,7 +342,6 @@ async function syncSingleEpisode(plexServer: any, metadata: any) {
     const plex = new PlexAPI({ uri: plexServer.url });
     
     if (!plexServer.token) {
-      console.log('⚠️ No token for Plex server');
       return;
     }
 
@@ -393,7 +373,6 @@ async function syncSingleEpisode(plexServer: any, metadata: any) {
       }
     });
 
-    console.log(`✅ Episode synced: ${metadata.grandparentTitle} - ${metadata.title}`);
   } catch (error) {
     console.error(`❌ Error syncing episode ${metadata.title}:`, error);
   }
@@ -414,11 +393,9 @@ async function handleLibraryDeleteEvent(webhookData: PlexWebhookPayload) {
     });
 
     if (!plexServer) {
-      console.log(`⚠️ Webhook from unknown Plex server: ${Server.title}`);
       return;
     }
 
-    console.log(`🗑️ Processing library.delete for ${Metadata.title} (${Metadata.type}) on server ${Server.title}`);
 
     // Identify corresponding library (only needed for movie/show deletes)
     let library: any = null;
@@ -440,7 +417,6 @@ async function handleLibraryDeleteEvent(webhookData: PlexWebhookPayload) {
           ratingKey: Metadata.ratingKey
         }
       });
-      console.log(`✅ Movie removed: ${Metadata.title}`);
     } else if (Metadata.librarySectionType === 'show') {
       if (Metadata.type === 'show') {
         if (!library) return;
@@ -450,7 +426,6 @@ async function handleLibraryDeleteEvent(webhookData: PlexWebhookPayload) {
             ratingKey: Metadata.ratingKey
           }
         });
-        console.log(`✅ Show removed: ${Metadata.title}`);
       } else if (Metadata.type === 'episode') {
         // Episode deletion – need parent show first
         const parentShow = await prisma.mediaShow.findFirst({
@@ -465,7 +440,6 @@ async function handleLibraryDeleteEvent(webhookData: PlexWebhookPayload) {
               ratingKey: Metadata.ratingKey
             }
           });
-          console.log(`✅ Episode removed: ${Metadata.grandparentTitle} - ${Metadata.title}`);
         }
       }
     }

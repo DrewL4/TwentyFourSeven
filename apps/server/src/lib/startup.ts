@@ -30,21 +30,16 @@ export class StartupService {
   }
 
   private static async _doInitialization() {
-    console.log('🚀 Initializing TwentyFour/Seven server...');
     
     try {
       // Check if we have any programs
       const programCount = await prisma.program.count();
       
       if (programCount === 0) {
-        console.log('📺 No programs found, generating initial programming...');
         await programmingService.generateProgramsForAllChannels(); // Use guideDays setting
-        console.log('✅ Initial programming generated');
       } else {
-        console.log(`📺 Found ${programCount} existing programs`);
         // No automatic maintenance or regeneration here
         // await programmingService.maintainPrograms();
-        // console.log('✅ Programming maintained');
       }
 
       // Initialize automatic Plex library sync
@@ -59,7 +54,9 @@ export class StartupService {
       // Initialize periodic channel automation sweep
       await this.initializeChannelAutomation();
 
-      console.log('✅ TwentyFour/Seven server initialized successfully');
+      // Initialize stream watchdog for monitoring and auto-recovery
+      await this.initializeStreamWatchdog();
+
     } catch (error) {
       console.error('❌ Error during server initialization:', error);
       throw error;
@@ -86,7 +83,6 @@ export class StartupService {
       const plexSettings = await prisma.plexSettings.findFirst();
       
       if (!plexSettings?.autoRefreshLibraries) {
-        console.log('📡 Automatic Plex sync is disabled');
         return;
       }
 
@@ -106,7 +102,6 @@ export class StartupService {
       }
 
       if (plexServers.length > 0) {
-        console.log(`📡 Scheduled automatic sync for ${plexServers.length} Plex servers`);
       }
     } catch (error) {
       console.error('❌ Error initializing automatic Plex sync:', error);
@@ -129,17 +124,14 @@ export class StartupService {
     // Schedule recurring sync
     const interval = setInterval(async () => {
       try {
-        console.log(`🔄 Starting automatic Plex sync for server ${serverId}`);
         const { PlexService } = await import('./plex-service');
         await PlexService.syncLibraries(serverId);
-        console.log(`✅ Completed automatic Plex sync for server ${serverId}`);
       } catch (error) {
         console.error(`❌ Error during automatic Plex sync for server ${serverId}:`, error);
       }
     }, intervalMs);
 
     this.syncIntervals.set(serverId, interval);
-    console.log(`📅 Scheduled Plex server ${serverId} to sync every ${intervalHours} hours`);
   }
 
   /**
@@ -153,7 +145,6 @@ export class StartupService {
       if (existingInterval) {
         clearInterval(existingInterval);
         this.syncIntervals.delete(serverId);
-        console.log(`🚫 Disabled automatic sync for Plex server ${serverId}`);
       }
     }
   }
@@ -164,7 +155,6 @@ export class StartupService {
   private static async initializeProgrammingMaintenance() {
     try {
       await scheduler.startProgrammingMaintenance();
-      console.log('📺 Programming maintenance initialized - channels will never end!');
     } catch (error) {
       console.error('❌ Error initializing programming maintenance:', error);
     }
@@ -176,9 +166,19 @@ export class StartupService {
   private static async initializeChannelAutomation() {
     try {
       await scheduler.startChannelAutomationSweep();
-      console.log('🤖 Channel automation initialized - collections and filters stay in sync');
     } catch (error) {
       console.error('❌ Error initializing channel automation:', error);
+    }
+  }
+
+  /**
+   * Initialize stream watchdog for monitoring and auto-recovery
+   */
+  private static async initializeStreamWatchdog() {
+    try {
+      await scheduler.startStreamWatchdog();
+    } catch (error) {
+      console.error('❌ Error initializing stream watchdog:', error);
     }
   }
 
@@ -188,7 +188,6 @@ export class StartupService {
   static cleanup() {
     for (const [serverId, interval] of this.syncIntervals) {
       clearInterval(interval);
-      console.log(`🧹 Cleaned up sync interval for server ${serverId}`);
     }
     this.syncIntervals.clear();
     

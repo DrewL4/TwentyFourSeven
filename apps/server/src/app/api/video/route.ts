@@ -4,6 +4,9 @@ import { TimingService } from '@/lib/timing-service';
 import { PlexAPI } from '@/lib/plex';
 import { spawn, ChildProcess } from 'child_process';
 import { PassThrough } from 'stream';
+import { streamMonitorService } from '@/lib/stream-monitor-service';
+import { streamRecoveryService } from '@/lib/stream-recovery-service';
+import { viewingHistoryService } from '@/lib/viewing-history-service';
 
 // This is a requirement for using readable streams in a NextResponse.
 export const dynamic = 'force-dynamic';
@@ -198,9 +201,9 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number, options?:
 
     // Log the transcoding method being used
     if (useEnvironmentFallback) {
-        console.log(`[FFmpeg] Using environment fallback - Hardware: ${forceSoftware ? 'disabled' : (hardwareAccelType || 'cpu')}, Codec: ${videoCodec}`);
+        
     } else {
-        console.log(`[FFmpeg] Using database settings - Hardware: ${forceSoftware ? 'disabled' : (ffmpegSettings?.enableHardwareAccel ? ffmpegSettings.hardwareAccelType : 'disabled')}, Codec: ${videoCodec}`);
+        
     }
 
     return args;
@@ -233,13 +236,72 @@ export async function GET(request: NextRequest) {
     const streamUrl = `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`;
     const seekSeconds = timing.seekOffsetMs > 0 ? Math.floor(timing.seekOffsetMs / 1000) : 0;
 
+    // Get client IP for session tracking
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+                     request.headers.get('x-real-ip') || 
+                     undefined;
+
+    // Get channel info for viewing history
+    const channel = await prisma.channel.findUnique({
+      where: { number: channelNumber },
+      select: { name: true },
+    });
+
+    // Get program title (movie or episode)
+    let programTitle: string | undefined;
+    const currentProgram = (await prisma.channel.findUnique({
+      where: { number: channelNumber },
+      include: {
+        programs: {
+          where: { startTime: { lte: new Date() } },
+          include: {
+            movie: true,
+            episode: { include: { show: true } },
+          },
+          orderBy: { startTime: 'desc' },
+          take: 1,
+        },
+      },
+    }))?.programs[0];
+    
+    if (currentProgram?.movie) {
+      programTitle = currentProgram.movie.title;
+    } else if (currentProgram?.episode) {
+      programTitle = `${currentProgram.episode.show.title} - ${currentProgram.episode.title || 'Episode'}`;
+    }
+
+    // Create stream session for monitoring
+    const sessionId = streamMonitorService.createSession(
+      channelNumber,
+      { ratingKey: programInfo.ratingKey },
+      clientIp
+    );
+
+    // Update session metadata
+    streamMonitorService.updateSessionMetadata(sessionId, {
+      streamUrl,
+      seekSeconds,
+      restartedToSoftware: false,
+    });
+
+    // Record viewing session start
+    if (clientIp) {
+      viewingHistoryService.recordSessionStart(
+        sessionId,
+        clientIp,
+        channelNumber,
+        channel?.name,
+        programTitle
+      ).catch((error) => {
+        
+        // Don't block streaming on history logging errors
+      });
+    }
+
     // Shared passthrough for the lifetime of the HTTP response
     const passthrough = new PassThrough();
 
-    // Simple GPU fail-safe: try hardware first, on failure auto-restart with software encoder (once)
-    let restartedToSoftware = false;
-    let currentFfmpeg: ChildProcess | null = null;
-
+    // Enhanced error patterns for better error detection
     const gpuErrorPatterns = [
       /nvenc/i,
       /cuInit/i,
@@ -254,45 +316,182 @@ export async function GET(request: NextRequest) {
       /failed/i,
     ];
 
+    // Enhanced error patterns for network/codec/file errors
+    const networkErrorPatterns = [
+      /network/i,
+      /timeout/i,
+      /connection/i,
+      /ECONNREFUSED/i,
+      /ENOTFOUND/i,
+      /ETIMEDOUT/i,
+    ];
+
+    const codecErrorPatterns = [
+      /codec/i,
+      /encoder/i,
+      /decoder/i,
+      /unsupported/i,
+      /Invalid data/i,
+    ];
+
+    let restartedToSoftware = false;
+    let currentFfmpeg: ChildProcess | null = null;
+    let isAborted = false;
+
     const startFfmpeg = async (forceSoftware: boolean) => {
-      const ffmpegArgs = await buildFfmpegArgs(streamUrl, seekSeconds, { forceSoftware });
-      console.log(`[FFmpeg] Spawning FFmpeg with args: ${ffmpegArgs.join(' ')}`);
+      if (isAborted) {
+        return null;
+      }
+
+      const currentSession = streamMonitorService.getSession(sessionId);
+      if (!currentSession) {
+        return null;
+      }
+
+      // Use session metadata for stream URL and seek
+      const activeStreamUrl = currentSession.streamUrl || streamUrl;
+      const activeSeekSeconds = currentSession.seekSeconds || seekSeconds;
+
+      const ffmpegArgs = await buildFfmpegArgs(activeStreamUrl, activeSeekSeconds, { forceSoftware });
+      
       const child = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+      
+      // Update session with FFmpeg process
+      streamMonitorService.setFfmpegProcess(sessionId, child);
+      
+      // Track output activity (event-driven monitoring)
+      child.stdout.on('data', () => {
+        streamMonitorService.updateOutputActivity(sessionId);
+      });
+      
       child.stdout.pipe(passthrough, { end: false });
 
       child.stderr.on('data', (data) => {
         const text = data.toString();
-        console.error(`[FFmpeg] stderr: ${text}`);
-        // If we detect GPU-related errors and haven't switched yet, restart with software
-        if (!restartedToSoftware && gpuErrorPatterns.some((p) => p.test(text))) {
+        
+        
+        // Track activity on stderr output as well
+        streamMonitorService.updateActivity(sessionId);
+
+        // Detect errors and classify them
+        const hasGpuError = gpuErrorPatterns.some((p) => p.test(text));
+        const hasNetworkError = networkErrorPatterns.some((p) => p.test(text));
+        const hasCodecError = codecErrorPatterns.some((p) => p.test(text));
+
+        // GPU error: try software fallback first (legacy behavior)
+        if (!restartedToSoftware && hasGpuError) {
           restartedToSoftware = true;
-          console.warn('[FFmpeg] Detected hardware acceleration error; restarting with software encoder...');
-          try { child.kill('SIGKILL'); } catch {}
+          
+          streamMonitorService.addError(sessionId, `GPU error: ${text.substring(0, 100)}`);
+          streamMonitorService.updateSessionMetadata(sessionId, { restartedToSoftware: true });
+          
+          try { 
+            child.kill('SIGKILL'); 
+          } catch {}
+          
           // Start software fallback
           startFfmpeg(true).catch((err) => {
-            console.error('[FFmpeg] Software fallback failed to start:', err);
+            
+            streamMonitorService.addError(sessionId, `Software fallback failed: ${err.message}`);
+            streamMonitorService.updateStatus(sessionId, 'failed');
             passthrough.end();
+          });
+          return;
+        }
+
+        // Network or codec errors: attempt recovery via recovery service
+        if (hasNetworkError || hasCodecError) {
+          const errorType = hasNetworkError ? 'Network error' : 'Codec error';
+          const errorMessage = `${errorType}: ${text.substring(0, 100)}`;
+          
+          streamMonitorService.addError(sessionId, errorMessage);
+          
+          // Attempt recovery (will check limits and circuit breaker internally)
+          streamRecoveryService.attemptRecovery(sessionId, errorMessage, buildFfmpegArgs)
+            .then((result) => {
+              if (result.success && result.process) {
+                // Recovery succeeded - update process reference
+                streamMonitorService.setFfmpegProcess(sessionId, result.process);
+                if (result.process.stdout) {
+                  result.process.stdout.on('data', () => {
+                    streamMonitorService.updateOutputActivity(sessionId);
+                  });
+                  result.process.stdout.pipe(passthrough, { end: false });
+                }
+                currentFfmpeg = result.process;
+              } else {
+                // Recovery failed
+                
+                streamMonitorService.updateStatus(sessionId, 'failed');
+                passthrough.end();
+              }
+            })
+            .catch((err) => {
+              
+              streamMonitorService.updateStatus(sessionId, 'failed');
+              passthrough.end();
+            });
+        }
+      });
+
+      child.on('error', (error) => {
+        
+        streamMonitorService.addError(sessionId, `Process error: ${error.message}`);
+        
+        // Attempt recovery for process errors
+        if (!isAborted) {
+          streamRecoveryService.attemptRecovery(sessionId, error.message, buildFfmpegArgs)
+            .then((result) => {
+              if (result.success && result.process) {
+                streamMonitorService.setFfmpegProcess(sessionId, result.process);
+                if (result.process.stdout) {
+                  result.process.stdout.on('data', () => {
+                    streamMonitorService.updateOutputActivity(sessionId);
+                  });
+                  result.process.stdout.pipe(passthrough, { end: false });
+                }
+                currentFfmpeg = result.process;
+              } else {
+                streamMonitorService.updateStatus(sessionId, 'failed');
+                passthrough.end();
+              }
           });
         }
       });
 
       child.on('close', (code) => {
-        console.log(`[FFmpeg] process exited with code ${code}`);
-        // If this is an old process (we already restarted), ignore this close event based on PID
+        
+        
+        // Ignore if this is an old process (we already restarted)
         if (!currentFfmpeg || currentFfmpeg.pid !== child.pid) {
           return;
         }
-        // If hardware run exited non-zero and we have not restarted, try software
-        if (code !== 0 && !restartedToSoftware) {
+
+        // If process exited with error and haven't tried software fallback
+        if (code !== 0 && !restartedToSoftware && !isAborted) {
           restartedToSoftware = true;
-          console.warn('[FFmpeg] FFmpeg exited with error; restarting with software encoder...');
+          
+          streamMonitorService.addError(sessionId, `FFmpeg exited with code ${code}`);
+          streamMonitorService.updateSessionMetadata(sessionId, { restartedToSoftware: true });
+          
           startFfmpeg(true).catch((err) => {
-            console.error('[FFmpeg] Software fallback failed to start:', err);
+            
+            streamMonitorService.addError(sessionId, `Software fallback failed: ${err.message}`);
+            streamMonitorService.updateStatus(sessionId, 'failed');
             passthrough.end();
           });
           return;
         }
+
         // Normal end (client abort or final process finished)
+        if (!isAborted) {
+          streamMonitorService.updateStatus(sessionId, 'failed');
+          
+          // Record session end with failed status
+          viewingHistoryService.recordSessionEnd(sessionId, 'failed').catch((error) => {
+            
+          });
+        }
         passthrough.end();
       });
 
@@ -304,10 +503,21 @@ export async function GET(request: NextRequest) {
     await startFfmpeg(false);
 
     // Handle client abort
-    request.signal.onabort = () => {
-      console.log('[FFmpeg] Client aborted request. Killing FFmpeg.');
-      try { currentFfmpeg?.kill('SIGKILL'); } catch {}
-    };
+    request.signal.addEventListener('abort', () => {
+      isAborted = true;
+      
+      try { 
+        currentFfmpeg?.kill('SIGKILL'); 
+      } catch {}
+      
+      // Record session end
+      viewingHistoryService.recordSessionEnd(sessionId, 'completed').catch((error) => {
+        
+      });
+      
+      streamMonitorService.removeSession(sessionId);
+      streamRecoveryService.cleanup(sessionId);
+    });
     
     return new NextResponse(passthrough as any, {
       status: 200,
@@ -317,7 +527,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error(`Error streaming video for channel ${channelNumber}:`, error.message);
+    
     return new NextResponse(error.message, { status: 500 });
   }
 } 

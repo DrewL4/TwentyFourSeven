@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "../lib/orpc";
 import { prisma } from "../lib/prisma";
+import { requireAdminAsync } from "../lib/admin-auth";
+import { viewingHistoryService } from "../lib/viewing-history-service";
 
 export const appRouter = {
   healthCheck: publicProcedure.handler(() => {
@@ -189,7 +191,7 @@ export const appRouter = {
             const { channelAutomationService } = await import('@/lib/channel-automation-service');
             await channelAutomationService.processAutomatedChannels();
           } catch (e) {
-            console.error('Failed to run automation after bulk create:', e);
+            
           }
         });
 
@@ -334,7 +336,7 @@ export const appRouter = {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.generateProgramsForChannel(input.channelId, 24);
         } catch (error) {
-          console.error('Failed to generate programs after adding show:', error);
+          
         }
         
         return result;
@@ -360,7 +362,7 @@ export const appRouter = {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.generateProgramsForChannel(input.channelId, 24);
         } catch (error) {
-          console.error('Failed to generate programs after removing show:', error);
+          
         }
         
         return result;
@@ -382,7 +384,7 @@ export const appRouter = {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.generateProgramsForChannel(input.channelId, 24);
         } catch (error) {
-          console.error('Failed to generate programs after adding movie:', error);
+          
         }
         
         return result;
@@ -408,7 +410,7 @@ export const appRouter = {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.generateProgramsForChannel(input.channelId, 24);
         } catch (error) {
-          console.error('Failed to generate programs after removing movie:', error);
+          
         }
         
         return result;
@@ -820,7 +822,7 @@ export const appRouter = {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.generateProgramsForChannel(input.channelId, 24);
         } catch (error) {
-          console.error('Failed to generate programs after reordering content:', error);
+          
         }
         
         return result;
@@ -872,7 +874,7 @@ export const appRouter = {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.generateProgramsForChannel(input.channelId, 24);
         } catch (error) {
-          console.error('Failed to generate programs after reordering episodes:', error);
+          
         }
         
         return result;
@@ -885,10 +887,10 @@ export const appRouter = {
         try {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.generateProgramsForChannel(input.channelId, 24);
-          console.log(`Successfully regenerated schedule for channel: ${input.channelId}`);
+          
           return { success: true, message: "Schedule regenerated successfully" };
         } catch (error) {
-          console.error('Failed to regenerate schedule:', error);
+          
           throw new Error(`Failed to regenerate schedule: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }),
@@ -898,10 +900,10 @@ export const appRouter = {
         try {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.ensureAllChannelsHaveProgramming();
-          console.log('Successfully ensured all channels have programming');
+          
           return { success: true, message: "All channels now have programming. XMLTV should be fully populated." };
         } catch (error) {
-          console.error('Failed to ensure programming for all channels:', error);
+          
           throw new Error(`Failed to ensure programming: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }),
@@ -911,13 +913,13 @@ export const appRouter = {
         try {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.cacheChannelCollectionIcons();
-          console.log('Successfully cached channel collection icons');
+          
           return {
             success: true,
             message: "Channel collection icons have been cached. XMLTV generation will now be much faster and won't require Plex API calls."
           };
         } catch (error) {
-          console.error('Failed to cache channel collection icons:', error);
+          
           throw new Error(`Failed to cache icons: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }),
@@ -978,7 +980,7 @@ export const appRouter = {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.generateProgramsForChannel(input.channelId, 24);
         } catch (error) {
-          console.error('Failed to generate programs after shuffling content:', error);
+          
         }
         
         return result;
@@ -1536,14 +1538,14 @@ export const appRouter = {
         try {
           const { programmingService } = await import('@/lib/programming-service');
           await programmingService.ensureAllChannelsHaveProgramming();
-          console.log('Successfully fixed XMLTV programming via system endpoint');
+          
           return {
             success: true,
             message: "XMLTV programming has been fixed. All channels now have programming data.",
             details: "This ensures that the /media.xml endpoint will return complete guide data for all channels."
           };
         } catch (error) {
-          console.error('Failed to fix XMLTV programming:', error);
+          
           throw new Error(`Failed to fix XMLTV programming: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       })
@@ -1783,7 +1785,7 @@ export const appRouter = {
                 );
               }
             } catch (error) {
-              console.error('Failed to update sync schedules:', error);
+              
             }
           }
 
@@ -1933,6 +1935,83 @@ export const appRouter = {
         warnings: consistency.warnings
       };
     })
+  },
+
+  viewers: {
+    getActive: protectedProcedure.handler(async ({ context }) => {
+      await requireAdminAsync(context.session?.user?.id, prisma);
+      return await viewingHistoryService.getActiveViewers();
+    }),
+
+    getHistory: protectedProcedure
+      .input(
+        z.object({
+          ipAddress: z.string().optional(),
+          startDate: z.date().optional(),
+          endDate: z.date().optional(),
+          channelNumber: z.number().optional(),
+          limit: z.number().optional().default(50),
+          offset: z.number().optional().default(0),
+        })
+      )
+      .handler(async ({ input, context }) => {
+        await requireAdminAsync(context.session?.user?.id, prisma);
+        return await viewingHistoryService.getViewingHistory(input);
+      }),
+
+    listMappings: protectedProcedure.handler(async ({ context }) => {
+      await requireAdminAsync(context.session?.user?.id, prisma);
+      return await prisma.viewer.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
+    }),
+
+    createMapping: protectedProcedure
+      .input(
+        z.object({
+          ipAddress: z.string(),
+          name: z.string(),
+          notes: z.string().optional(),
+        })
+      )
+      .handler(async ({ input, context }) => {
+        await requireAdminAsync(context.session?.user?.id, prisma);
+
+        // Clear cache when creating/updating mapping
+        viewingHistoryService.clearCache();
+
+        return await viewingHistoryService.createIpMapping(input);
+      }),
+
+    deleteMapping: protectedProcedure
+      .input(
+        z.object({
+          id: z.string().optional(),
+          ipAddress: z.string().optional(),
+        })
+      )
+      .handler(async ({ input, context }) => {
+        await requireAdminAsync(context.session?.user?.id, prisma);
+        
+        const where = input.id 
+          ? { id: input.id }
+          : input.ipAddress 
+          ? { ipAddress: input.ipAddress }
+          : null;
+        
+        if (!where) {
+          throw new Error('Either id or ipAddress must be provided');
+        }
+        
+        // Clear cache when deleting mapping
+        viewingHistoryService.clearCache();
+        
+        await prisma.viewer.delete({
+          where,
+        });
+        
+        return { success: true };
+      }),
   }
 };
 

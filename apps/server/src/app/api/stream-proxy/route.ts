@@ -87,18 +87,18 @@ export async function GET(request: NextRequest) {
         streamUrl += `&t=${seekSeconds}`;
       }
 
-      console.log(`[StreamProxy] Resolved: ${ratingKey} -> ${streamUrl}`);
+      
 
       // Redirect to the direct file stream
       return NextResponse.redirect(streamUrl);
       
     } catch (error) {
-      console.error('Error resolving stream:', error);
+      
       return NextResponse.json({ error: 'Failed to resolve stream' }, { status: 500 });
     }
 
   } catch (error) {
-    console.error('Error in stream proxy:', error);
+    
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 

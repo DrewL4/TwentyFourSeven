@@ -411,7 +411,9 @@ export const ModelName = {
   Settings: 'Settings',
   FfmpegSettings: 'FfmpegSettings',
   PlexSettings: 'PlexSettings',
-  WebhookActivity: 'WebhookActivity'
+  WebhookActivity: 'WebhookActivity',
+  Viewer: 'Viewer',
+  ViewingHistory: 'ViewingHistory'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -427,7 +429,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "session" | "account" | "verification" | "setting" | "mediaServer" | "mediaLibrary" | "mediaShow" | "mediaEpisode" | "mediaMovie" | "channel" | "program" | "channelShow" | "channelMovie" | "settings" | "ffmpegSettings" | "plexSettings" | "webhookActivity"
+    modelProps: "user" | "session" | "account" | "verification" | "setting" | "mediaServer" | "mediaLibrary" | "mediaShow" | "mediaEpisode" | "mediaMovie" | "channel" | "program" | "channelShow" | "channelMovie" | "settings" | "ffmpegSettings" | "plexSettings" | "webhookActivity" | "viewer" | "viewingHistory"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1763,6 +1765,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    Viewer: {
+      payload: Prisma.$ViewerPayload<ExtArgs>
+      fields: Prisma.ViewerFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ViewerFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ViewerFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload>
+        }
+        findFirst: {
+          args: Prisma.ViewerFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ViewerFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload>
+        }
+        findMany: {
+          args: Prisma.ViewerFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload>[]
+        }
+        create: {
+          args: Prisma.ViewerCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload>
+        }
+        createMany: {
+          args: Prisma.ViewerCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ViewerCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload>[]
+        }
+        delete: {
+          args: Prisma.ViewerDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload>
+        }
+        update: {
+          args: Prisma.ViewerUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload>
+        }
+        deleteMany: {
+          args: Prisma.ViewerDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ViewerUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ViewerUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload>[]
+        }
+        upsert: {
+          args: Prisma.ViewerUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewerPayload>
+        }
+        aggregate: {
+          args: Prisma.ViewerAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateViewer>
+        }
+        groupBy: {
+          args: Prisma.ViewerGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ViewerGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ViewerCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ViewerCountAggregateOutputType> | number
+        }
+      }
+    }
+    ViewingHistory: {
+      payload: Prisma.$ViewingHistoryPayload<ExtArgs>
+      fields: Prisma.ViewingHistoryFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ViewingHistoryFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ViewingHistoryFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload>
+        }
+        findFirst: {
+          args: Prisma.ViewingHistoryFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ViewingHistoryFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload>
+        }
+        findMany: {
+          args: Prisma.ViewingHistoryFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload>[]
+        }
+        create: {
+          args: Prisma.ViewingHistoryCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload>
+        }
+        createMany: {
+          args: Prisma.ViewingHistoryCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ViewingHistoryCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload>[]
+        }
+        delete: {
+          args: Prisma.ViewingHistoryDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload>
+        }
+        update: {
+          args: Prisma.ViewingHistoryUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload>
+        }
+        deleteMany: {
+          args: Prisma.ViewingHistoryDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ViewingHistoryUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ViewingHistoryUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload>[]
+        }
+        upsert: {
+          args: Prisma.ViewingHistoryUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingHistoryPayload>
+        }
+        aggregate: {
+          args: Prisma.ViewingHistoryAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateViewingHistory>
+        }
+        groupBy: {
+          args: Prisma.ViewingHistoryGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ViewingHistoryGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ViewingHistoryCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ViewingHistoryCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2163,6 +2313,35 @@ export const WebhookActivityScalarFieldEnum = {
 export type WebhookActivityScalarFieldEnum = (typeof WebhookActivityScalarFieldEnum)[keyof typeof WebhookActivityScalarFieldEnum]
 
 
+export const ViewerScalarFieldEnum = {
+  id: 'id',
+  ipAddress: 'ipAddress',
+  name: 'name',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  createdBy: 'createdBy'
+} as const
+
+export type ViewerScalarFieldEnum = (typeof ViewerScalarFieldEnum)[keyof typeof ViewerScalarFieldEnum]
+
+
+export const ViewingHistoryScalarFieldEnum = {
+  id: 'id',
+  ipAddress: 'ipAddress',
+  channelNumber: 'channelNumber',
+  channelName: 'channelName',
+  programTitle: 'programTitle',
+  startTime: 'startTime',
+  endTime: 'endTime',
+  duration: 'duration',
+  status: 'status',
+  sessionId: 'sessionId'
+} as const
+
+export type ViewingHistoryScalarFieldEnum = (typeof ViewingHistoryScalarFieldEnum)[keyof typeof ViewingHistoryScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -2365,6 +2544,8 @@ export type GlobalOmitConfig = {
   ffmpegSettings?: Prisma.FfmpegSettingsOmit
   plexSettings?: Prisma.PlexSettingsOmit
   webhookActivity?: Prisma.WebhookActivityOmit
+  viewer?: Prisma.ViewerOmit
+  viewingHistory?: Prisma.ViewingHistoryOmit
 }
 
 /* Types for Logging */

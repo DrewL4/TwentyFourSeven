@@ -24,7 +24,7 @@ export function middleware(request: NextRequest) {
   res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 
   if (request.nextUrl.pathname === '/api/auth/get-session') {
-    console.log('🍪 Incoming get-session Cookie header:', request.headers.get('cookie'));
+    
   }
 
   return res;

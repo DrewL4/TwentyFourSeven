@@ -48,6 +48,11 @@ COPY apps/server/package*.json ./apps/server/
 # Copy source code
 COPY . .
 
+# Generate Prisma client for the target platform (Linux)
+WORKDIR /app/apps/server
+RUN npx prisma generate --schema ./prisma/schema
+WORKDIR /app
+
 # Set production environment and build optimizations
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

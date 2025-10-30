@@ -622,7 +622,6 @@ export class ProgrammingService {
     }
 
     console.log(`Generated ${programs.length} continuous programs from ${startTime.toISOString()} to ${currentTime.toISOString()}`);
-    console.log(`✓ Programming covers ${Math.round((currentTime.getTime() - startTime.getTime()) / (60 * 60 * 1000) * 100) / 100} hours with no gaps`);
 
     // Remove any overlapping programs before inserting new ones
     console.log(`Checking for overlaps before inserting ${programs.length} programs...`);
@@ -650,7 +649,6 @@ export class ProgrammingService {
         console.warn(`  Gap ${index + 1}: ${gapSeconds} seconds between programs ending at ${new Date(gap.program1.startTime.getTime() + gap.program1.duration).toISOString()} and starting at ${gap.program2.startTime.toISOString()}`);
       });
     } else {
-      console.log(`✓ Verified continuous programming with no gaps for channel ${channel.name}`);
     }
 
     console.log(`Generated ${programs.length} programs for channel ${channel.name} (looped content ${Math.ceil(programs.length / validatedContent.length)} times)`);
@@ -717,7 +715,6 @@ export class ProgrammingService {
       }
     }
 
-    console.log(`✅ Ensured programming for ${allChannelsToGenerate.length} channels`);
   }
 
   /**
@@ -763,12 +760,10 @@ export class ProgrammingService {
    * - Manually via API endpoints
    */
   async maintainPrograms() {
-    console.log('🔄 Starting comprehensive programming maintenance...');
 
     // First, ensure all channels have programming (this fixes the XMLTV issue!)
     try {
       await this.ensureAllChannelsHaveProgramming();
-      console.log('✅ Ensured all channels have programming');
     } catch (error) {
       console.error('❌ Failed to ensure programming for all channels:', error);
     }
@@ -834,9 +829,7 @@ export class ProgrammingService {
             // If gap filling failed, regenerate the entire schedule
             console.warn(`Gap filling failed for channel ${channel.name}. Regenerating entire schedule...`);
             await this.generateProgramsForChannel(channel.id);
-            console.log(`✅ Automatically regenerated schedule for channel ${channel.name}`);
           } else {
-            console.log(`✅ Successfully filled remaining gaps on channel ${channel.name}`);
           }
         }
 
@@ -1002,7 +995,6 @@ export class ProgrammingService {
    * This should be called when channels are created/updated, not during XMLTV generation
    */
   async cacheChannelCollectionIcons() {
-    console.log('🎨 Caching Plex collection artwork for channels...');
 
     const channels = await prisma.channel.findMany({
       where: {
@@ -1012,11 +1004,9 @@ export class ProgrammingService {
     });
 
     if (channels.length === 0) {
-      console.log('✅ All channels have cached collection icons');
       return;
     }
 
-    console.log(`📺 Updating collection icons for ${channels.length} channels`);
 
     // Get base URL (you'll need to pass this or get it from config)
     const baseUrl = 'https://247.midweststreams.us'; // Use your actual base URL
@@ -1039,14 +1029,12 @@ export class ProgrammingService {
             where: { id: channel.id },
             data: { cachedCollectionIcon: iconUrl }
           });
-          console.log(`✅ Cached icon for channel: ${channel.name}`);
         }
       } catch (error) {
         console.error(`❌ Failed to cache icon for channel ${channel.name}:`, error);
       }
     }
 
-    console.log('🎨 Channel collection icon caching completed');
   }
 
   private async resolveCollectionIcon(collectionNames: string[], baseUrl: string): Promise<string | null> {

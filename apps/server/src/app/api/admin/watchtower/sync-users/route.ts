@@ -90,6 +90,11 @@ export async function POST(request: NextRequest) {
           }
         });
 
+        // Determine admin status - check multiple fields for compatibility
+        // WatchTower may return is_admin, or is_staff/is_superuser
+        const isAdmin = watchTowerUser.is_admin === true || 
+                        (watchTowerUser.is_staff === true && watchTowerUser.is_superuser === true);
+
         const userData = {
           email: watchTowerUser.email,
           name: watchTowerUser.first_name && watchTowerUser.last_name 
@@ -97,11 +102,12 @@ export async function POST(request: NextRequest) {
             : watchTowerUser.username || watchTowerUser.email,
           watchTowerUserId: watchTowerUser.id?.toString(),
           watchTowerUsername: watchTowerUser.username,
-          role: watchTowerUser.is_admin ? 'ADMIN' : 'USER',
+          role: isAdmin ? 'ADMIN' : 'USER',
           isActive: watchTowerUser.is_active !== false,
           watchTowerJoinDate: watchTowerUser.date_joined ? new Date(watchTowerUser.date_joined) : null,
           // Store additional WatchTower metadata
           watchTowerMetadata: {
+            isAdmin: watchTowerUser.is_admin || false,
             isStaff: watchTowerUser.is_staff,
             isSuperuser: watchTowerUser.is_superuser,
             dateJoined: watchTowerUser.date_joined,

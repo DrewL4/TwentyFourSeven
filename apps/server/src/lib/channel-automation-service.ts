@@ -178,8 +178,7 @@ export class ChannelAutomationService {
       if (collections.length > 0) {
         whereClause.OR = collections.map((collection: string) => ({
           collections: {
-            contains: `"${collection}"`,
-            mode: 'insensitive'
+            contains: `"${collection}"`
           }
         }));
       }
@@ -211,8 +210,7 @@ export class ChannelAutomationService {
             { OR: whereClause.OR }, // Collection filters
             { OR: studios.map((studio: string) => ({
               studio: {
-                contains: studio,
-                mode: 'insensitive'
+                contains: studio
               }
             }))}
           ];
@@ -220,8 +218,7 @@ export class ChannelAutomationService {
         } else {
           whereClause.OR = studios.map((studio: string) => ({
             studio: {
-              contains: studio,
-              mode: 'insensitive'
+              contains: studio
             }
           }));
         }
@@ -248,8 +245,7 @@ export class ChannelAutomationService {
       if (collections.length > 0) {
         whereClause.OR = collections.map((collection: string) => ({
           collections: {
-            contains: `"${collection}"`,
-            mode: 'insensitive'
+            contains: `"${collection}"`
           }
         }));
       }
@@ -280,8 +276,7 @@ export class ChannelAutomationService {
             { OR: whereClause.OR },
             { OR: studios.map((studio: string) => ({
               studio: {
-                contains: studio,
-                mode: 'insensitive'
+                contains: studio
               }
             }))}
           ];
@@ -289,8 +284,7 @@ export class ChannelAutomationService {
         } else {
           whereClause.OR = studios.map((studio: string) => ({
             studio: {
-              contains: studio,
-              mode: 'insensitive'
+              contains: studio
             }
           }));
         }

@@ -16,7 +16,7 @@
 		"dev": {
 			"cache": false,
 			"persistent": true,
-			"env": ["PORT"]
+			"env": ["PORT", "SERVER_PORT", "NEXT_PUBLIC_SERVER_URL", "CORS_ORIGIN"]
 		},
 		"db:push": {
 			"cache": false,

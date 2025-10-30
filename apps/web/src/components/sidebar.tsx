@@ -15,18 +15,21 @@ import {
   LogOut,
   Home,
   Rocket,
-  Users
+  Users,
+  Eye
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "./ui/skeleton";
+import { useAdmin } from "@/hooks/use-admin";
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
+  const { isAdmin } = useAdmin();
 
   const navigationLinks = [
     { to: "/", label: "Home", icon: Home },
@@ -34,6 +37,7 @@ export default function Sidebar() {
     { to: "/channels", label: "Channels", icon: Radio },
     { to: "/library", label: "Library", icon: Library },
     { to: "/users", label: "Users", icon: Users },
+    ...(isAdmin ? [{ to: "/viewers", label: "Viewers", icon: Eye }] : []),
     { to: "/settings", label: "Settings", icon: Settings },
   ];
 
