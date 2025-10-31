@@ -3,30 +3,58 @@ model Viewer {
   ipAddress String   @unique
   name      String
   notes     String?
+  blocked   Boolean  @default(false)
+  userId    String?  // Link to User model
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   createdBy String?  // Admin user ID who created the mapping
 
   @@index([ipAddress])
+  @@index([blocked])
+  @@index([userId])
   @@map("viewer")
 }
 
+model ViewingSession {
+  id            String   @id @default(cuid()) @map("_id")
+  ipAddress      String
+  channelNumber  Int
+  channelName    String?
+  viewerName     String?
+  sessionStart   DateTime @default(now())
+  sessionEnd     DateTime?
+  totalDuration  Int?     // Total duration in seconds
+  programCount   Int      @default(0)
+  
+  history        ViewingHistory[]
+
+  @@index([ipAddress])
+  @@index([sessionStart])
+  @@index([channelNumber])
+  @@map("viewing_session")
+}
+
 model ViewingHistory {
-  id           String    @id @default(cuid()) @map("_id")
-  ipAddress    String
-  channelNumber Int
-  channelName  String?
-  programTitle String?
-  startTime    DateTime  @default(now())
-  endTime      DateTime?
-  duration     Int?      // Duration in seconds
-  status       String    @default("active") // active, completed, failed
-  sessionId    String?   // Reference to stream session ID
+  id               String         @id @default(cuid()) @map("_id")
+  ipAddress        String
+  channelNumber    Int
+  channelName      String?
+  programTitle     String?
+  startTime        DateTime       @default(now())
+  endTime          DateTime?
+  duration         Int?           // Duration in seconds
+  status           String         @default("active") // active, completed, failed
+  statusMessage    String?        // Detailed status information
+  errorDetails     Json?          // Error details from stream monitor
+  sessionId        String?        // Reference to stream session ID
+  viewingSessionId String?       // Reference to ViewingSession
+  viewingSession   ViewingSession? @relation(fields: [viewingSessionId], references: [id], onDelete: SetNull)
 
   @@index([ipAddress])
   @@index([startTime])
   @@index([channelNumber])
   @@index([status])
+  @@index([viewingSessionId])
   @@map("viewing_history")
 }
 

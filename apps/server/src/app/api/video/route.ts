@@ -284,16 +284,36 @@ export async function GET(request: NextRequest) {
       restartedToSoftware: false,
     });
 
-    // Record viewing session start
+    // Check if IP is blocked before starting session
     if (clientIp) {
+      try {
+        const isBlocked = await viewingHistoryService.isIpBlocked(clientIp);
+        if (isBlocked) {
+          return NextResponse.json(
+            { error: 'Access denied: IP address is blocked' },
+            { status: 403 }
+          );
+        }
+      } catch (error) {
+        // Don't block on check errors, but log them
+        console.error('[Video] Error checking IP block status:', error);
+      }
+
+      // Record viewing session start
       viewingHistoryService.recordSessionStart(
         sessionId,
         clientIp,
         channelNumber,
         channel?.name,
         programTitle
-      ).catch((error) => {
-        
+      ).catch((error: any) => {
+        if (error.message?.includes('blocked')) {
+          // IP was blocked during recordSessionStart
+          return NextResponse.json(
+            { error: 'Access denied: IP address is blocked' },
+            { status: 403 }
+          );
+        }
         // Don't block streaming on history logging errors
       });
     }
@@ -487,9 +507,24 @@ export async function GET(request: NextRequest) {
         if (!isAborted) {
           streamMonitorService.updateStatus(sessionId, 'failed');
           
+          // Get error details from stream monitor
+          const session = streamMonitorService.getSession(sessionId);
+          const errorMessage = session?.lastError || 'Stream ended unexpectedly';
+          const errorDetails = session ? {
+            lastError: session.lastError,
+            errorHistory: session.errorHistory,
+            recoveryAttempts: session.recoveryAttempts,
+            status: session.status,
+          } : undefined;
+          
           // Record session end with failed status
-          viewingHistoryService.recordSessionEnd(sessionId, 'failed').catch((error) => {
-            
+          viewingHistoryService.recordSessionEnd(
+            sessionId,
+            'failed',
+            errorMessage,
+            errorDetails
+          ).catch((error) => {
+            console.error('[Video] Failed to record session end:', error);
           });
         }
         passthrough.end();
@@ -511,8 +546,19 @@ export async function GET(request: NextRequest) {
       } catch {}
       
       // Record session end
-      viewingHistoryService.recordSessionEnd(sessionId, 'completed').catch((error) => {
-        
+      const session = streamMonitorService.getSession(sessionId);
+      viewingHistoryService.recordSessionEnd(
+        sessionId,
+        'completed',
+        'Client disconnected',
+        session ? {
+          lastError: session.lastError,
+          errorHistory: session.errorHistory,
+          recoveryAttempts: session.recoveryAttempts,
+          status: session.status,
+        } : undefined
+      ).catch((error) => {
+        console.error('[Video] Failed to record session end:', error);
       });
       
       streamMonitorService.removeSession(sessionId);

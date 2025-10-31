@@ -28,6 +28,8 @@ export type ViewerMinAggregateOutputType = {
   ipAddress: string | null
   name: string | null
   notes: string | null
+  blocked: boolean | null
+  userId: string | null
   createdAt: Date | null
   updatedAt: Date | null
   createdBy: string | null
@@ -38,6 +40,8 @@ export type ViewerMaxAggregateOutputType = {
   ipAddress: string | null
   name: string | null
   notes: string | null
+  blocked: boolean | null
+  userId: string | null
   createdAt: Date | null
   updatedAt: Date | null
   createdBy: string | null
@@ -48,6 +52,8 @@ export type ViewerCountAggregateOutputType = {
   ipAddress: number
   name: number
   notes: number
+  blocked: number
+  userId: number
   createdAt: number
   updatedAt: number
   createdBy: number
@@ -60,6 +66,8 @@ export type ViewerMinAggregateInputType = {
   ipAddress?: true
   name?: true
   notes?: true
+  blocked?: true
+  userId?: true
   createdAt?: true
   updatedAt?: true
   createdBy?: true
@@ -70,6 +78,8 @@ export type ViewerMaxAggregateInputType = {
   ipAddress?: true
   name?: true
   notes?: true
+  blocked?: true
+  userId?: true
   createdAt?: true
   updatedAt?: true
   createdBy?: true
@@ -80,6 +90,8 @@ export type ViewerCountAggregateInputType = {
   ipAddress?: true
   name?: true
   notes?: true
+  blocked?: true
+  userId?: true
   createdAt?: true
   updatedAt?: true
   createdBy?: true
@@ -163,6 +175,8 @@ export type ViewerGroupByOutputType = {
   ipAddress: string
   name: string
   notes: string | null
+  blocked: boolean
+  userId: string | null
   createdAt: Date
   updatedAt: Date
   createdBy: string | null
@@ -194,6 +208,8 @@ export type ViewerWhereInput = {
   ipAddress?: Prisma.StringFilter<"Viewer"> | string
   name?: Prisma.StringFilter<"Viewer"> | string
   notes?: Prisma.StringNullableFilter<"Viewer"> | string | null
+  blocked?: Prisma.BoolFilter<"Viewer"> | boolean
+  userId?: Prisma.StringNullableFilter<"Viewer"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Viewer"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Viewer"> | Date | string
   createdBy?: Prisma.StringNullableFilter<"Viewer"> | string | null
@@ -204,6 +220,8 @@ export type ViewerOrderByWithRelationInput = {
   ipAddress?: Prisma.SortOrder
   name?: Prisma.SortOrder
   notes?: Prisma.SortOrderInput | Prisma.SortOrder
+  blocked?: Prisma.SortOrder
+  userId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdBy?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -217,6 +235,8 @@ export type ViewerWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.ViewerWhereInput | Prisma.ViewerWhereInput[]
   name?: Prisma.StringFilter<"Viewer"> | string
   notes?: Prisma.StringNullableFilter<"Viewer"> | string | null
+  blocked?: Prisma.BoolFilter<"Viewer"> | boolean
+  userId?: Prisma.StringNullableFilter<"Viewer"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Viewer"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Viewer"> | Date | string
   createdBy?: Prisma.StringNullableFilter<"Viewer"> | string | null
@@ -227,6 +247,8 @@ export type ViewerOrderByWithAggregationInput = {
   ipAddress?: Prisma.SortOrder
   name?: Prisma.SortOrder
   notes?: Prisma.SortOrderInput | Prisma.SortOrder
+  blocked?: Prisma.SortOrder
+  userId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdBy?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -243,6 +265,8 @@ export type ViewerScalarWhereWithAggregatesInput = {
   ipAddress?: Prisma.StringWithAggregatesFilter<"Viewer"> | string
   name?: Prisma.StringWithAggregatesFilter<"Viewer"> | string
   notes?: Prisma.StringNullableWithAggregatesFilter<"Viewer"> | string | null
+  blocked?: Prisma.BoolWithAggregatesFilter<"Viewer"> | boolean
+  userId?: Prisma.StringNullableWithAggregatesFilter<"Viewer"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Viewer"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Viewer"> | Date | string
   createdBy?: Prisma.StringNullableWithAggregatesFilter<"Viewer"> | string | null
@@ -253,6 +277,8 @@ export type ViewerCreateInput = {
   ipAddress: string
   name: string
   notes?: string | null
+  blocked?: boolean
+  userId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   createdBy?: string | null
@@ -263,6 +289,8 @@ export type ViewerUncheckedCreateInput = {
   ipAddress: string
   name: string
   notes?: string | null
+  blocked?: boolean
+  userId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   createdBy?: string | null
@@ -273,6 +301,8 @@ export type ViewerUpdateInput = {
   ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  blocked?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -283,6 +313,8 @@ export type ViewerUncheckedUpdateInput = {
   ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  blocked?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -293,6 +325,8 @@ export type ViewerCreateManyInput = {
   ipAddress: string
   name: string
   notes?: string | null
+  blocked?: boolean
+  userId?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   createdBy?: string | null
@@ -303,6 +337,8 @@ export type ViewerUpdateManyMutationInput = {
   ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  blocked?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -313,6 +349,8 @@ export type ViewerUncheckedUpdateManyInput = {
   ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  blocked?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -323,6 +361,8 @@ export type ViewerCountOrderByAggregateInput = {
   ipAddress?: Prisma.SortOrder
   name?: Prisma.SortOrder
   notes?: Prisma.SortOrder
+  blocked?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
@@ -333,6 +373,8 @@ export type ViewerMaxOrderByAggregateInput = {
   ipAddress?: Prisma.SortOrder
   name?: Prisma.SortOrder
   notes?: Prisma.SortOrder
+  blocked?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
@@ -343,6 +385,8 @@ export type ViewerMinOrderByAggregateInput = {
   ipAddress?: Prisma.SortOrder
   name?: Prisma.SortOrder
   notes?: Prisma.SortOrder
+  blocked?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdBy?: Prisma.SortOrder
@@ -355,6 +399,8 @@ export type ViewerSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   ipAddress?: boolean
   name?: boolean
   notes?: boolean
+  blocked?: boolean
+  userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   createdBy?: boolean
@@ -365,6 +411,8 @@ export type ViewerSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   ipAddress?: boolean
   name?: boolean
   notes?: boolean
+  blocked?: boolean
+  userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   createdBy?: boolean
@@ -375,6 +423,8 @@ export type ViewerSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   ipAddress?: boolean
   name?: boolean
   notes?: boolean
+  blocked?: boolean
+  userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   createdBy?: boolean
@@ -385,12 +435,14 @@ export type ViewerSelectScalar = {
   ipAddress?: boolean
   name?: boolean
   notes?: boolean
+  blocked?: boolean
+  userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   createdBy?: boolean
 }
 
-export type ViewerOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "ipAddress" | "name" | "notes" | "createdAt" | "updatedAt" | "createdBy", ExtArgs["result"]["viewer"]>
+export type ViewerOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "ipAddress" | "name" | "notes" | "blocked" | "userId" | "createdAt" | "updatedAt" | "createdBy", ExtArgs["result"]["viewer"]>
 
 export type $ViewerPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Viewer"
@@ -400,6 +452,8 @@ export type $ViewerPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
     ipAddress: string
     name: string
     notes: string | null
+    blocked: boolean
+    userId: string | null
     createdAt: Date
     updatedAt: Date
     createdBy: string | null
@@ -830,6 +884,8 @@ export interface ViewerFieldRefs {
   readonly ipAddress: Prisma.FieldRef<"Viewer", 'String'>
   readonly name: Prisma.FieldRef<"Viewer", 'String'>
   readonly notes: Prisma.FieldRef<"Viewer", 'String'>
+  readonly blocked: Prisma.FieldRef<"Viewer", 'Boolean'>
+  readonly userId: Prisma.FieldRef<"Viewer", 'String'>
   readonly createdAt: Prisma.FieldRef<"Viewer", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Viewer", 'DateTime'>
   readonly createdBy: Prisma.FieldRef<"Viewer", 'String'>

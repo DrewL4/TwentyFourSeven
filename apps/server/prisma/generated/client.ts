@@ -149,6 +149,11 @@ export type WebhookActivity = Prisma.WebhookActivityModel
  */
 export type Viewer = Prisma.ViewerModel
 /**
+ * Model ViewingSession
+ * 
+ */
+export type ViewingSession = Prisma.ViewingSessionModel
+/**
  * Model ViewingHistory
  * 
  */

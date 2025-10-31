@@ -1984,6 +1984,7 @@ export const appRouter = {
       .input(
         z.object({
           ipAddress: z.string().optional(),
+          viewerName: z.string().optional(),
           startDate: z.date().optional(),
           endDate: z.date().optional(),
           channelNumber: z.number().optional(),
@@ -1994,6 +1995,23 @@ export const appRouter = {
       .handler(async ({ input, context }) => {
         await requireAdminAsync(context.session?.user?.id, prisma);
         return await viewingHistoryService.getViewingHistory(input);
+      }),
+
+    getViewingSessions: protectedProcedure
+      .input(
+        z.object({
+          ipAddress: z.string().optional(),
+          viewerName: z.string().optional(),
+          startDate: z.date().optional(),
+          endDate: z.date().optional(),
+          channelNumber: z.number().optional(),
+          limit: z.number().optional().default(50),
+          offset: z.number().optional().default(0),
+        })
+      )
+      .handler(async ({ input, context }) => {
+        await requireAdminAsync(context.session?.user?.id, prisma);
+        return await viewingHistoryService.getViewingSessions(input);
       }),
 
     listMappings: protectedProcedure.handler(async ({ context }) => {
@@ -2009,6 +2027,8 @@ export const appRouter = {
           ipAddress: z.string(),
           name: z.string(),
           notes: z.string().optional(),
+          userId: z.string().optional(),
+          blocked: z.boolean().optional(),
         })
       )
       .handler(async ({ input, context }) => {
@@ -2019,6 +2039,77 @@ export const appRouter = {
 
         return await viewingHistoryService.createIpMapping(input);
       }),
+
+    blockIp: protectedProcedure
+      .input(
+        z.object({
+          ipAddress: z.string(),
+        })
+      )
+      .handler(async ({ input, context }) => {
+        await requireAdminAsync(context.session?.user?.id, prisma);
+        viewingHistoryService.clearCache();
+        return await viewingHistoryService.blockIp(input.ipAddress);
+      }),
+
+    unblockIp: protectedProcedure
+      .input(
+        z.object({
+          ipAddress: z.string(),
+        })
+      )
+      .handler(async ({ input, context }) => {
+        await requireAdminAsync(context.session?.user?.id, prisma);
+        viewingHistoryService.clearCache();
+        return await viewingHistoryService.unblockIp(input.ipAddress);
+      }),
+
+    assignIpToUser: protectedProcedure
+      .input(
+        z.object({
+          ipAddress: z.string(),
+          userId: z.string(),
+        })
+      )
+      .handler(async ({ input, context }) => {
+        await requireAdminAsync(context.session?.user?.id, prisma);
+        viewingHistoryService.clearCache();
+        return await viewingHistoryService.assignIpToUser(input.ipAddress, input.userId);
+      }),
+
+    getUsers: protectedProcedure.handler(async ({ context }) => {
+      await requireAdminAsync(context.session?.user?.id, prisma);
+      return await prisma.user.findMany({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+        orderBy: { name: 'asc' },
+      });
+    }),
+
+    getUnassignedIps: protectedProcedure.handler(async ({ context }) => {
+      await requireAdminAsync(context.session?.user?.id, prisma);
+      
+      // Get all unique IP addresses from viewing history using groupBy
+      const historyGroups = await prisma.viewingHistory.groupBy({
+        by: ['ipAddress'],
+      });
+      
+      // Get all IP addresses that already have mappings
+      const mappedIps = await prisma.viewer.findMany({
+        select: { ipAddress: true },
+      });
+      
+      const mappedIpSet = new Set(mappedIps.map(v => v.ipAddress));
+      const unassignedIps = historyGroups
+        .map(g => g.ipAddress)
+        .filter(ip => !mappedIpSet.has(ip))
+        .sort();
+      
+      return unassignedIps;
+    }),
 
     deleteMapping: protectedProcedure
       .input(

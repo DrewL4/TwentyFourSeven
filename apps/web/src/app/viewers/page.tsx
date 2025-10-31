@@ -68,7 +68,7 @@ export default function ViewersPage() {
             <CardHeader>
               <CardTitle>Viewing History</CardTitle>
               <CardDescription>
-                Historical record of all viewing sessions
+                Session-based viewing history grouped by channel and viewer
               </CardDescription>
             </CardHeader>
             <CardContent>

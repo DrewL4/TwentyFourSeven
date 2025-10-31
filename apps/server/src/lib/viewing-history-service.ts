@@ -23,8 +23,22 @@ export interface ViewingHistoryEntry {
   endTime?: Date;
   duration?: number;
   status: string;
+  statusMessage?: string;
   sessionId?: string;
   viewerName?: string; // From Viewer mapping
+}
+
+export interface ViewingSessionEntry {
+  id: string;
+  ipAddress: string;
+  channelNumber: number;
+  channelName?: string;
+  viewerName?: string;
+  sessionStart: Date;
+  sessionEnd?: Date;
+  totalDuration?: number;
+  programCount: number;
+  history: ViewingHistoryEntry[];
 }
 
 export class ViewingHistoryService {
@@ -41,6 +55,22 @@ export class ViewingHistoryService {
   }
 
   /**
+   * Check if IP address is blocked
+   */
+  async isIpBlocked(ipAddress: string): Promise<boolean> {
+    try {
+      const viewer = await prisma.viewer.findUnique({
+        where: { ipAddress },
+        select: { blocked: true },
+      });
+      return viewer?.blocked === true;
+    } catch (error) {
+      console.error(`[ViewingHistory] Failed to check IP block status for ${ipAddress}:`, error);
+      return false; // Don't block on error
+    }
+  }
+
+  /**
    * Record session start in viewing history
    */
   async recordSessionStart(
@@ -51,7 +81,13 @@ export class ViewingHistoryService {
     programTitle?: string
   ): Promise<void> {
     try {
-      await prisma.viewingHistory.create({
+      // Check if IP is blocked
+      const blocked = await this.isIpBlocked(ipAddress);
+      if (blocked) {
+        throw new Error(`IP address ${ipAddress} is blocked`);
+      }
+
+      const historyEntry = await prisma.viewingHistory.create({
         data: {
           sessionId,
           ipAddress,
@@ -62,7 +98,13 @@ export class ViewingHistoryService {
           status: 'active',
         },
       });
-    } catch (error) {
+
+      // Try to add to existing session or create new one
+      await this.addToViewingSession(historyEntry.id, ipAddress, channelNumber, channelName);
+    } catch (error: any) {
+      if (error.message?.includes('blocked')) {
+        throw error; // Re-throw blocking errors
+      }
       console.error(`[ViewingHistory] Failed to record session start for ${sessionId}:`, error);
       // Don't throw - logging should not break streaming
     }
@@ -73,7 +115,9 @@ export class ViewingHistoryService {
    */
   async recordSessionEnd(
     sessionId: string,
-    status: 'completed' | 'failed' = 'completed'
+    status: 'completed' | 'failed' = 'completed',
+    statusMessage?: string,
+    errorDetails?: any
   ): Promise<void> {
     try {
       const history = await prisma.viewingHistory.findFirst({
@@ -87,14 +131,43 @@ export class ViewingHistoryService {
           (endTime.getTime() - history.startTime.getTime()) / 1000
         );
 
+        // Get error details from stream monitor if available
+        const session = streamMonitorService.getSession(sessionId);
+        let finalStatusMessage = statusMessage;
+        let finalErrorDetails = errorDetails;
+
+        if (session) {
+          if (session.lastError && !finalStatusMessage) {
+            finalStatusMessage = session.lastError;
+          }
+          if (session.errorHistory && session.errorHistory.length > 0 && !finalErrorDetails) {
+            finalErrorDetails = {
+              lastError: session.lastError,
+              errorHistory: session.errorHistory.map(e => ({
+                timestamp: e.timestamp,
+                error: e.error,
+              })),
+              recoveryAttempts: session.recoveryAttempts,
+              status: session.status,
+            };
+          }
+        }
+
         await prisma.viewingHistory.update({
           where: { id: history.id },
           data: {
             endTime,
             duration,
             status,
+            statusMessage: finalStatusMessage,
+            errorDetails: finalErrorDetails,
           },
         });
+
+        // Update viewing session if exists
+        if (history.viewingSessionId) {
+          await this.updateViewingSession(history.viewingSessionId);
+        }
       }
     } catch (error) {
       console.error(`[ViewingHistory] Failed to record session end for ${sessionId}:`, error);
@@ -185,6 +258,7 @@ export class ViewingHistoryService {
    */
   async getViewingHistory(options?: {
     ipAddress?: string;
+    viewerName?: string;
     startDate?: Date;
     endDate?: Date;
     channelNumber?: number;
@@ -196,6 +270,7 @@ export class ViewingHistoryService {
   }> {
     const {
       ipAddress,
+      viewerName,
       startDate,
       endDate,
       channelNumber,
@@ -207,6 +282,21 @@ export class ViewingHistoryService {
 
     if (ipAddress) {
       where.ipAddress = ipAddress;
+    }
+
+    if (viewerName) {
+      // Find IPs with this viewer name
+      const viewers = await prisma.viewer.findMany({
+        where: { name: viewerName },
+        select: { ipAddress: true },
+      });
+      const ipAddresses = viewers.map(v => v.ipAddress);
+      if (ipAddresses.length > 0) {
+        where.ipAddress = { in: ipAddresses };
+      } else {
+        // No matches, return empty
+        return { entries: [], total: 0 };
+      }
     }
 
     if (channelNumber) {
@@ -236,7 +326,7 @@ export class ViewingHistoryService {
     // Enrich with viewer names
     const enrichedEntries: ViewingHistoryEntry[] = await Promise.all(
       entries.map(async (entry) => {
-        const viewerName = await this.getViewerName(entry.ipAddress);
+        const viewerNameResult = await this.getViewerName(entry.ipAddress);
         return {
           id: entry.id,
           ipAddress: entry.ipAddress,
@@ -247,8 +337,9 @@ export class ViewingHistoryService {
           endTime: entry.endTime || undefined,
           duration: entry.duration || undefined,
           status: entry.status,
+          statusMessage: entry.statusMessage || undefined,
           sessionId: entry.sessionId || undefined,
-          viewerName,
+          viewerName: viewerNameResult,
         };
       })
     );
@@ -259,13 +350,270 @@ export class ViewingHistoryService {
     };
   }
 
-  async createIpMapping(data: { ipAddress: string; name: string; notes?: string }): Promise<any> {
-    return await prisma.viewer.create({
-      data: {
+  /**
+   * Add history entry to viewing session (group consecutive same-channel watches)
+   */
+  private async addToViewingSession(
+    historyId: string,
+    ipAddress: string,
+    channelNumber: number,
+    channelName?: string
+  ): Promise<void> {
+    try {
+      // Find the most recent session for this IP and channel
+      const recentSession = await prisma.viewingSession.findFirst({
+        where: {
+          ipAddress,
+          channelNumber,
+        },
+        include: {
+          history: {
+            orderBy: { startTime: 'desc' },
+            take: 1,
+          },
+        },
+        orderBy: { sessionStart: 'desc' },
+      });
+
+      const now = new Date();
+      const viewerName = await this.getViewerName(ipAddress);
+
+      if (recentSession && recentSession.history.length > 0) {
+        // Check if within 5 minutes of last history entry's end time (or start time if no end time)
+        const lastEntry = recentSession.history[0];
+        const lastActivityTime = lastEntry.endTime?.getTime() || lastEntry.startTime.getTime();
+        const timeSinceLastActivity = now.getTime() - lastActivityTime;
+        const fiveMinutes = 5 * 60 * 1000;
+
+        if (timeSinceLastActivity < fiveMinutes) {
+          // Add to existing session
+          await prisma.viewingHistory.update({
+            where: { id: historyId },
+            data: { viewingSessionId: recentSession.id },
+          });
+
+          await prisma.viewingSession.update({
+            where: { id: recentSession.id },
+            data: {
+              programCount: { increment: 1 },
+              channelName: channelName || recentSession.channelName,
+            },
+          });
+          return;
+        }
+      }
+
+      // Create new session (different channel or gap > 5 minutes)
+      const newSession = await prisma.viewingSession.create({
+        data: {
+          ipAddress,
+          channelNumber,
+          channelName,
+          viewerName,
+          sessionStart: now,
+          programCount: 1,
+        },
+      });
+
+      await prisma.viewingHistory.update({
+        where: { id: historyId },
+        data: { viewingSessionId: newSession.id },
+      });
+    } catch (error) {
+      console.error(`[ViewingHistory] Failed to add to viewing session:`, error);
+      // Don't throw - this is not critical
+    }
+  }
+
+  /**
+   * Update viewing session totals
+   */
+  private async updateViewingSession(sessionId: string): Promise<void> {
+    try {
+      const session = await prisma.viewingSession.findUnique({
+        where: { id: sessionId },
+        include: { history: true },
+      });
+
+      if (!session) return;
+
+      const completedHistory = session.history.filter(h => h.endTime && h.duration);
+      const totalDuration = completedHistory.reduce((sum, h) => sum + (h.duration || 0), 0);
+      const lastEndTime = session.history
+        .filter(h => h.endTime)
+        .sort((a, b) => b.endTime!.getTime() - a.endTime!.getTime())[0]?.endTime;
+
+      await prisma.viewingSession.update({
+        where: { id: sessionId },
+        data: {
+          totalDuration,
+          sessionEnd: lastEndTime || undefined,
+          programCount: session.history.length,
+        },
+      });
+    } catch (error) {
+      console.error(`[ViewingHistory] Failed to update viewing session:`, error);
+    }
+  }
+
+  /**
+   * Get viewing sessions (grouped history)
+   */
+  async getViewingSessions(options?: {
+    ipAddress?: string;
+    viewerName?: string;
+    startDate?: Date;
+    endDate?: Date;
+    channelNumber?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    sessions: ViewingSessionEntry[];
+    total: number;
+  }> {
+    try {
+      const {
+        ipAddress,
+        viewerName,
+        startDate,
+        endDate,
+        channelNumber,
+        limit = 50,
+        offset = 0,
+      } = options || {};
+
+      const where: any = {};
+
+      if (ipAddress) {
+        where.ipAddress = ipAddress;
+      }
+
+      if (viewerName) {
+        where.viewerName = viewerName;
+      }
+
+      if (channelNumber) {
+        where.channelNumber = channelNumber;
+      }
+
+      if (startDate || endDate) {
+        where.sessionStart = {};
+        if (startDate) {
+          where.sessionStart.gte = startDate;
+        }
+        if (endDate) {
+          where.sessionStart.lte = endDate;
+        }
+      }
+
+      const [sessions, total] = await Promise.all([
+        prisma.viewingSession.findMany({
+          where,
+          include: {
+            history: {
+              orderBy: { startTime: 'asc' },
+            },
+          },
+          orderBy: { sessionStart: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+        prisma.viewingSession.count({ where }),
+      ]);
+
+      // Enrich with viewer names and format
+      const enrichedSessions: ViewingSessionEntry[] = sessions.map((session) => ({
+        id: session.id,
+        ipAddress: session.ipAddress,
+        channelNumber: session.channelNumber,
+        channelName: session.channelName || undefined,
+        viewerName: session.viewerName || undefined,
+        sessionStart: session.sessionStart,
+        sessionEnd: session.sessionEnd || undefined,
+        totalDuration: session.totalDuration || undefined,
+        programCount: session.programCount,
+        history: session.history.map((h) => ({
+          id: h.id,
+          ipAddress: h.ipAddress,
+          channelNumber: h.channelNumber,
+          channelName: h.channelName || undefined,
+          programTitle: h.programTitle || undefined,
+          startTime: h.startTime,
+          endTime: h.endTime || undefined,
+          duration: h.duration || undefined,
+          status: h.status,
+          statusMessage: h.statusMessage || undefined,
+          sessionId: h.sessionId || undefined,
+          viewerName: session.viewerName || undefined,
+        })),
+      }));
+
+      return {
+        sessions: enrichedSessions,
+        total,
+      };
+    } catch (error: any) {
+      // If table doesn't exist or other database error, return empty result
+      console.error('[ViewingHistory] Error fetching viewing sessions:', error);
+      return {
+        sessions: [],
+        total: 0,
+      };
+    }
+  }
+
+  async createIpMapping(data: {
+    ipAddress: string;
+    name: string;
+    notes?: string;
+    userId?: string;
+    blocked?: boolean;
+  }): Promise<any> {
+    return await prisma.viewer.upsert({
+      where: { ipAddress: data.ipAddress },
+      update: {
+        name: data.name,
+        notes: data.notes,
+        userId: data.userId,
+        blocked: data.blocked ?? false,
+      },
+      create: {
         ipAddress: data.ipAddress,
         name: data.name,
         notes: data.notes,
+        userId: data.userId,
+        blocked: data.blocked ?? false,
       },
+    });
+  }
+
+  /**
+   * Block an IP address
+   */
+  async blockIp(ipAddress: string): Promise<any> {
+    return await prisma.viewer.updateMany({
+      where: { ipAddress },
+      data: { blocked: true },
+    });
+  }
+
+  /**
+   * Unblock an IP address
+   */
+  async unblockIp(ipAddress: string): Promise<any> {
+    return await prisma.viewer.updateMany({
+      where: { ipAddress },
+      data: { blocked: false },
+    });
+  }
+
+  /**
+   * Assign IP to user
+   */
+  async assignIpToUser(ipAddress: string, userId: string): Promise<any> {
+    return await prisma.viewer.updateMany({
+      where: { ipAddress },
+      data: { userId },
     });
   }
 

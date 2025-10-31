@@ -2,19 +2,38 @@
 
 import { useState, useEffect } from "react";
 import { orpc } from "@/utils/orpc";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Clock } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { RefreshCw, Clock, UserPlus, MoreVertical } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 export default function ActiveViewersTable() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [assigningIp, setAssigningIp] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data: activeViewers, isLoading, refetch } = useQuery(
     orpc.viewers.getActive.queryOptions()
   );
+
+  const { data: users } = useQuery(orpc.viewers.getUsers.queryOptions());
+  const assignIpToUser = useMutation(orpc.viewers.assignIpToUser.mutationOptions());
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -38,6 +57,18 @@ export default function ActiveViewersTable() {
       return `${minutes}m ${secs}s`;
     }
     return `${secs}s`;
+  };
+
+  const handleAssignToUser = async (ipAddress: string, userId: string) => {
+    try {
+      await assignIpToUser.mutateAsync({ ipAddress, userId });
+      toast.success("IP address assigned to user");
+      setAssigningIp(null);
+      queryClient.invalidateQueries({ queryKey: orpc.viewers.getActive.queryOptions().queryKey });
+      queryClient.invalidateQueries({ queryKey: orpc.viewers.listMappings.queryOptions().queryKey });
+    } catch (error: any) {
+      toast.error(error.message || "Failed to assign IP to user");
+    }
   };
 
   if (isLoading) {
@@ -78,6 +109,7 @@ export default function ActiveViewersTable() {
               <TableHead>Start Time</TableHead>
               <TableHead>Duration</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -105,6 +137,46 @@ export default function ActiveViewersTable() {
                   <Badge variant={viewer.status === 'active' ? 'default' : 'secondary'}>
                     {viewer.status}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  {assigningIp === viewer.ipAddress ? (
+                    <Select
+                      onValueChange={(userId) => {
+                        if (userId && userId !== "__cancel__") {
+                          handleAssignToUser(viewer.ipAddress, userId);
+                        } else {
+                          setAssigningIp(null);
+                        }
+                      }}
+                      defaultValue="__cancel__"
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Select user..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__cancel__">Cancel</SelectItem>
+                        {users?.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setAssigningIp(viewer.ipAddress)}>
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          Assign to User
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

@@ -45,7 +45,9 @@ export type ViewingHistoryMinAggregateOutputType = {
   endTime: Date | null
   duration: number | null
   status: string | null
+  statusMessage: string | null
   sessionId: string | null
+  viewingSessionId: string | null
 }
 
 export type ViewingHistoryMaxAggregateOutputType = {
@@ -58,7 +60,9 @@ export type ViewingHistoryMaxAggregateOutputType = {
   endTime: Date | null
   duration: number | null
   status: string | null
+  statusMessage: string | null
   sessionId: string | null
+  viewingSessionId: string | null
 }
 
 export type ViewingHistoryCountAggregateOutputType = {
@@ -71,7 +75,10 @@ export type ViewingHistoryCountAggregateOutputType = {
   endTime: number
   duration: number
   status: number
+  statusMessage: number
+  errorDetails: number
   sessionId: number
+  viewingSessionId: number
   _all: number
 }
 
@@ -96,7 +103,9 @@ export type ViewingHistoryMinAggregateInputType = {
   endTime?: true
   duration?: true
   status?: true
+  statusMessage?: true
   sessionId?: true
+  viewingSessionId?: true
 }
 
 export type ViewingHistoryMaxAggregateInputType = {
@@ -109,7 +118,9 @@ export type ViewingHistoryMaxAggregateInputType = {
   endTime?: true
   duration?: true
   status?: true
+  statusMessage?: true
   sessionId?: true
+  viewingSessionId?: true
 }
 
 export type ViewingHistoryCountAggregateInputType = {
@@ -122,7 +133,10 @@ export type ViewingHistoryCountAggregateInputType = {
   endTime?: true
   duration?: true
   status?: true
+  statusMessage?: true
+  errorDetails?: true
   sessionId?: true
+  viewingSessionId?: true
   _all?: true
 }
 
@@ -222,7 +236,10 @@ export type ViewingHistoryGroupByOutputType = {
   endTime: Date | null
   duration: number | null
   status: string
+  statusMessage: string | null
+  errorDetails: runtime.JsonValue | null
   sessionId: string | null
+  viewingSessionId: string | null
   _count: ViewingHistoryCountAggregateOutputType | null
   _avg: ViewingHistoryAvgAggregateOutputType | null
   _sum: ViewingHistorySumAggregateOutputType | null
@@ -258,7 +275,11 @@ export type ViewingHistoryWhereInput = {
   endTime?: Prisma.DateTimeNullableFilter<"ViewingHistory"> | Date | string | null
   duration?: Prisma.IntNullableFilter<"ViewingHistory"> | number | null
   status?: Prisma.StringFilter<"ViewingHistory"> | string
+  statusMessage?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+  errorDetails?: Prisma.JsonNullableFilter<"ViewingHistory">
   sessionId?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+  viewingSessionId?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+  viewingSession?: Prisma.XOR<Prisma.ViewingSessionNullableScalarRelationFilter, Prisma.ViewingSessionWhereInput> | null
 }
 
 export type ViewingHistoryOrderByWithRelationInput = {
@@ -271,7 +292,11 @@ export type ViewingHistoryOrderByWithRelationInput = {
   endTime?: Prisma.SortOrderInput | Prisma.SortOrder
   duration?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
+  statusMessage?: Prisma.SortOrderInput | Prisma.SortOrder
+  errorDetails?: Prisma.SortOrderInput | Prisma.SortOrder
   sessionId?: Prisma.SortOrderInput | Prisma.SortOrder
+  viewingSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
+  viewingSession?: Prisma.ViewingSessionOrderByWithRelationInput
 }
 
 export type ViewingHistoryWhereUniqueInput = Prisma.AtLeast<{
@@ -287,7 +312,11 @@ export type ViewingHistoryWhereUniqueInput = Prisma.AtLeast<{
   endTime?: Prisma.DateTimeNullableFilter<"ViewingHistory"> | Date | string | null
   duration?: Prisma.IntNullableFilter<"ViewingHistory"> | number | null
   status?: Prisma.StringFilter<"ViewingHistory"> | string
+  statusMessage?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+  errorDetails?: Prisma.JsonNullableFilter<"ViewingHistory">
   sessionId?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+  viewingSessionId?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+  viewingSession?: Prisma.XOR<Prisma.ViewingSessionNullableScalarRelationFilter, Prisma.ViewingSessionWhereInput> | null
 }, "id">
 
 export type ViewingHistoryOrderByWithAggregationInput = {
@@ -300,7 +329,10 @@ export type ViewingHistoryOrderByWithAggregationInput = {
   endTime?: Prisma.SortOrderInput | Prisma.SortOrder
   duration?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
+  statusMessage?: Prisma.SortOrderInput | Prisma.SortOrder
+  errorDetails?: Prisma.SortOrderInput | Prisma.SortOrder
   sessionId?: Prisma.SortOrderInput | Prisma.SortOrder
+  viewingSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.ViewingHistoryCountOrderByAggregateInput
   _avg?: Prisma.ViewingHistoryAvgOrderByAggregateInput
   _max?: Prisma.ViewingHistoryMaxOrderByAggregateInput
@@ -321,7 +353,10 @@ export type ViewingHistoryScalarWhereWithAggregatesInput = {
   endTime?: Prisma.DateTimeNullableWithAggregatesFilter<"ViewingHistory"> | Date | string | null
   duration?: Prisma.IntNullableWithAggregatesFilter<"ViewingHistory"> | number | null
   status?: Prisma.StringWithAggregatesFilter<"ViewingHistory"> | string
+  statusMessage?: Prisma.StringNullableWithAggregatesFilter<"ViewingHistory"> | string | null
+  errorDetails?: Prisma.JsonNullableWithAggregatesFilter<"ViewingHistory">
   sessionId?: Prisma.StringNullableWithAggregatesFilter<"ViewingHistory"> | string | null
+  viewingSessionId?: Prisma.StringNullableWithAggregatesFilter<"ViewingHistory"> | string | null
 }
 
 export type ViewingHistoryCreateInput = {
@@ -334,7 +369,10 @@ export type ViewingHistoryCreateInput = {
   endTime?: Date | string | null
   duration?: number | null
   status?: string
+  statusMessage?: string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   sessionId?: string | null
+  viewingSession?: Prisma.ViewingSessionCreateNestedOneWithoutHistoryInput
 }
 
 export type ViewingHistoryUncheckedCreateInput = {
@@ -347,7 +385,10 @@ export type ViewingHistoryUncheckedCreateInput = {
   endTime?: Date | string | null
   duration?: number | null
   status?: string
+  statusMessage?: string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   sessionId?: string | null
+  viewingSessionId?: string | null
 }
 
 export type ViewingHistoryUpdateInput = {
@@ -360,7 +401,10 @@ export type ViewingHistoryUpdateInput = {
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   duration?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  statusMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   sessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  viewingSession?: Prisma.ViewingSessionUpdateOneWithoutHistoryNestedInput
 }
 
 export type ViewingHistoryUncheckedUpdateInput = {
@@ -373,7 +417,10 @@ export type ViewingHistoryUncheckedUpdateInput = {
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   duration?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  statusMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   sessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  viewingSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ViewingHistoryCreateManyInput = {
@@ -386,7 +433,10 @@ export type ViewingHistoryCreateManyInput = {
   endTime?: Date | string | null
   duration?: number | null
   status?: string
+  statusMessage?: string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   sessionId?: string | null
+  viewingSessionId?: string | null
 }
 
 export type ViewingHistoryUpdateManyMutationInput = {
@@ -399,6 +449,8 @@ export type ViewingHistoryUpdateManyMutationInput = {
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   duration?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  statusMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   sessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
@@ -412,7 +464,20 @@ export type ViewingHistoryUncheckedUpdateManyInput = {
   endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   duration?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
+  statusMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   sessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  viewingSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+export type ViewingHistoryListRelationFilter = {
+  every?: Prisma.ViewingHistoryWhereInput
+  some?: Prisma.ViewingHistoryWhereInput
+  none?: Prisma.ViewingHistoryWhereInput
+}
+
+export type ViewingHistoryOrderByRelationAggregateInput = {
+  _count?: Prisma.SortOrder
 }
 
 export type ViewingHistoryCountOrderByAggregateInput = {
@@ -425,7 +490,10 @@ export type ViewingHistoryCountOrderByAggregateInput = {
   endTime?: Prisma.SortOrder
   duration?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  statusMessage?: Prisma.SortOrder
+  errorDetails?: Prisma.SortOrder
   sessionId?: Prisma.SortOrder
+  viewingSessionId?: Prisma.SortOrder
 }
 
 export type ViewingHistoryAvgOrderByAggregateInput = {
@@ -443,7 +511,9 @@ export type ViewingHistoryMaxOrderByAggregateInput = {
   endTime?: Prisma.SortOrder
   duration?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  statusMessage?: Prisma.SortOrder
   sessionId?: Prisma.SortOrder
+  viewingSessionId?: Prisma.SortOrder
 }
 
 export type ViewingHistoryMinOrderByAggregateInput = {
@@ -456,12 +526,190 @@ export type ViewingHistoryMinOrderByAggregateInput = {
   endTime?: Prisma.SortOrder
   duration?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  statusMessage?: Prisma.SortOrder
   sessionId?: Prisma.SortOrder
+  viewingSessionId?: Prisma.SortOrder
 }
 
 export type ViewingHistorySumOrderByAggregateInput = {
   channelNumber?: Prisma.SortOrder
   duration?: Prisma.SortOrder
+}
+
+export type ViewingHistoryCreateNestedManyWithoutViewingSessionInput = {
+  create?: Prisma.XOR<Prisma.ViewingHistoryCreateWithoutViewingSessionInput, Prisma.ViewingHistoryUncheckedCreateWithoutViewingSessionInput> | Prisma.ViewingHistoryCreateWithoutViewingSessionInput[] | Prisma.ViewingHistoryUncheckedCreateWithoutViewingSessionInput[]
+  connectOrCreate?: Prisma.ViewingHistoryCreateOrConnectWithoutViewingSessionInput | Prisma.ViewingHistoryCreateOrConnectWithoutViewingSessionInput[]
+  createMany?: Prisma.ViewingHistoryCreateManyViewingSessionInputEnvelope
+  connect?: Prisma.ViewingHistoryWhereUniqueInput | Prisma.ViewingHistoryWhereUniqueInput[]
+}
+
+export type ViewingHistoryUncheckedCreateNestedManyWithoutViewingSessionInput = {
+  create?: Prisma.XOR<Prisma.ViewingHistoryCreateWithoutViewingSessionInput, Prisma.ViewingHistoryUncheckedCreateWithoutViewingSessionInput> | Prisma.ViewingHistoryCreateWithoutViewingSessionInput[] | Prisma.ViewingHistoryUncheckedCreateWithoutViewingSessionInput[]
+  connectOrCreate?: Prisma.ViewingHistoryCreateOrConnectWithoutViewingSessionInput | Prisma.ViewingHistoryCreateOrConnectWithoutViewingSessionInput[]
+  createMany?: Prisma.ViewingHistoryCreateManyViewingSessionInputEnvelope
+  connect?: Prisma.ViewingHistoryWhereUniqueInput | Prisma.ViewingHistoryWhereUniqueInput[]
+}
+
+export type ViewingHistoryUpdateManyWithoutViewingSessionNestedInput = {
+  create?: Prisma.XOR<Prisma.ViewingHistoryCreateWithoutViewingSessionInput, Prisma.ViewingHistoryUncheckedCreateWithoutViewingSessionInput> | Prisma.ViewingHistoryCreateWithoutViewingSessionInput[] | Prisma.ViewingHistoryUncheckedCreateWithoutViewingSessionInput[]
+  connectOrCreate?: Prisma.ViewingHistoryCreateOrConnectWithoutViewingSessionInput | Prisma.ViewingHistoryCreateOrConnectWithoutViewingSessionInput[]
+  upsert?: Prisma.ViewingHistoryUpsertWithWhereUniqueWithoutViewingSessionInput | Prisma.ViewingHistoryUpsertWithWhereUniqueWithoutViewingSessionInput[]
+  createMany?: Prisma.ViewingHistoryCreateManyViewingSessionInputEnvelope
+  set?: Prisma.ViewingHistoryWhereUniqueInput | Prisma.ViewingHistoryWhereUniqueInput[]
+  disconnect?: Prisma.ViewingHistoryWhereUniqueInput | Prisma.ViewingHistoryWhereUniqueInput[]
+  delete?: Prisma.ViewingHistoryWhereUniqueInput | Prisma.ViewingHistoryWhereUniqueInput[]
+  connect?: Prisma.ViewingHistoryWhereUniqueInput | Prisma.ViewingHistoryWhereUniqueInput[]
+  update?: Prisma.ViewingHistoryUpdateWithWhereUniqueWithoutViewingSessionInput | Prisma.ViewingHistoryUpdateWithWhereUniqueWithoutViewingSessionInput[]
+  updateMany?: Prisma.ViewingHistoryUpdateManyWithWhereWithoutViewingSessionInput | Prisma.ViewingHistoryUpdateManyWithWhereWithoutViewingSessionInput[]
+  deleteMany?: Prisma.ViewingHistoryScalarWhereInput | Prisma.ViewingHistoryScalarWhereInput[]
+}
+
+export type ViewingHistoryUncheckedUpdateManyWithoutViewingSessionNestedInput = {
+  create?: Prisma.XOR<Prisma.ViewingHistoryCreateWithoutViewingSessionInput, Prisma.ViewingHistoryUncheckedCreateWithoutViewingSessionInput> | Prisma.ViewingHistoryCreateWithoutViewingSessionInput[] | Prisma.ViewingHistoryUncheckedCreateWithoutViewingSessionInput[]
+  connectOrCreate?: Prisma.ViewingHistoryCreateOrConnectWithoutViewingSessionInput | Prisma.ViewingHistoryCreateOrConnectWithoutViewingSessionInput[]
+  upsert?: Prisma.ViewingHistoryUpsertWithWhereUniqueWithoutViewingSessionInput | Prisma.ViewingHistoryUpsertWithWhereUniqueWithoutViewingSessionInput[]
+  createMany?: Prisma.ViewingHistoryCreateManyViewingSessionInputEnvelope
+  set?: Prisma.ViewingHistoryWhereUniqueInput | Prisma.ViewingHistoryWhereUniqueInput[]
+  disconnect?: Prisma.ViewingHistoryWhereUniqueInput | Prisma.ViewingHistoryWhereUniqueInput[]
+  delete?: Prisma.ViewingHistoryWhereUniqueInput | Prisma.ViewingHistoryWhereUniqueInput[]
+  connect?: Prisma.ViewingHistoryWhereUniqueInput | Prisma.ViewingHistoryWhereUniqueInput[]
+  update?: Prisma.ViewingHistoryUpdateWithWhereUniqueWithoutViewingSessionInput | Prisma.ViewingHistoryUpdateWithWhereUniqueWithoutViewingSessionInput[]
+  updateMany?: Prisma.ViewingHistoryUpdateManyWithWhereWithoutViewingSessionInput | Prisma.ViewingHistoryUpdateManyWithWhereWithoutViewingSessionInput[]
+  deleteMany?: Prisma.ViewingHistoryScalarWhereInput | Prisma.ViewingHistoryScalarWhereInput[]
+}
+
+export type ViewingHistoryCreateWithoutViewingSessionInput = {
+  id?: string
+  ipAddress: string
+  channelNumber: number
+  channelName?: string | null
+  programTitle?: string | null
+  startTime?: Date | string
+  endTime?: Date | string | null
+  duration?: number | null
+  status?: string
+  statusMessage?: string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  sessionId?: string | null
+}
+
+export type ViewingHistoryUncheckedCreateWithoutViewingSessionInput = {
+  id?: string
+  ipAddress: string
+  channelNumber: number
+  channelName?: string | null
+  programTitle?: string | null
+  startTime?: Date | string
+  endTime?: Date | string | null
+  duration?: number | null
+  status?: string
+  statusMessage?: string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  sessionId?: string | null
+}
+
+export type ViewingHistoryCreateOrConnectWithoutViewingSessionInput = {
+  where: Prisma.ViewingHistoryWhereUniqueInput
+  create: Prisma.XOR<Prisma.ViewingHistoryCreateWithoutViewingSessionInput, Prisma.ViewingHistoryUncheckedCreateWithoutViewingSessionInput>
+}
+
+export type ViewingHistoryCreateManyViewingSessionInputEnvelope = {
+  data: Prisma.ViewingHistoryCreateManyViewingSessionInput | Prisma.ViewingHistoryCreateManyViewingSessionInput[]
+}
+
+export type ViewingHistoryUpsertWithWhereUniqueWithoutViewingSessionInput = {
+  where: Prisma.ViewingHistoryWhereUniqueInput
+  update: Prisma.XOR<Prisma.ViewingHistoryUpdateWithoutViewingSessionInput, Prisma.ViewingHistoryUncheckedUpdateWithoutViewingSessionInput>
+  create: Prisma.XOR<Prisma.ViewingHistoryCreateWithoutViewingSessionInput, Prisma.ViewingHistoryUncheckedCreateWithoutViewingSessionInput>
+}
+
+export type ViewingHistoryUpdateWithWhereUniqueWithoutViewingSessionInput = {
+  where: Prisma.ViewingHistoryWhereUniqueInput
+  data: Prisma.XOR<Prisma.ViewingHistoryUpdateWithoutViewingSessionInput, Prisma.ViewingHistoryUncheckedUpdateWithoutViewingSessionInput>
+}
+
+export type ViewingHistoryUpdateManyWithWhereWithoutViewingSessionInput = {
+  where: Prisma.ViewingHistoryScalarWhereInput
+  data: Prisma.XOR<Prisma.ViewingHistoryUpdateManyMutationInput, Prisma.ViewingHistoryUncheckedUpdateManyWithoutViewingSessionInput>
+}
+
+export type ViewingHistoryScalarWhereInput = {
+  AND?: Prisma.ViewingHistoryScalarWhereInput | Prisma.ViewingHistoryScalarWhereInput[]
+  OR?: Prisma.ViewingHistoryScalarWhereInput[]
+  NOT?: Prisma.ViewingHistoryScalarWhereInput | Prisma.ViewingHistoryScalarWhereInput[]
+  id?: Prisma.StringFilter<"ViewingHistory"> | string
+  ipAddress?: Prisma.StringFilter<"ViewingHistory"> | string
+  channelNumber?: Prisma.IntFilter<"ViewingHistory"> | number
+  channelName?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+  programTitle?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+  startTime?: Prisma.DateTimeFilter<"ViewingHistory"> | Date | string
+  endTime?: Prisma.DateTimeNullableFilter<"ViewingHistory"> | Date | string | null
+  duration?: Prisma.IntNullableFilter<"ViewingHistory"> | number | null
+  status?: Prisma.StringFilter<"ViewingHistory"> | string
+  statusMessage?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+  errorDetails?: Prisma.JsonNullableFilter<"ViewingHistory">
+  sessionId?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+  viewingSessionId?: Prisma.StringNullableFilter<"ViewingHistory"> | string | null
+}
+
+export type ViewingHistoryCreateManyViewingSessionInput = {
+  id?: string
+  ipAddress: string
+  channelNumber: number
+  channelName?: string | null
+  programTitle?: string | null
+  startTime?: Date | string
+  endTime?: Date | string | null
+  duration?: number | null
+  status?: string
+  statusMessage?: string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  sessionId?: string | null
+}
+
+export type ViewingHistoryUpdateWithoutViewingSessionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
+  channelNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  channelName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  programTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  startTime?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  duration?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  statusMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  sessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+export type ViewingHistoryUncheckedUpdateWithoutViewingSessionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
+  channelNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  channelName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  programTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  startTime?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  duration?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  statusMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  sessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+export type ViewingHistoryUncheckedUpdateManyWithoutViewingSessionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  ipAddress?: Prisma.StringFieldUpdateOperationsInput | string
+  channelNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  channelName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  programTitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  startTime?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  endTime?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  duration?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  statusMessage?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  errorDetails?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  sessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 
@@ -476,7 +724,11 @@ export type ViewingHistorySelect<ExtArgs extends runtime.Types.Extensions.Intern
   endTime?: boolean
   duration?: boolean
   status?: boolean
+  statusMessage?: boolean
+  errorDetails?: boolean
   sessionId?: boolean
+  viewingSessionId?: boolean
+  viewingSession?: boolean | Prisma.ViewingHistory$viewingSessionArgs<ExtArgs>
 }, ExtArgs["result"]["viewingHistory"]>
 
 export type ViewingHistorySelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -489,7 +741,11 @@ export type ViewingHistorySelectCreateManyAndReturn<ExtArgs extends runtime.Type
   endTime?: boolean
   duration?: boolean
   status?: boolean
+  statusMessage?: boolean
+  errorDetails?: boolean
   sessionId?: boolean
+  viewingSessionId?: boolean
+  viewingSession?: boolean | Prisma.ViewingHistory$viewingSessionArgs<ExtArgs>
 }, ExtArgs["result"]["viewingHistory"]>
 
 export type ViewingHistorySelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -502,7 +758,11 @@ export type ViewingHistorySelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   endTime?: boolean
   duration?: boolean
   status?: boolean
+  statusMessage?: boolean
+  errorDetails?: boolean
   sessionId?: boolean
+  viewingSessionId?: boolean
+  viewingSession?: boolean | Prisma.ViewingHistory$viewingSessionArgs<ExtArgs>
 }, ExtArgs["result"]["viewingHistory"]>
 
 export type ViewingHistorySelectScalar = {
@@ -515,14 +775,28 @@ export type ViewingHistorySelectScalar = {
   endTime?: boolean
   duration?: boolean
   status?: boolean
+  statusMessage?: boolean
+  errorDetails?: boolean
   sessionId?: boolean
+  viewingSessionId?: boolean
 }
 
-export type ViewingHistoryOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "ipAddress" | "channelNumber" | "channelName" | "programTitle" | "startTime" | "endTime" | "duration" | "status" | "sessionId", ExtArgs["result"]["viewingHistory"]>
+export type ViewingHistoryOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "ipAddress" | "channelNumber" | "channelName" | "programTitle" | "startTime" | "endTime" | "duration" | "status" | "statusMessage" | "errorDetails" | "sessionId" | "viewingSessionId", ExtArgs["result"]["viewingHistory"]>
+export type ViewingHistoryInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  viewingSession?: boolean | Prisma.ViewingHistory$viewingSessionArgs<ExtArgs>
+}
+export type ViewingHistoryIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  viewingSession?: boolean | Prisma.ViewingHistory$viewingSessionArgs<ExtArgs>
+}
+export type ViewingHistoryIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  viewingSession?: boolean | Prisma.ViewingHistory$viewingSessionArgs<ExtArgs>
+}
 
 export type $ViewingHistoryPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "ViewingHistory"
-  objects: {}
+  objects: {
+    viewingSession: Prisma.$ViewingSessionPayload<ExtArgs> | null
+  }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     ipAddress: string
@@ -533,7 +807,10 @@ export type $ViewingHistoryPayload<ExtArgs extends runtime.Types.Extensions.Inte
     endTime: Date | null
     duration: number | null
     status: string
+    statusMessage: string | null
+    errorDetails: runtime.JsonValue | null
     sessionId: string | null
+    viewingSessionId: string | null
   }, ExtArgs["result"]["viewingHistory"]>
   composites: {}
 }
@@ -928,6 +1205,7 @@ readonly fields: ViewingHistoryFieldRefs;
  */
 export interface Prisma__ViewingHistoryClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  viewingSession<T extends Prisma.ViewingHistory$viewingSessionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ViewingHistory$viewingSessionArgs<ExtArgs>>): Prisma.Prisma__ViewingSessionClient<runtime.Types.Result.GetResult<Prisma.$ViewingSessionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -966,7 +1244,10 @@ export interface ViewingHistoryFieldRefs {
   readonly endTime: Prisma.FieldRef<"ViewingHistory", 'DateTime'>
   readonly duration: Prisma.FieldRef<"ViewingHistory", 'Int'>
   readonly status: Prisma.FieldRef<"ViewingHistory", 'String'>
+  readonly statusMessage: Prisma.FieldRef<"ViewingHistory", 'String'>
+  readonly errorDetails: Prisma.FieldRef<"ViewingHistory", 'Json'>
   readonly sessionId: Prisma.FieldRef<"ViewingHistory", 'String'>
+  readonly viewingSessionId: Prisma.FieldRef<"ViewingHistory", 'String'>
 }
     
 
@@ -983,6 +1264,10 @@ export type ViewingHistoryFindUniqueArgs<ExtArgs extends runtime.Types.Extension
    * Omit specific fields from the ViewingHistory
    */
   omit?: Prisma.ViewingHistoryOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryInclude<ExtArgs> | null
   /**
    * Filter, which ViewingHistory to fetch.
    */
@@ -1002,6 +1287,10 @@ export type ViewingHistoryFindUniqueOrThrowArgs<ExtArgs extends runtime.Types.Ex
    */
   omit?: Prisma.ViewingHistoryOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryInclude<ExtArgs> | null
+  /**
    * Filter, which ViewingHistory to fetch.
    */
   where: Prisma.ViewingHistoryWhereUniqueInput
@@ -1019,6 +1308,10 @@ export type ViewingHistoryFindFirstArgs<ExtArgs extends runtime.Types.Extensions
    * Omit specific fields from the ViewingHistory
    */
   omit?: Prisma.ViewingHistoryOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryInclude<ExtArgs> | null
   /**
    * Filter, which ViewingHistory to fetch.
    */
@@ -1068,6 +1361,10 @@ export type ViewingHistoryFindFirstOrThrowArgs<ExtArgs extends runtime.Types.Ext
    */
   omit?: Prisma.ViewingHistoryOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryInclude<ExtArgs> | null
+  /**
    * Filter, which ViewingHistory to fetch.
    */
   where?: Prisma.ViewingHistoryWhereInput
@@ -1116,6 +1413,10 @@ export type ViewingHistoryFindManyArgs<ExtArgs extends runtime.Types.Extensions.
    */
   omit?: Prisma.ViewingHistoryOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryInclude<ExtArgs> | null
+  /**
    * Filter, which ViewingHistories to fetch.
    */
   where?: Prisma.ViewingHistoryWhereInput
@@ -1159,6 +1460,10 @@ export type ViewingHistoryCreateArgs<ExtArgs extends runtime.Types.Extensions.In
    */
   omit?: Prisma.ViewingHistoryOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryInclude<ExtArgs> | null
+  /**
    * The data needed to create a ViewingHistory.
    */
   data: Prisma.XOR<Prisma.ViewingHistoryCreateInput, Prisma.ViewingHistoryUncheckedCreateInput>
@@ -1190,6 +1495,10 @@ export type ViewingHistoryCreateManyAndReturnArgs<ExtArgs extends runtime.Types.
    * The data used to create many ViewingHistories.
    */
   data: Prisma.ViewingHistoryCreateManyInput | Prisma.ViewingHistoryCreateManyInput[]
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryIncludeCreateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1204,6 +1513,10 @@ export type ViewingHistoryUpdateArgs<ExtArgs extends runtime.Types.Extensions.In
    * Omit specific fields from the ViewingHistory
    */
   omit?: Prisma.ViewingHistoryOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryInclude<ExtArgs> | null
   /**
    * The data needed to update a ViewingHistory.
    */
@@ -1256,6 +1569,10 @@ export type ViewingHistoryUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.
    * Limit how many ViewingHistories to update.
    */
   limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1270,6 +1587,10 @@ export type ViewingHistoryUpsertArgs<ExtArgs extends runtime.Types.Extensions.In
    * Omit specific fields from the ViewingHistory
    */
   omit?: Prisma.ViewingHistoryOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryInclude<ExtArgs> | null
   /**
    * The filter to search for the ViewingHistory to update in case it exists.
    */
@@ -1297,6 +1618,10 @@ export type ViewingHistoryDeleteArgs<ExtArgs extends runtime.Types.Extensions.In
    */
   omit?: Prisma.ViewingHistoryOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryInclude<ExtArgs> | null
+  /**
    * Filter which ViewingHistory to delete.
    */
   where: Prisma.ViewingHistoryWhereUniqueInput
@@ -1317,6 +1642,25 @@ export type ViewingHistoryDeleteManyArgs<ExtArgs extends runtime.Types.Extension
 }
 
 /**
+ * ViewingHistory.viewingSession
+ */
+export type ViewingHistory$viewingSessionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ViewingSession
+   */
+  select?: Prisma.ViewingSessionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ViewingSession
+   */
+  omit?: Prisma.ViewingSessionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingSessionInclude<ExtArgs> | null
+  where?: Prisma.ViewingSessionWhereInput
+}
+
+/**
  * ViewingHistory without action
  */
 export type ViewingHistoryDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1328,4 +1672,8 @@ export type ViewingHistoryDefaultArgs<ExtArgs extends runtime.Types.Extensions.I
    * Omit specific fields from the ViewingHistory
    */
   omit?: Prisma.ViewingHistoryOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ViewingHistoryInclude<ExtArgs> | null
 }

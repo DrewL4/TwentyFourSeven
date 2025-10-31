@@ -413,6 +413,7 @@ export const ModelName = {
   PlexSettings: 'PlexSettings',
   WebhookActivity: 'WebhookActivity',
   Viewer: 'Viewer',
+  ViewingSession: 'ViewingSession',
   ViewingHistory: 'ViewingHistory'
 } as const
 
@@ -429,7 +430,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "session" | "account" | "verification" | "setting" | "mediaServer" | "mediaLibrary" | "mediaShow" | "mediaEpisode" | "mediaMovie" | "channel" | "program" | "channelShow" | "channelMovie" | "settings" | "ffmpegSettings" | "plexSettings" | "webhookActivity" | "viewer" | "viewingHistory"
+    modelProps: "user" | "session" | "account" | "verification" | "setting" | "mediaServer" | "mediaLibrary" | "mediaShow" | "mediaEpisode" | "mediaMovie" | "channel" | "program" | "channelShow" | "channelMovie" | "settings" | "ffmpegSettings" | "plexSettings" | "webhookActivity" | "viewer" | "viewingSession" | "viewingHistory"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1839,6 +1840,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ViewingSession: {
+      payload: Prisma.$ViewingSessionPayload<ExtArgs>
+      fields: Prisma.ViewingSessionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ViewingSessionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ViewingSessionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload>
+        }
+        findFirst: {
+          args: Prisma.ViewingSessionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ViewingSessionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload>
+        }
+        findMany: {
+          args: Prisma.ViewingSessionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload>[]
+        }
+        create: {
+          args: Prisma.ViewingSessionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload>
+        }
+        createMany: {
+          args: Prisma.ViewingSessionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ViewingSessionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload>[]
+        }
+        delete: {
+          args: Prisma.ViewingSessionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload>
+        }
+        update: {
+          args: Prisma.ViewingSessionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload>
+        }
+        deleteMany: {
+          args: Prisma.ViewingSessionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ViewingSessionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ViewingSessionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload>[]
+        }
+        upsert: {
+          args: Prisma.ViewingSessionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ViewingSessionPayload>
+        }
+        aggregate: {
+          args: Prisma.ViewingSessionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateViewingSession>
+        }
+        groupBy: {
+          args: Prisma.ViewingSessionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ViewingSessionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ViewingSessionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ViewingSessionCountAggregateOutputType> | number
+        }
+      }
+    }
     ViewingHistory: {
       payload: Prisma.$ViewingHistoryPayload<ExtArgs>
       fields: Prisma.ViewingHistoryFieldRefs
@@ -2318,12 +2393,29 @@ export const ViewerScalarFieldEnum = {
   ipAddress: 'ipAddress',
   name: 'name',
   notes: 'notes',
+  blocked: 'blocked',
+  userId: 'userId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   createdBy: 'createdBy'
 } as const
 
 export type ViewerScalarFieldEnum = (typeof ViewerScalarFieldEnum)[keyof typeof ViewerScalarFieldEnum]
+
+
+export const ViewingSessionScalarFieldEnum = {
+  id: 'id',
+  ipAddress: 'ipAddress',
+  channelNumber: 'channelNumber',
+  channelName: 'channelName',
+  viewerName: 'viewerName',
+  sessionStart: 'sessionStart',
+  sessionEnd: 'sessionEnd',
+  totalDuration: 'totalDuration',
+  programCount: 'programCount'
+} as const
+
+export type ViewingSessionScalarFieldEnum = (typeof ViewingSessionScalarFieldEnum)[keyof typeof ViewingSessionScalarFieldEnum]
 
 
 export const ViewingHistoryScalarFieldEnum = {
@@ -2336,7 +2428,10 @@ export const ViewingHistoryScalarFieldEnum = {
   endTime: 'endTime',
   duration: 'duration',
   status: 'status',
-  sessionId: 'sessionId'
+  statusMessage: 'statusMessage',
+  errorDetails: 'errorDetails',
+  sessionId: 'sessionId',
+  viewingSessionId: 'viewingSessionId'
 } as const
 
 export type ViewingHistoryScalarFieldEnum = (typeof ViewingHistoryScalarFieldEnum)[keyof typeof ViewingHistoryScalarFieldEnum]
@@ -2545,6 +2640,7 @@ export type GlobalOmitConfig = {
   plexSettings?: Prisma.PlexSettingsOmit
   webhookActivity?: Prisma.WebhookActivityOmit
   viewer?: Prisma.ViewerOmit
+  viewingSession?: Prisma.ViewingSessionOmit
   viewingHistory?: Prisma.ViewingHistoryOmit
 }
 
