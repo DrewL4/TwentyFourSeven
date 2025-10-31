@@ -4,7 +4,10 @@ import { WatchTowerHubService } from "@/lib/watchtower-hub-service-simple";
 export async function POST(request: NextRequest) {
   try {
     const watchTowerService = WatchTowerHubService.getInstance();
+    await watchTowerService.initialize(); // Ensure service is initialized
     const results = await watchTowerService.syncUsers();
+
+    console.log(`[Sync] Sync completed: ${results.created} created, ${results.updated} updated, ${results.skipped} skipped`);
 
     return NextResponse.json({
       success: true,

@@ -47,44 +47,72 @@ export class PlexService {
   static async login(username: string, password: string): Promise<PlexLoginResult> {
     const plex = new PlexAPI();
     
-    // Sign in to get access token
-    const loginResult = await plex.signIn(username, password);
-    
-    // Get available servers
-    const servers = await plex.getServers();
-    
-    // Test connections and find best one for each server
-    const discoveredServers: PlexServerDiscovery[] = [];
-    
-    for (const server of servers) {
-      const bestConnection = await plex.findBestConnection(server);
+    try {
+      // Sign in to get access token
+      const loginResult = await plex.signIn(username, password);
       
-      discoveredServers.push({
-        name: server.name,
-        machineIdentifier: server.machineIdentifier,
-        accessToken: server.accessToken,
-        bestConnection: bestConnection ? {
-          uri: bestConnection.uri,
-          protocol: bestConnection.protocol,
-          address: bestConnection.address,
-          port: bestConnection.port,
-          local: bestConnection.local
-        } : null,
-        allConnections: server.connections.map(conn => ({
-          uri: conn.uri,
-          protocol: conn.protocol,
-          address: conn.address,
-          port: conn.port,
-          local: conn.local
-        }))
-      });
+      // Get available servers
+      const servers = await plex.getServers();
+      
+      // Test connections and find best one for each server
+      const discoveredServers: PlexServerDiscovery[] = [];
+      
+      for (const server of servers) {
+        try {
+          const bestConnection = await plex.findBestConnection(server);
+          
+          discoveredServers.push({
+            name: server.name,
+            machineIdentifier: server.machineIdentifier,
+            accessToken: server.accessToken,
+            bestConnection: bestConnection ? {
+              uri: bestConnection.uri,
+              protocol: bestConnection.protocol,
+              address: bestConnection.address,
+              port: bestConnection.port,
+              local: bestConnection.local
+            } : null,
+            allConnections: server.connections.map(conn => ({
+              uri: conn.uri,
+              protocol: conn.protocol,
+              address: conn.address,
+              port: conn.port,
+              local: conn.local
+            }))
+          });
+        } catch (error: any) {
+          // Log but continue - server might be unreachable but still valid
+          console.warn(`[PlexService] Failed to find best connection for server ${server.name}:`, error?.message);
+          
+          // Still add the server with null bestConnection
+          discoveredServers.push({
+            name: server.name,
+            machineIdentifier: server.machineIdentifier,
+            accessToken: server.accessToken,
+            bestConnection: null,
+            allConnections: server.connections.map(conn => ({
+              uri: conn.uri,
+              protocol: conn.protocol,
+              address: conn.address,
+              port: conn.port,
+              local: conn.local
+            }))
+          });
+        }
+      }
+      
+      return {
+        accessToken: loginResult.authToken,
+        user: loginResult.user,
+        servers: discoveredServers
+      };
+    } catch (error: any) {
+      // Re-throw with more context
+      if (error?.message) {
+        throw new Error(error.message);
+      }
+      throw error;
     }
-    
-    return {
-      accessToken: loginResult.authToken,
-      user: loginResult.user,
-      servers: discoveredServers
-    };
   }
 
   /**

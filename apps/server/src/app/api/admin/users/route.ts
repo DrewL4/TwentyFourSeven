@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         updatedAt: true,
         watchTowerJoinDate: true,
+        watchTowerMetadata: true,
       },
       orderBy: {
         createdAt: 'desc'
@@ -22,14 +23,22 @@ export async function GET(request: NextRequest) {
     });
 
     // Transform the response to match frontend expectations
-    const transformedUsers = users.map(user => ({
-      _id: user.id, // Map id to _id for frontend compatibility
-      name: user.name,
-      email: user.email,
-      emailVerified: user.emailVerified,
-      createdAt: user.createdAt,
-      watchTowerJoinDate: user.watchTowerJoinDate,
-    }));
+    const transformedUsers = users.map(user => {
+      const metadata = user.watchTowerMetadata as any;
+      const movieDonationDue = metadata?.movie_donation_due || null;
+      const isExpired = metadata?.movie_donation_expired || false;
+      
+      return {
+        _id: user.id, // Map id to _id for frontend compatibility
+        name: user.name,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        createdAt: user.createdAt,
+        watchTowerJoinDate: user.watchTowerJoinDate,
+        movieDonationDue: movieDonationDue,
+        isMovieExpired: isExpired,
+      };
+    });
 
     return NextResponse.json({ users: transformedUsers });
   } catch (error) {

@@ -1,4 +1,5 @@
 "use client"
+import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +34,9 @@ import {
   Type,
   Zap,
   Info,
-  Folder
+  Folder,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import Link from "next/link";
@@ -798,7 +801,7 @@ function AddContentDialog({
   if (!isOpen) return null;
 
   return (
-    <TooltipProvider>
+    <TooltipProvider delayDuration={300}>
       <div 
         className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
         onClick={(e) => {
@@ -814,9 +817,16 @@ function AddContentDialog({
               <CardTitle>Add Content to Channel</CardTitle>
               <CardDescription>Search and select content to add to your channel</CardDescription>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleClose}>
-              <X className="w-4 h-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" onClick={handleClose}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Close</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
           
                      {/* Search and Filters */}
@@ -831,22 +841,36 @@ function AddContentDialog({
                    className="pl-10"
                  />
                </div>
-               <Button 
-                 variant="outline"
-                 onClick={() => setShowFilters(!showFilters)}
-                 className="flex items-center gap-2"
-               >
-                 <Filter className="w-4 h-4" />
-                 Advanced Filters
-                 {showFilters ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-               </Button>
-               <Button 
-                 variant="outline" 
-                 onClick={clearSelection}
-                 disabled={selectedShows.size === 0 && selectedMovies.size === 0}
-               >
-                 Clear Selection
-               </Button>
+               <Tooltip>
+                 <TooltipTrigger asChild>
+                   <Button 
+                     variant="outline"
+                     onClick={() => setShowFilters(!showFilters)}
+                     className="flex items-center gap-2"
+                   >
+                     <Filter className="w-4 h-4 md:mr-1" />
+                     <span className="hidden md:inline">Advanced Filters</span>
+                     {showFilters ? <ChevronDown className="w-4 h-4 md:ml-1" /> : <ChevronRight className="w-4 h-4 md:ml-1" />}
+                   </Button>
+                 </TooltipTrigger>
+                 <TooltipContent>
+                   <p>Advanced Filters</p>
+                 </TooltipContent>
+               </Tooltip>
+               <Tooltip>
+                 <TooltipTrigger asChild>
+                   <Button 
+                     variant="outline" 
+                     onClick={clearSelection}
+                     disabled={selectedShows.size === 0 && selectedMovies.size === 0}
+                   >
+                     <span className="hidden md:inline">Clear Selection</span>
+                   </Button>
+                 </TooltipTrigger>
+                 <TooltipContent>
+                   <p>Clear Selection</p>
+                 </TooltipContent>
+               </Tooltip>
              </div>
 
              {/* Channel Automation Section */}
@@ -1086,9 +1110,16 @@ function AddContentDialog({
                        </Tooltip>
                      </Label>
                    </div>
-                   <Button variant="outline" size="sm" onClick={clearAllFilters}>
-                     Clear All Filters
-                   </Button>
+                   <Tooltip>
+                     <TooltipTrigger asChild>
+                       <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                         <span className="hidden md:inline">Clear All Filters</span>
+                       </Button>
+                     </TooltipTrigger>
+                     <TooltipContent>
+                       <p>Clear All Filters</p>
+                     </TooltipContent>
+                   </Tooltip>
                  </div>
                </div>
              )}
@@ -1126,28 +1157,42 @@ function AddContentDialog({
             <TabsContent value="shows" className="p-6 space-y-4 h-[500px] overflow-hidden">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={selectAllShows}
-                    disabled={filteredShows.length === 0}
-                  >
-                    Select All ({filteredShows.length})
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={selectAllShows}
+                        disabled={filteredShows.length === 0}
+                      >
+                        <span className="hidden md:inline">Select All ({filteredShows.length})</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Select All ({filteredShows.length})</p>
+                    </TooltipContent>
+                  </Tooltip>
                   {selectedShows.size > 0 && (
-                    <Button onClick={handleBulkAddShows}>
-                      Add {selectedShows.size} Show{selectedShows.size > 1 ? 's' : ''}
-                      {autoFilterEnabled && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="w-4 h-4 ml-2 text-blue-400" />
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-sm">
-                            <p>✨ <strong>Auto-Update Enabled:</strong> These shows will automatically get new episodes when synced</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button onClick={handleBulkAddShows}>
+                          <span className="hidden md:inline">Add {selectedShows.size} Show{selectedShows.size > 1 ? 's' : ''}</span>
+                          {autoFilterEnabled && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="w-4 h-4 md:ml-2 text-blue-400" />
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-sm">
+                                <p>✨ <strong>Auto-Update Enabled:</strong> These shows will automatically get new episodes when synced</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Add {selectedShows.size} Show{selectedShows.size > 1 ? 's' : ''}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
               </div>
@@ -1190,14 +1235,21 @@ function AddContentDialog({
                            </div>
                          </div>
                          <div className="flex items-center gap-2">
-                           <Button
-                             size="sm"
-                             variant="outline"
-                             onClick={() => toggleShowExpansion(show.id)}
-                           >
-                             {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                             Episodes
-                           </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => toggleShowExpansion(show.id)}
+                              >
+                                {isExpanded ? <ChevronDown className="w-4 h-4 md:mr-1" /> : <ChevronRight className="w-4 h-4 md:mr-1" />}
+                                <span className="hidden md:inline">Episodes</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Episodes</p>
+                            </TooltipContent>
+                          </Tooltip>
                          </div>
                        </div>
 
@@ -1206,13 +1258,20 @@ function AddContentDialog({
                          <div className="border-t bg-muted/20 p-3 space-y-3">
                            <div className="flex items-center justify-between">
                              <h5 className="font-medium text-sm">Select Seasons/Episodes</h5>
-                             <Button 
-                               size="sm" 
-                               variant="outline"
-                               onClick={() => selectAllSeasonsForShow(show.id, seasons)}
-                             >
-                               Select All Seasons
-                             </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => selectAllSeasonsForShow(show.id, seasons)}
+                                >
+                                  <span className="hidden md:inline">Select All Seasons</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Select All Seasons</p>
+                              </TooltipContent>
+                            </Tooltip>
                            </div>
                            
                                                             <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -1270,38 +1329,45 @@ function AddContentDialog({
                            
                            {(selectedShowSeasons.size > 0 || selectedShowEpisodes.size > 0) && (
                              <div className="flex justify-end pt-2 border-t">
-                               <Button 
-                                 size="sm"
-                                 onClick={() => {
-                                   // Selected episodes/seasons never auto-update
-                                   onAddShows(show.id, {
-                                     seasons: Array.from(selectedShowSeasons),
-                                     episodes: Array.from(selectedShowEpisodes)
-                                   }, false);
-                                   // Clear selections for this show
-                                   setSelectedSeasons(prev => {
-                                     const updated = { ...prev };
-                                     delete updated[show.id];
-                                     return updated;
-                                   });
-                                   setSelectedEpisodes(prev => {
-                                     const updated = { ...prev };
-                                     delete updated[show.id];
-                                     return updated;
-                                   });
-                                 }}
-                               >
-                                 Add Selected ({selectedShowSeasons.size} seasons, {selectedShowEpisodes.size} episodes)
-                                 <Tooltip>
-                                   <TooltipTrigger asChild>
-                                     <Info className="w-4 h-4 ml-2 text-muted-foreground" />
-                                   </TooltipTrigger>
-                                   <TooltipContent side="top" className="max-w-sm">
-                                     <p><strong>Note:</strong> Selected episodes/seasons will NOT auto-update with new content</p>
-                                   </TooltipContent>
-                                 </Tooltip>
-                               </Button>
-                             </div>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    size="sm"
+                                    onClick={() => {
+                                      // Selected episodes/seasons never auto-update
+                                      onAddShows(show.id, {
+                                        seasons: Array.from(selectedShowSeasons),
+                                        episodes: Array.from(selectedShowEpisodes)
+                                      }, false);
+                                      // Clear selections for this show
+                                      setSelectedSeasons(prev => {
+                                        const updated = { ...prev };
+                                        delete updated[show.id];
+                                        return updated;
+                                      });
+                                      setSelectedEpisodes(prev => {
+                                        const updated = { ...prev };
+                                        delete updated[show.id];
+                                        return updated;
+                                      });
+                                    }}
+                                  >
+                                    <span className="hidden md:inline">Add Selected ({selectedShowSeasons.size} seasons, {selectedShowEpisodes.size} episodes)</span>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Info className="w-4 h-4 md:ml-2 text-muted-foreground" />
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" className="max-w-sm">
+                                        <p><strong>Note:</strong> Selected episodes/seasons will NOT auto-update with new content</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Add Selected ({selectedShowSeasons.size} seasons, {selectedShowEpisodes.size} episodes)</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              </div>
                            )}
                          </div>
                        )}
@@ -1323,18 +1389,32 @@ function AddContentDialog({
             <TabsContent value="movies" className="p-6 space-y-4 h-[500px] overflow-hidden">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={selectAllMovies}
-                    disabled={filteredMovies.length === 0}
-                  >
-                    Select All ({filteredMovies.length})
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={selectAllMovies}
+                        disabled={filteredMovies.length === 0}
+                      >
+                        <span className="hidden md:inline">Select All ({filteredMovies.length})</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Select All ({filteredMovies.length})</p>
+                    </TooltipContent>
+                  </Tooltip>
                   {selectedMovies.size > 0 && (
-                    <Button onClick={handleBulkAddMovies}>
-                      Add {selectedMovies.size} Movies
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button onClick={handleBulkAddMovies}>
+                          <span className="hidden md:inline">Add {selectedMovies.size} Movies</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Add {selectedMovies.size} Movies</p>
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
               </div>
@@ -1362,16 +1442,23 @@ function AddContentDialog({
                         {movie.year} • {Math.floor(movie.duration / 60000)} min
                       </p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        onAddMovies(movie.id);
-                        toggleMovieSelection(movie.id);
-                      }}
-                    >
-                      Add
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            onAddMovies(movie.id);
+                            toggleMovieSelection(movie.id);
+                          }}
+                        >
+                          <span className="hidden md:inline">Add</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Add</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 ))}
                 {filteredMovies.length === 0 && (
@@ -1389,18 +1476,36 @@ function AddContentDialog({
             <TabsContent value="collections" className="p-6 space-y-4 h-[500px] overflow-hidden">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={selectAllCollections}
-                    disabled={filteredCollections.length === 0 || addingCollections}
-                  >
-                    Select All ({filteredCollections.length})
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={selectAllCollections}
+                        disabled={filteredCollections.length === 0 || addingCollections}
+                      >
+                        <span className="hidden md:inline">Select All ({filteredCollections.length})</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Select All ({filteredCollections.length})</p>
+                    </TooltipContent>
+                  </Tooltip>
                   {selectedCollections.size > 0 && (
-                    <Button onClick={handleBulkAddCollections} disabled={addingCollections}>
-                      {addingCollections ? "Adding..." : `Add ${selectedCollections.size} Collections`}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button onClick={handleBulkAddCollections} disabled={addingCollections}>
+                          {addingCollections ? (
+                            <span className="hidden md:inline">Adding...</span>
+                          ) : (
+                            <span className="hidden md:inline">Add {selectedCollections.size} Collections</span>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{addingCollections ? "Adding..." : `Add ${selectedCollections.size} Collections`}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
               </div>
@@ -1424,14 +1529,21 @@ function AddContentDialog({
                         {col.count} items
                       </p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => toggleCollectionSelection(col.name)}
-                      disabled={addingCollections}
-                    >
-                      Add
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => toggleCollectionSelection(col.name)}
+                          disabled={addingCollections}
+                        >
+                          <span className="hidden md:inline">Add</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Add</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 ))}
                 {filteredCollections.length === 0 && (
@@ -1458,20 +1570,34 @@ function AddContentDialog({
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={() => {
-                  handleBulkAddShows();
-                  handleBulkAddMovies();
-                  handleBulkAddCollections();
-                  handleClose();
-                }}
-                disabled={selectedShows.size === 0 && selectedMovies.size === 0}
-              >
-                Add Selected ({selectedShows.size + selectedMovies.size + selectedCollections.size})
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" onClick={handleClose}>
+                    <span className="hidden md:inline">Cancel</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Cancel</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={() => {
+                      handleBulkAddShows();
+                      handleBulkAddMovies();
+                      handleBulkAddCollections();
+                      handleClose();
+                    }}
+                    disabled={selectedShows.size === 0 && selectedMovies.size === 0}
+                  >
+                    <span className="hidden md:inline">Add Selected ({selectedShows.size + selectedMovies.size + selectedCollections.size})</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Add Selected ({selectedShows.size + selectedMovies.size + selectedCollections.size})</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -2681,9 +2807,10 @@ function ChannelsPageContent() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-7xl">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <TooltipProvider delayDuration={300}>
+      <div className="h-full flex flex-col max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 flex-shrink-0">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
             <Radio className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
@@ -2695,12 +2822,18 @@ function ChannelsPageContent() {
         </div>
         
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/media.m3u">
-              <span className="hidden sm:inline">Export M3U</span>
-              <span className="sm:hidden">M3U</span>
-            </Link>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/media.m3u">
+                  <span className="hidden md:inline">Export M3U</span>
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Export M3U</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -2711,16 +2844,23 @@ function ChannelsPageContent() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Select Channel</CardTitle>
-                <Button 
-                  size="sm"
-                  onClick={() => {
-                    setNewChannel(prev => ({ ...prev, number: getNextChannelNumber() }));
-                    setShowCreateForm(true);
-                  }}
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      size="sm"
+                      onClick={() => {
+                        setNewChannel(prev => ({ ...prev, number: getNextChannelNumber() }));
+                        setShowCreateForm(true);
+                      }}
+                    >
+                      <Plus className="w-4 h-4 md:mr-1" />
+                      <span className="hidden md:inline">Add</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Add Channel</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
@@ -2790,16 +2930,23 @@ function ChannelsPageContent() {
               <p className="text-sm text-muted-foreground mb-4">
                 Create your first channel to get started
               </p>
-              <Button 
-                size="sm"
-                onClick={() => {
-                  setNewChannel(prev => ({ ...prev, number: 1 }));
-                  setShowCreateForm(true);
-                }}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Channel
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    size="sm"
+                    onClick={() => {
+                      setNewChannel(prev => ({ ...prev, number: 1 }));
+                      setShowCreateForm(true);
+                    }}
+                  >
+                    <Plus className="w-4 h-4 md:mr-2" />
+                    <span className="hidden md:inline">Create Channel</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Create Channel</p>
+                </TooltipContent>
+              </Tooltip>
             </CardContent>
           </Card>
         )}
@@ -2904,16 +3051,36 @@ function ChannelsPageContent() {
             </Tabs>
 
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowCreateForm(false)} className="touch-manipulation">
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleCreateChannel}
-                disabled={!newChannel.name || createChannelMutation.isPending}
-                className="touch-manipulation"
-              >
-                {createChannelMutation.isPending ? "Creating..." : "Create Channel"}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" onClick={() => setShowCreateForm(false)} className="touch-manipulation">
+                    <span className="hidden md:inline">Cancel</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Cancel</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={handleCreateChannel}
+                    disabled={!newChannel.name || createChannelMutation.isPending}
+                    className="touch-manipulation"
+                  >
+                    {createChannelMutation.isPending ? (
+                      <span className="hidden md:inline">Creating...</span>
+                    ) : (
+                      <>
+                        <span className="hidden md:inline">Create Channel</span>
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{createChannelMutation.isPending ? "Creating..." : "Create Channel"}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </CardContent>
         </Card>
@@ -3006,42 +3173,67 @@ function ChannelsPageContent() {
             </div>
             
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditingChannelId(null)} className="touch-manipulation">
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleUpdateChannel}
-                disabled={!editChannel.name || updateChannelMutation.isPending}
-                className="touch-manipulation"
-              >
-                {updateChannelMutation.isPending ? "Updating..." : "Update Channel"}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" onClick={() => setEditingChannelId(null)} className="touch-manipulation">
+                    <span className="hidden md:inline">Cancel</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Cancel</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={handleUpdateChannel}
+                    disabled={!editChannel.name || updateChannelMutation.isPending}
+                    className="touch-manipulation"
+                  >
+                    {updateChannelMutation.isPending ? (
+                      <span className="hidden md:inline">Updating...</span>
+                    ) : (
+                      <span className="hidden md:inline">Update Channel</span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{updateChannelMutation.isPending ? "Updating..." : "Update Channel"}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-4 gap-6" style={{ gridTemplateRows: '1fr' }}>
         {/* Desktop Channels List - Left Side */}
-        <div className="hidden md:block lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Channels</CardTitle>
-                <Button 
-                  size="sm"
-                  onClick={() => {
-                    setNewChannel(prev => ({ ...prev, number: getNextChannelNumber() }));
-                    setShowCreateForm(true);
-                  }}
-                  className="touch-manipulation"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Channel
-                </Button>
+        <div className="hidden md:block lg:col-span-1 flex flex-col min-h-0">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="flex-shrink-0 pb-4">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-lg flex-shrink-0">Channels</CardTitle>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      size="sm"
+                      onClick={() => {
+                        setNewChannel(prev => ({ ...prev, number: getNextChannelNumber() }));
+                        setShowCreateForm(true);
+                      }}
+                      className="touch-manipulation flex-shrink-0"
+                    >
+                      <Plus className="w-4 h-4 md:mr-2" />
+                      <span className="hidden md:inline">Add Channel</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Add Channel</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 flex-1 overflow-hidden flex flex-col min-h-0 pb-6">
               {channelsQuery.isLoading ? (
                 <div className="space-y-2 p-4">
                   {[...Array(3)].map((_, i) => (
@@ -3074,7 +3266,7 @@ function ChannelsPageContent() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-1">
+                <div className="flex-1 overflow-y-auto space-y-1 p-2">
                   {(channelsQuery.data as any[]).map((channel: any) => (
                    <div
                      key={channel.id}
@@ -3108,25 +3300,31 @@ function ChannelsPageContent() {
                            {(channel.channelShows?.length || 0) + (channel.channelMovies?.length || 0)} items
                          </p>
                        </div>
-                       <Button
-                         variant="ghost"
-                         size="sm"
-                         className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 hover:opacity-100 touch-manipulation"
-                         onClick={(e) => {
-                           e.stopPropagation();
-                           setEditChannel({
-                             id: channel.id,
-                             number: channel.number,
-                             name: channel.name,
-                             icon: channel.icon || "",
-                             groupTitle: channel.groupTitle || ""
-                           });
-                           setEditingChannelId(channel.id);
-                         }}
-                         title="Edit Channel"
-                       >
-                         <Edit className="w-4 h-4" />
-                       </Button>
+                       <Tooltip>
+                         <TooltipTrigger asChild>
+                           <Button
+                             variant="ghost"
+                             size="sm"
+                             className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 hover:opacity-100 touch-manipulation"
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               setEditChannel({
+                                 id: channel.id,
+                                 number: channel.number,
+                                 name: channel.name,
+                                 icon: channel.icon || "",
+                                 groupTitle: channel.groupTitle || ""
+                               });
+                               setEditingChannelId(channel.id);
+                             }}
+                           >
+                             <Edit className="w-4 h-4" />
+                           </Button>
+                         </TooltipTrigger>
+                         <TooltipContent>
+                           <p>Edit Channel</p>
+                         </TooltipContent>
+                       </Tooltip>
                      </div>
                    </div>
                  ))}
@@ -3137,7 +3335,7 @@ function ChannelsPageContent() {
         </div>
 
         {/* Channel Content - Main Area */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 flex flex-col min-h-0">
           {!selectedChannelId ? (
             <Card>
               <CardContent className="p-8 sm:p-12 text-center">
@@ -3178,9 +3376,9 @@ function ChannelsPageContent() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-6 flex-1 flex flex-col min-h-0">
               {/* Channel Header */}
-              <Card>
+              <Card className="flex-shrink-0">
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
@@ -3215,67 +3413,93 @@ function ChannelsPageContent() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Button variant="ghost" size="sm" asChild className="touch-manipulation">
-                        <Link href={`/player?channel=${selectedChannelQuery.data.number}`}>
-                          <Play className="w-4 h-4 mr-1" />
-                          Watch
-                        </Link>
-                      </Button>
-                      <Button 
-                        variant="destructive" 
-                        size="sm"
-                        onClick={() => deleteChannelMutation.mutate({ id: selectedChannelQuery.data!.id })}
-                        disabled={deleteChannelMutation.isPending}
-                        className="touch-manipulation"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span className="hidden sm:inline ml-1">Delete</span>
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="sm" asChild className="touch-manipulation">
+                            <Link href={`/player?channel=${selectedChannelQuery.data.number}`}>
+                              <Play className="w-4 h-4 md:mr-1" />
+                              <span className="hidden md:inline">Watch</span>
+                            </Link>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Watch</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="destructive" 
+                            size="sm"
+                            onClick={() => deleteChannelMutation.mutate({ id: selectedChannelQuery.data!.id })}
+                            disabled={deleteChannelMutation.isPending}
+                            className="touch-manipulation"
+                          >
+                            <Trash2 className="w-4 h-4 md:mr-1" />
+                            <span className="hidden md:inline">Delete</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Delete</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 </CardHeader>
               </Card>
 
                             {/* Programming Content - TwentyFourSeven Style */}
-              <Tabs defaultValue="programming" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-3">
+              <Tabs defaultValue="programming" className="flex-1 flex flex-col min-h-0">
+                <TabsList className="grid w-full grid-cols-3 flex-shrink-0 mb-6">
                   <TabsTrigger value="programming" className="touch-manipulation">Programming</TabsTrigger>
                   <TabsTrigger value="schedule" className="touch-manipulation">Schedule</TabsTrigger>
                   <TabsTrigger value="filler" className="touch-manipulation">Filler</TabsTrigger>
                 </TabsList>
 
                 {/* Programming Tab */}
-                <TabsContent value="programming">
-                  <Card>
-                    <CardHeader>
+                <TabsContent value="programming" className="flex-1 flex flex-col min-h-0 mt-0">
+                  <Card className="h-full flex flex-col">
+                    <CardHeader className="flex-shrink-0">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <CardTitle className="flex items-center gap-2">
                           <Video className="w-5 h-5" />
                           Channel Configuration
                         </CardTitle>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={handleShuffleAllContent}
-                            className="touch-manipulation"
-                          >
-                            <Shuffle className="w-4 h-4 mr-1" />
-                            <span className="hidden sm:inline">Shuffle All</span>
-                            <span className="sm:hidden">Shuffle</span>
-                          </Button>
-                          <Button 
-                            onClick={() => setShowAddDialog(true)}
-                            className="touch-manipulation"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            <span className="hidden sm:inline">Add Content</span>
-                            <span className="sm:hidden">Add</span>
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={handleShuffleAllContent}
+                                className="touch-manipulation"
+                              >
+                                <Shuffle className="w-4 h-4 md:mr-1" />
+                                <span className="hidden md:inline">Shuffle All</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Shuffle All</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button 
+                                onClick={() => setShowAddDialog(true)}
+                                className="touch-manipulation"
+                              >
+                                <Plus className="w-4 h-4 md:mr-2" />
+                                <span className="hidden md:inline">Add Content</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Add Content</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="flex-1 min-h-0 flex flex-col pb-0">
                       {selectedChannelQuery.isLoading ? (
                         <div className="space-y-4">
                           <div className="animate-pulse space-y-3">
@@ -3302,9 +3526,9 @@ function ChannelsPageContent() {
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-4">
+                        <div className="flex-1 flex flex-col min-h-0 space-y-4">
                           {/* Program Duration Summary */}
-                          <div className="bg-muted/30 p-4 rounded-lg">
+                          <div className="bg-muted/30 p-4 rounded-lg flex-shrink-0">
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
                               <div>
                                 <p className="text-sm text-muted-foreground">Shows</p>
@@ -3387,68 +3611,89 @@ function ChannelsPageContent() {
                                 {/* Mobile Actions */}
                                 <div className="flex items-center justify-between pt-2 border-t">
                                   <div className="flex items-center gap-2">
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      className="h-8 px-3 touch-manipulation"
-                                      disabled={index === 0}
-                                      onClick={() => {
-                                        // Move up logic for mobile
-                                        const newOrder = [...getAllPrograms()];
-                                        const temp = newOrder[index];
-                                        newOrder[index] = newOrder[index - 1];
-                                        newOrder[index - 1] = temp;
-                                        // Handle reorder mutation here
-                                      }}
-                                    >
-                                      ↑
-                                    </Button>
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm"
-                                      className="h-8 px-3 touch-manipulation"
-                                      disabled={index === getAllPrograms().length - 1}
-                                      onClick={() => {
-                                        // Move down logic for mobile
-                                        const newOrder = [...getAllPrograms()];
-                                        const temp = newOrder[index];
-                                        newOrder[index] = newOrder[index + 1];
-                                        newOrder[index + 1] = temp;
-                                        // Handle reorder mutation here
-                                      }}
-                                    >
-                                      ↓
-                                    </Button>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm"
+                                          className="h-8 px-3 touch-manipulation"
+                                          disabled={index === 0}
+                                          onClick={() => {
+                                            // Move up logic for mobile
+                                            const newOrder = [...getAllPrograms()];
+                                            const temp = newOrder[index];
+                                            newOrder[index] = newOrder[index - 1];
+                                            newOrder[index - 1] = temp;
+                                            // Handle reorder mutation here
+                                          }}
+                                        >
+                                          ↑
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Move Up</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm"
+                                          className="h-8 px-3 touch-manipulation"
+                                          disabled={index === getAllPrograms().length - 1}
+                                          onClick={() => {
+                                            // Move down logic for mobile
+                                            const newOrder = [...getAllPrograms()];
+                                            const temp = newOrder[index];
+                                            newOrder[index] = newOrder[index + 1];
+                                            newOrder[index + 1] = temp;
+                                            // Handle reorder mutation here
+                                          }}
+                                        >
+                                          ↓
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Move Down</p>
+                                      </TooltipContent>
+                                    </Tooltip>
                                   </div>
                                   
-                                  <Button 
-                                    variant="destructive" 
-                                    size="sm"
-                                    className="h-8 px-3 touch-manipulation"
-                                    onClick={() => {
-                                      if (item.type === 'movie' && item.channelMovieId) {
-                                        handleRemoveMovie(item.movieId);
-                                      } else if ((item.type === 'episode' || item.type === 'show') && item.channelShowId) {
-                                        handleRemoveShow(item.showId);
-                                      }
-                                    }}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button 
+                                        variant="destructive" 
+                                        size="sm"
+                                        className="h-8 px-3 touch-manipulation"
+                                        onClick={() => {
+                                          if (item.type === 'movie' && item.channelMovieId) {
+                                            handleRemoveMovie(item.movieId);
+                                          } else if ((item.type === 'episode' || item.type === 'show') && item.channelShowId) {
+                                            handleRemoveShow(item.showId);
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Remove</p>
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </div>
                               </div>
                             ))}
                           </div>
 
                           {/* Desktop Drag-and-Drop List */}
-                          <div className="hidden md:block">
+                          <div className="hidden md:block flex-1 min-h-0">
                             <DragDropContext onDragEnd={onDragEnd}>
                               <Droppable droppableId="programs">
                                 {(provided) => (
                                   <div
                                     {...provided.droppableProps}
                                     ref={provided.innerRef}
-                                    className="space-y-1"
+                                    className="space-y-1 h-full overflow-y-auto px-6 pb-6"
                                   >
                                     {getAllPrograms().map((item: any, index) => (
                                       <Draggable key={item.id} draggableId={item.id} index={index}>
@@ -3534,47 +3779,71 @@ function ChannelsPageContent() {
                                               {/* Actions */}
                                               <div className="flex items-center gap-1 flex-shrink-0">
                                                 {(item.type === 'movie' && item.channelMovieId) && (
-                                                  <Button 
-                                                    variant="ghost" 
-                                                    size="sm"
-                                                    className="h-6 w-6 p-0"
-                                                    title="Remove Movie from Channel"
-                                                    onClick={() => handleRemoveMovie(item.movieId)}
-                                                  >
-                                                    <Trash2 className="w-3 h-3 text-destructive" />
-                                                  </Button>
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Button 
+                                                        variant="ghost" 
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0"
+                                                        onClick={() => handleRemoveMovie(item.movieId)}
+                                                      >
+                                                        <Trash2 className="w-3 h-3 text-destructive" />
+                                                      </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                      <p>Remove Movie from Channel</p>
+                                                    </TooltipContent>
+                                                  </Tooltip>
                                                 )}
                                                 {(item.type === 'episode' && item.channelShowId) && (
-                                                  <Button 
-                                                    variant="ghost" 
-                                                    size="sm"
-                                                    className="h-6 w-6 p-0"
-                                                    title="Remove Show from Channel"
-                                                    onClick={() => handleRemoveShow(item.showId)}
-                                                  >
-                                                    <Trash2 className="w-3 h-3 text-destructive" />
-                                                  </Button>
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Button 
+                                                        variant="ghost" 
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0"
+                                                        onClick={() => handleRemoveShow(item.showId)}
+                                                      >
+                                                        <Trash2 className="w-3 h-3 text-destructive" />
+                                                      </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                      <p>Remove Show from Channel</p>
+                                                    </TooltipContent>
+                                                  </Tooltip>
                                                 )}
                                                 {(item.type === 'show' && item.channelShowId) && (
-                                                  <Button 
-                                                    variant="ghost" 
-                                                    size="sm"
-                                                    className="h-6 w-6 p-0"
-                                                    title="Remove Show from Channel"
-                                                    onClick={() => handleRemoveShow(item.showId)}
-                                                  >
-                                                    <Trash2 className="w-3 h-3 text-destructive" />
-                                                  </Button>
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Button 
+                                                        variant="ghost" 
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0"
+                                                        onClick={() => handleRemoveShow(item.showId)}
+                                                      >
+                                                        <Trash2 className="w-3 h-3 text-destructive" />
+                                                      </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                      <p>Remove Show from Channel</p>
+                                                    </TooltipContent>
+                                                  </Tooltip>
                                                 )}
-                                                <Button 
-                                                  variant="ghost" 
-                                                  size="sm"
-                                                  className="h-6 w-6 p-0"
-                                                  title="View Details"
-                                                  disabled
-                                                >
-                                                  <Settings className="w-3 h-3" />
-                                                </Button>
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <Button 
+                                                      variant="ghost" 
+                                                      size="sm"
+                                                      className="h-6 w-6 p-0"
+                                                      disabled
+                                                    >
+                                                      <Settings className="w-3 h-3" />
+                                                    </Button>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>
+                                                    <p>View Details</p>
+                                                  </TooltipContent>
+                                                </Tooltip>
                                               </div>
                                             </div>
                                           </div>
@@ -3594,8 +3863,8 @@ function ChannelsPageContent() {
                 </TabsContent>
 
                 {/* Schedule Tab */}
-                <TabsContent value="schedule">
-                  <Card>
+                <TabsContent value="schedule" className="flex-1 flex flex-col min-h-0">
+                  <Card className="h-full flex flex-col">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Clock className="w-5 h-5" />
@@ -3609,28 +3878,42 @@ function ChannelsPageContent() {
                         <p className="text-muted-foreground mb-4 text-sm sm:text-base">
                           Visual timeline of your channel programming (Coming Soon)
                         </p>
-                        <Button variant="outline" disabled className="touch-manipulation">
-                          <RotateCcw className="w-4 h-4 mr-2" />
-                          Generate Schedule
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" disabled className="touch-manipulation">
+                              <RotateCcw className="w-4 h-4 md:mr-2" />
+                              <span className="hidden md:inline">Generate Schedule</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Generate Schedule</p>
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
 
                 {/* Filler Tab */}
-                <TabsContent value="filler">
-                  <Card>
+                <TabsContent value="filler" className="flex-1 flex flex-col min-h-0">
+                  <Card className="h-full flex flex-col">
                     <CardHeader>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <CardTitle className="flex items-center gap-2">
                           <Music className="w-5 h-5" />
                           Filler Content
                         </CardTitle>
-                        <Button variant="outline" disabled className="touch-manipulation">
-                          <Plus className="w-4 h-4 mr-2" />
-                          Add Filler
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" disabled className="touch-manipulation">
+                              <Plus className="w-4 h-4 md:mr-2" />
+                              <span className="hidden md:inline">Add Filler</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Add Filler</p>
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -3640,10 +3923,17 @@ function ChannelsPageContent() {
                         <p className="text-muted-foreground mb-4 text-sm sm:text-base">
                           Add commercials, bumpers, and other filler content to enhance your channel
                         </p>
-                        <Button variant="outline" disabled className="touch-manipulation">
-                          <Plus className="w-4 h-4 mr-2" />
-                          Add Filler Content
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" disabled className="touch-manipulation">
+                              <Plus className="w-4 h-4 md:mr-2" />
+                              <span className="hidden md:inline">Add Filler Content</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Add Filler Content</p>
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     </CardContent>
                   </Card>
@@ -3655,7 +3945,8 @@ function ChannelsPageContent() {
 
         {/* Sidebar - Programming Tools */}
         {selectedChannelId && selectedChannelQuery.data && (
-          <div className="lg:col-span-1 space-y-6">
+          <div className="lg:col-span-1 min-h-0 overflow-y-auto">
+            <div className="space-y-4 sticky top-0 pb-4">
             {/* Mobile Collapsible Quick Actions */}
             <div className="md:hidden">
               <Card>
@@ -3687,100 +3978,52 @@ function ChannelsPageContent() {
             </div>
 
             {/* Desktop Sidebar */}
-            <div className="hidden md:block space-y-6">
+            <div className="hidden md:block space-y-4">
+              {/* Quick Actions Dropdown */}
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="w-5 h-5" />
-                    Schedule Info
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Shows</p>
-                      <p className="text-2xl font-bold">{selectedChannelQuery.data.channelShows?.length || 0}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Movies</p>
-                      <p className="text-2xl font-bold">{selectedChannelQuery.data.channelMovies?.length || 0}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Filler</p>
-                      <p className="text-2xl font-bold">{(selectedChannelQuery.data as any).fillerContent?.length || 0}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Total Items</p>
-                      <p className="text-2xl font-bold text-primary">
-                        {(selectedChannelQuery.data.channelShows?.length || 0) + 
-                         (selectedChannelQuery.data.channelMovies?.length || 0) + 
-                         ((selectedChannelQuery.data as any).fillerContent?.length || 0)}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Quick Actions</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Button 
-                    className="w-full touch-manipulation" 
-                    variant="outline"
-                    onClick={handleRegenerateSchedule}
-                    disabled={regenerateScheduleMutation.isPending}
-                  >
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    {regenerateScheduleMutation.isPending ? "Regenerating..." : "Regenerate Schedule"}
-                  </Button>
-                  
-                  {/* Quick Shuffle Button */}
-                  <Button 
-                    className="w-full touch-manipulation" 
-                    variant="outline"
-                    onClick={() => handleSmartShuffle('shuffle-all')}
-                    disabled={reorderContentMutation.isPending || getAllPrograms().length === 0}
-                  >
-                    <Shuffle className="w-4 h-4 mr-2" />
-                    {reorderContentMutation.isPending ? "Shuffling..." : "Quick Shuffle"}
-                  </Button>
-                  
-                  {/* Smart Shuffle/Sort Dropdown */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium">Advanced Reorder</Label>
-                      {getAllPrograms().length > 0 && (
-                        <Badge variant="outline" className="text-xs">
-                          {getAllPrograms().length} items
-                        </Badge>
-                      )}
-                    </div>
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Quick Actions</Label>
                     <Select 
-                      value={selectedChannelQuery.data?.autoSortMethod || ""}
+                      value=""
                       onValueChange={(value) => {
-                        if (value && value !== 'placeholder') {
+                        if (value === "regenerate") {
+                          handleRegenerateSchedule();
+                        } else if (value === "shuffle-all") {
+                          handleSmartShuffle('shuffle-all');
+                        } else if (value && value !== 'placeholder') {
                           handleSmartShuffle(value);
                         }
                       }}
-                      disabled={reorderContentMutation.isPending || getAllPrograms().length === 0}
+                      disabled={regenerateScheduleMutation.isPending || reorderContentMutation.isPending || getAllPrograms().length === 0}
                     >
                       <SelectTrigger className="w-full touch-manipulation">
                         <SelectValue placeholder={
-                          reorderContentMutation.isPending 
-                            ? "Reordering..." 
-                            : getAllPrograms().length === 0
-                            ? "No content to sort"
-                            : selectedChannelQuery.data?.autoSortMethod 
-                            ? `Auto: ${getAutoSortDisplayName(selectedChannelQuery.data.autoSortMethod)}`
-                            : "Choose advanced option"
+                          regenerateScheduleMutation.isPending 
+                            ? "Regenerating..." 
+                            : reorderContentMutation.isPending
+                            ? "Shuffling..."
+                            : "Choose action..."
                         } />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="regenerate">
+                          <div className="flex items-center gap-2">
+                            <RotateCcw className="w-4 h-4" />
+                            <span>Regenerate Schedule</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="shuffle-all">
+                          <div className="flex items-center gap-2">
+                            <Shuffle className="w-4 h-4" />
+                            <span>Quick Shuffle</span>
+                          </div>
+                        </SelectItem>
+                        
                         {/* Current Auto-Sort Status */}
                         {selectedChannelQuery.data?.autoSortMethod && (
                           <>
+                            <div className="border-t my-1"></div>
                             <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                               Current Auto-Sort
                             </div>
@@ -3896,80 +4139,70 @@ function ChannelsPageContent() {
                     </Select>
                     
                     {reorderContentMutation.isPending && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <RotateCcw className="w-3 h-3 animate-spin" />
-                        <span>Saving new order...</span>
+                        <span>Saving...</span>
                       </div>
                     )}
                   </div>
-                  
-                  <Button 
-                    className="w-full touch-manipulation" 
-                    variant="outline"
-                    onClick={handleViewGrid}
-                    disabled
-                    title="Grid view coming soon"
-                  >
-                    <Grid3X3 className="w-4 h-4 mr-2" />
-                    View Grid
-                  </Button>
                 </CardContent>
               </Card>
 
+              {/* Programming Rules Dropdown */}
               <Card>
-                <CardHeader>
-                  <CardTitle>Programming Rules</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      Default Episode Order
-                      {updateChannelSettingsMutation.isPending && (
-                        <RotateCcw className="w-3 h-3 animate-spin" />
-                      )}
-                    </Label>
-                    <Select 
-                      value={defaultEpisodeOrder} 
-                      onValueChange={handleEpisodeOrderChange}
-                      disabled={updateChannelSettingsMutation.isPending}
-                    >
-                      <SelectTrigger className="touch-manipulation">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sequential">Sequential</SelectItem>
-                        <SelectItem value="random">Random</SelectItem>
-                        <SelectItem value="shuffle">Shuffle</SelectItem>
-                      </SelectContent>
-                    </Select>
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Programming Rules</Label>
+                    <div className="space-y-2">
+                      <div className="space-y-1.5">
+                        <Label className="flex items-center gap-1.5 text-xs">
+                          Default Episode Order
+                          {updateChannelSettingsMutation.isPending && (
+                            <RotateCcw className="w-3 h-3 animate-spin" />
+                          )}
+                        </Label>
+                        <Select 
+                          value={defaultEpisodeOrder} 
+                          onValueChange={handleEpisodeOrderChange}
+                          disabled={updateChannelSettingsMutation.isPending}
+                        >
+                          <SelectTrigger className="touch-manipulation h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sequential">Sequential</SelectItem>
+                            <SelectItem value="random">Random</SelectItem>
+                            <SelectItem value="shuffle">Shuffle</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch 
+                          id="respect-order" 
+                          checked={respectEpisodeOrder}
+                          onCheckedChange={handleRespectEpisodeOrderChange}
+                          disabled={updateChannelSettingsMutation.isPending}
+                          className="touch-manipulation"
+                        />
+                        <Label htmlFor="respect-order" className="text-xs">Respect Episode Order</Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch 
+                          id="block-shuffle" 
+                          checked={blockShuffle}
+                          onCheckedChange={handleBlockShuffleChange}
+                          disabled={updateChannelSettingsMutation.isPending}
+                          className="touch-manipulation"
+                        />
+                        <Label htmlFor="block-shuffle" className="text-xs">Block Shuffle</Label>
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Switch 
-                      id="respect-order" 
-                      checked={respectEpisodeOrder}
-                      onCheckedChange={handleRespectEpisodeOrderChange}
-                      disabled={updateChannelSettingsMutation.isPending}
-                      className="touch-manipulation"
-                    />
-                    <Label htmlFor="respect-order">Respect Episode Order</Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Switch 
-                      id="block-shuffle" 
-                      checked={blockShuffle}
-                      onCheckedChange={handleBlockShuffleChange}
-                      disabled={updateChannelSettingsMutation.isPending}
-                      className="touch-manipulation"
-                    />
-                    <Label htmlFor="block-shuffle">Block Shuffle</Label>
-                  </div>
-
-
-
                 </CardContent>
               </Card>
+            </div>
             </div>
           </div>
         )}
@@ -3992,7 +4225,8 @@ function ChannelsPageContent() {
 
 
 
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 
@@ -4009,9 +4243,26 @@ function InlineBulkCreateFromCollections() {
   return (
     <div className="mb-4">
       <div className="flex justify-end">
-        <Button variant="secondary" size="sm" className="touch-manipulation" onClick={() => setOpen(o => !o)}>
-          <Folder className="w-4 h-4 mr-2" /> {open ? 'Close' : 'Create from Collections'}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="secondary" size="sm" className="touch-manipulation" onClick={() => setOpen(o => !o)}>
+              {open ? (
+                <>
+                  <X className="w-4 h-4 md:mr-2" />
+                  <span className="hidden md:inline">Close</span>
+                </>
+              ) : (
+                <>
+                  <Folder className="w-4 h-4 md:mr-2" />
+                  <span className="hidden md:inline">Create from Collections</span>
+                </>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{open ? 'Close' : 'Create from Collections'}</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
       {open && (
         <Card className="mt-3">
@@ -4100,8 +4351,28 @@ function BulkCreateFromCollections() {
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search collections" />
         <div className="flex items-center justify-between py-1">
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setSelected((collectionsQuery.data || []).map((c:any)=> c.name))}>Select All</Button>
-            <Button variant="outline" size="sm" onClick={() => setSelected([])}>Select None</Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={() => setSelected((collectionsQuery.data || []).map((c:any)=> c.name))}>
+                  <CheckSquare className="w-4 h-4 md:mr-2" />
+                  <span className="hidden md:inline">Select All</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Select All</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={() => setSelected([])}>
+                  <Square className="w-4 h-4 md:mr-2" />
+                  <span className="hidden md:inline">Select None</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Select None</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
           <Badge variant="outline">{selected.length} selected</Badge>
         </div>

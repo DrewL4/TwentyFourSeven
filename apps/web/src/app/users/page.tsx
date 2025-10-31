@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Download, Users as UsersIcon, Loader2, AlertCircle, CheckCircle, LogIn } from "lucide-react";
 import { toast } from "sonner";
+import { useSocket } from "@/hooks/use-socket";
 
 interface User {
   _id: string;
@@ -17,6 +18,8 @@ interface User {
   emailVerified: boolean;
   createdAt: string;
   watchTowerJoinDate?: string;
+  movieDonationDue?: string | null;
+  isMovieExpired?: boolean;
 }
 
 interface WatchTowerUser {
@@ -39,27 +42,63 @@ export default function UsersPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isWatchTowerConfigured, setIsWatchTowerConfigured] = useState(false);
+  
+  // Connect to WebSocket for real-time updates
+  const { socket, isConnected } = useSocket();
 
-  useEffect(() => {
-    fetchUsers();
-    loadWatchTowerSettings();
-  }, []);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async (showLoading = true) => {
     try {
+      if (showLoading) {
+        setLoading(true);
+      }
       const response = await fetch("/api/admin/users");
       if (response.ok) {
         const data = await response.json();
         setUsers(data.users || []);
       } else {
-        toast.error("Failed to fetch users");
+        if (showLoading) {
+          toast.error("Failed to fetch users");
+        }
       }
     } catch (error) {
-      toast.error("Error loading users");
+      if (showLoading) {
+        toast.error("Error loading users");
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchUsers(true); // Show loading on initial fetch
+    loadWatchTowerSettings();
+  }, [fetchUsers]);
+
+  // Listen for user update events from WebSocket
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUserUpdate = (data: { email: string; action: string; timestamp: string }) => {
+      console.log('[Socket] Received user update:', data);
+      // Refresh users list when we receive an update
+      fetchUsers(false); // Silent refresh (no loading spinner)
+      
+      // Show appropriate toast message
+      if (data.action === 'deleted') {
+        toast.info(`User ${data.email} was deleted`);
+      } else {
+        toast.info(`User ${data.email} was ${data.action}`);
+      }
+    };
+
+    socket.on('user:update', handleUserUpdate);
+
+    return () => {
+      socket.off('user:update', handleUserUpdate);
+    };
+  }, [socket, fetchUsers]);
 
   const loadWatchTowerSettings = async () => {
     try {
@@ -322,92 +361,17 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Import from WatchTower */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Download className="h-5 w-5" />
-            <span>{isWatchTowerConfigured ? "WatchTower Integration" : "Import from WatchTower"}</span>
-          </CardTitle>
-          <CardDescription>
-            {isWatchTowerConfigured 
-              ? "WatchTower is configured. You can sync users or update settings."
-              : "Sign in to your WatchTower account to import TV users"
-            }
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="watchtower-url">WatchTower URL</Label>
-            <Input
-              id="watchtower-url"
-              placeholder="https://your-watchtower.com"
-              value={watchTowerUrl}
-              onChange={(e) => setWatchTowerUrl(e.target.value)}
-            />
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="username">WatchTower Username</Label>
-              <Input
-                id="username"
-                placeholder="Your WatchTower username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-              />
-            </div>
-            <div>
-              <Label htmlFor="password">WatchTower Password{isWatchTowerConfigured ? " (leave blank to use saved)" : ""}</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder={isWatchTowerConfigured ? "Leave blank to use saved password" : "Your WatchTower password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-            </div>
-          </div>
-          
-          <Button 
-            onClick={isWatchTowerConfigured ? syncWatchTowerUsers : importFromWatchTower} 
-            disabled={importing || syncing || !watchTowerUrl || !username || (!isWatchTowerConfigured && !password)}
-            className="w-full md:w-auto"
-          >
-            {(importing || syncing) ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isWatchTowerConfigured ? "Syncing..." : "Importing..."}
-              </>
-            ) : (
-              <>
-                <Download className="mr-2 h-4 w-4" />
-                {isWatchTowerConfigured ? "Sync Users" : "Sign In & Import TV Users"}
-              </>
-            )}
-          </Button>
-          
-          <div className="flex items-start space-x-2 text-sm text-muted-foreground">
-            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-            <div>
-              <p>• Only active users with TV service will be imported</p>
-              <p>• Imported users will need to set their passwords using "forgot password"</p>
-              <p>• Existing users (same email) will be updated with fresh data</p>
-              {isWatchTowerConfigured && <p>• WatchTower credentials are securely stored for automatic syncing</p>}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Separator />
 
       {/* Users List */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <div>
-            <CardTitle>Current Users ({users.length})</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Current Users ({users.length})
+              {isConnected && (
+                <span className="text-xs text-green-600 font-normal" title="WebSocket connected - receiving real-time updates">● Live</span>
+              )}
+            </CardTitle>
             <CardDescription>All users in the TwentyFour/Seven system</CardDescription>
           </div>
           <Button 
@@ -436,38 +400,67 @@ export default function UsersPage() {
             </p>
           ) : (
             <div className="space-y-4">
-              {users.map((user) => (
-                <div key={user._id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex-1">
-                    <div className="font-medium">{user.name}</div>
-                    <div className="text-sm text-muted-foreground">{user.email}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {user.watchTowerJoinDate ? (
-                        <>
-                          WatchTower: {new Date(user.watchTowerJoinDate).toLocaleDateString()}
-                          <br />
-                          TwentyFour/Seven: {new Date(user.createdAt).toLocaleDateString()}
-                        </>
+              {users.map((user) => {
+                const isExpired = user.isMovieExpired || false;
+                const movieDueDate = user.movieDonationDue 
+                  ? new Date(user.movieDonationDue).toLocaleDateString()
+                  : null;
+                
+                return (
+                  <div 
+                    key={user._id} 
+                    className={`flex items-center justify-between p-4 border rounded-lg ${
+                      isExpired ? 'bg-red-50 border-red-200' : ''
+                    }`}
+                  >
+                    <div className="flex-1">
+                      <div className={`font-medium ${isExpired ? 'text-red-700' : ''}`}>
+                        {user.name}
+                      </div>
+                      <div className="text-sm text-muted-foreground">{user.email}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {user.watchTowerJoinDate ? (
+                          <>
+                            WatchTower: {new Date(user.watchTowerJoinDate).toLocaleDateString()}
+                            <br />
+                            TwentyFour/Seven: {new Date(user.createdAt).toLocaleDateString()}
+                          </>
+                        ) : (
+                          <>Joined: {new Date(user.createdAt).toLocaleDateString()}</>
+                        )}
+                        {movieDueDate && (
+                          <>
+                            <br />
+                            <span className={isExpired ? 'text-red-600 font-semibold' : 'text-green-600'}>
+                              Movie Expires: {movieDueDate}
+                              {isExpired && ' (EXPIRED)'}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {user.emailVerified ? (
+                        <Badge variant="default" className="flex items-center space-x-1">
+                          <CheckCircle className="h-3 w-3" />
+                          <span>Verified</span>
+                        </Badge>
                       ) : (
-                        <>Joined: {new Date(user.createdAt).toLocaleDateString()}</>
+                        <Badge variant="secondary" className="flex items-center space-x-1">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Unverified</span>
+                        </Badge>
+                      )}
+                      {isExpired && (
+                        <Badge variant="destructive" className="flex items-center space-x-1">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Expired</span>
+                        </Badge>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    {user.emailVerified ? (
-                      <Badge variant="default" className="flex items-center space-x-1">
-                        <CheckCircle className="h-3 w-3" />
-                        <span>Verified</span>
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="flex items-center space-x-1">
-                        <AlertCircle className="h-3 w-3" />
-                        <span>Unverified</span>
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

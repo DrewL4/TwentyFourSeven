@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Shield, Users, ArrowLeft } from 'lucide-react';
+import { Shield, Users, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { getServerUrl } from '@/utils/server-url';
 
 export default function LoginPage() {
@@ -19,6 +19,7 @@ export default function LoginPage() {
   // WatchTower login state
   const [watchTowerUrl, setWatchTowerUrl] = useState('http://127.0.0.1:8000');
   const [apiToken, setApiToken] = useState('');
+  const [showApiToken, setShowApiToken] = useState(false);
   const [watchTowerEmail, setWatchTowerEmail] = useState('');
   const [watchTowerPassword, setWatchTowerPassword] = useState('');
   const [watchTowerLoading, setWatchTowerLoading] = useState(false);
@@ -79,19 +80,61 @@ export default function LoginPage() {
       
       // Only save configuration if WatchTower is not already configured
       if (!watchTowerConfigured) {
-        console.log('Saving WatchTower configuration...');
+        // Validate required fields
+        if (!watchTowerUrl || !watchTowerUrl.trim()) {
+          setError('WatchTower Server URL is required');
+          setWatchTowerLoading(false);
+          return;
+        }
+        
+        if (!apiToken || !apiToken.trim()) {
+          setError('API Token is required');
+          setWatchTowerLoading(false);
+          return;
+        }
+
+        if (!watchTowerEmail || !watchTowerEmail.trim()) {
+          setError('WatchTower Email is required');
+          setWatchTowerLoading(false);
+          return;
+        }
+
+        if (!watchTowerPassword || !watchTowerPassword.trim()) {
+          setError('WatchTower Password is required');
+          setWatchTowerLoading(false);
+          return;
+        }
+
+        console.log('Saving WatchTower configuration...', {
+          urlLength: watchTowerUrl.trim().length,
+          tokenLength: apiToken.trim().length
+        });
+        
         const configResponse = await fetch(`${serverUrl}/api/admin/watchtower/save-config`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            watchTowerUrl, 
-            apiToken 
+            watchTowerUrl: watchTowerUrl.trim(), 
+            apiToken: apiToken.trim()
           })
         });
 
         if (!configResponse.ok) {
-          console.error('Failed to save WatchTower configuration:', await configResponse.text());
-          throw new Error('Failed to save WatchTower configuration');
+          const errorText = await configResponse.text();
+          let errorMessage = 'Failed to save WatchTower configuration';
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorMessage;
+            if (errorData.details) {
+              errorMessage += `: ${errorData.details}`;
+            }
+          } catch {
+            errorMessage += `: ${errorText}`;
+          }
+          console.error('Failed to save WatchTower configuration:', errorText);
+          setError(errorMessage);
+          setWatchTowerLoading(false);
+          return;
         }
         console.log('WatchTower configuration saved successfully');
       }
@@ -140,7 +183,13 @@ export default function LoginPage() {
       } else {
         const errorData = await loginResponse.json().catch(() => ({ error: 'Failed to parse error response' }));
         console.error('Login failed with status:', loginResponse.status, 'Error:', errorData);
-        setError(errorData.error || `Login failed (Status: ${loginResponse.status})`);
+        
+        // Handle expired subscription error with formatted date
+        if (errorData.expirationDateFormatted) {
+          setError(`${errorData.error} Your subscription expired on ${errorData.expirationDateFormatted}. Please renew your subscription to continue.`);
+        } else {
+          setError(errorData.error || `Login failed (Status: ${loginResponse.status})`);
+        }
       }
     } catch (error) {
       console.error('WatchTower login error:', error);
@@ -335,14 +384,33 @@ export default function LoginPage() {
                     
                     <div className="space-y-2">
                       <Label htmlFor="apiToken">API Token</Label>
-                      <Input
-                        id="apiToken"
-                        type="password"
-                        value={apiToken}
-                        onChange={(e) => setApiToken(e.target.value)}
-                        placeholder="Enter your WatchTower API token"
-                        required
-                      />
+                      <div className="relative">
+                        <Input
+                          id="apiToken"
+                          type={showApiToken ? "text" : "password"}
+                          value={apiToken}
+                          onChange={(e) => setApiToken(e.target.value)}
+                          placeholder="Enter your WatchTower API token"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck="false"
+                          required
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowApiToken(!showApiToken)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                          tabIndex={-1}
+                        >
+                          {showApiToken ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-500">
                         Get this from your WatchTower admin panel → Integration Management
                       </p>
@@ -377,6 +445,7 @@ export default function LoginPage() {
                     value={watchTowerPassword}
                     onChange={(e) => setWatchTowerPassword(e.target.value)}
                     placeholder="Your WatchTower password"
+                    autoComplete="current-password"
                     required
                   />
                 </div>

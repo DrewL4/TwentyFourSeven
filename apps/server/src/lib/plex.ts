@@ -124,29 +124,53 @@ export class PlexAPI {
       throw new Error("Username and password are required for Plex sign in");
     }
 
-    const response = await fetch('https://plex.tv/users/sign_in.json', {
-      method: 'POST',
-      headers: {
-        ...this.headers,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        'user[login]': username,
-        'user[password]': password
-      })
-    });
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    if (!response.ok) {
-      throw new Error("Invalid username/password combination");
+      const response = await fetch('https://plex.tv/users/sign_in.json', {
+        method: 'POST',
+        headers: {
+          ...this.headers,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          'user[login]': username,
+          'user[password]': password
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error("Invalid username/password combination");
+        }
+        throw new Error(`Plex authentication failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data?.user?.authToken) {
+        throw new Error("Invalid response from Plex: missing auth token");
+      }
+
+      this.accessToken = data.user.authToken;
+      
+      return {
+        authToken: this.accessToken,
+        user: data.user
+      };
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        throw new Error("Connection timeout while signing in to Plex. Please check your internet connection.");
+      }
+      if (error.message) {
+        throw error;
+      }
+      throw new Error(`Failed to sign in to Plex: ${error.message || 'Unknown error'}`);
     }
-
-    const data = await response.json();
-    this.accessToken = data.user.authToken;
-    
-    return {
-      authToken: this.accessToken,
-      user: data.user
-    };
   }
 
   /**

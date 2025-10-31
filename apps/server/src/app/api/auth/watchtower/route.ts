@@ -96,6 +96,87 @@ export async function POST(request: NextRequest) {
     const watchTowerResponse = await userResponse.json();
     const watchTowerUser = watchTowerResponse.user;
 
+    // Check if user has movie service access
+    // Based on WatchTower logic: admins and family users always have access
+    // Other users must have a valid movie_donation_due date
+    const hasMovieServiceAccess = (() => {
+      // Admins always have access
+      if (watchTowerUser.is_admin) {
+        return true;
+      }
+
+      // Family users always have access (even without donation due date)
+      if (watchTowerUser.is_family) {
+        return true;
+      }
+
+      // Must be active
+      if (!watchTowerUser.is_active) {
+        return false;
+      }
+
+      // Must have movie service indicator
+      if (!watchTowerUser.movie_service && !watchTowerUser.is_movie_user) {
+        return false;
+      }
+
+      // Must have a movie donation due date (required for non-admin, non-family users)
+      if (!watchTowerUser.movie_donation_due) {
+        return false;
+      }
+
+      // Check if donation due date is valid (not expired)
+      try {
+        const dueDate = new Date(watchTowerUser.movie_donation_due);
+        const now = new Date();
+        if (dueDate < now) {
+          return false;
+        }
+      } catch (error) {
+        // If we can't parse the date, deny access to be safe
+        return false;
+      }
+
+      return true;
+    })();
+
+    // Check if donation is expired (for error message)
+    const isExpired = (() => {
+      if (watchTowerUser.is_admin || watchTowerUser.is_family) {
+        return false;
+      }
+      if (!watchTowerUser.movie_donation_due) {
+        return true;
+      }
+      try {
+        const dueDate = new Date(watchTowerUser.movie_donation_due);
+        const now = new Date();
+        return dueDate < now;
+      } catch {
+        return true;
+      }
+    })();
+
+    if (!hasMovieServiceAccess) {
+      // Provide specific error message for expired users
+      if (isExpired && watchTowerUser.movie_donation_due) {
+        const expirationDate = new Date(watchTowerUser.movie_donation_due).toLocaleDateString();
+        return NextResponse.json(
+          { 
+            error: 'Your movie service subscription has expired.',
+            expirationDate: watchTowerUser.movie_donation_due,
+            expirationDateFormatted: expirationDate
+          },
+          { status: 403 }
+        );
+      }
+      
+      return NextResponse.json(
+        { error: 'You do not have access to this service. A movie service subscription is required.' },
+        { status: 403 }
+      );
+    }
+
     // Check if user exists
     let user = await prisma.user.findFirst({
       where: {
@@ -121,13 +202,19 @@ export async function POST(request: NextRequest) {
       watchTowerUserId: watchTowerUser.id?.toString() || '',
       watchTowerUsername: watchTowerUser.username || '',
       role: isAdmin ? 'ADMIN' : 'USER',
-      isActive: watchTowerUser.is_active !== false,
+      isActive: true, // Only allow active users with movie service access
       watchTowerMetadata: {
         isAdmin: watchTowerUser.is_admin || false,
         isStaff: watchTowerUser.is_staff || false,
         isSuperuser: watchTowerUser.is_superuser || false,
+        isFamily: watchTowerUser.is_family || false,
         dateJoined: watchTowerUser.date_joined || new Date().toISOString(),
-        lastLogin: new Date().toISOString()
+        lastLogin: new Date().toISOString(),
+        movie_service: watchTowerUser.movie_service || null,
+        movie_service_id: watchTowerUser.movie_service_id || null,
+        is_movie_user: watchTowerUser.is_movie_user || false,
+        movie_donation_due: watchTowerUser.movie_donation_due || null,
+        movie_donation_amount: watchTowerUser.movie_donation_amount || null
       }
     };
 

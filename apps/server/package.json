@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node server.js",
     "build": "next build",
-    "start": "next start",
+    "start": "NODE_ENV=production node server.js",
+    "start:next": "next start",
     "db:push": "prisma db push --schema ./prisma/schema",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate --schema ./prisma/schema",
@@ -19,6 +20,7 @@
     "dotenv": "^16.5.0",
     "fast-xml-parser": "^5.2.5",
     "next": "^15.3.0",
+    "socket.io": "^4.8.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {

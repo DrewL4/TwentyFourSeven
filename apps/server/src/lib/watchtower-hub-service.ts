@@ -11,9 +11,15 @@ interface WatchTowerUser {
   is_active: boolean;
   is_staff?: boolean;
   is_superuser?: boolean;
+  is_family?: boolean;
   date_joined?: string;
   last_login?: string;
   profile?: any;
+  movie_service?: string | null;
+  movie_service_id?: number | null;
+  is_movie_user?: boolean;
+  movie_donation_due?: string | null;
+  movie_donation_amount?: string | null;
 }
 
 interface WatchTowerService {
@@ -129,6 +135,18 @@ export class WatchTowerHubService {
 
   private async handleUserCreated(userData: any): Promise<void> {
     try {
+      // Check if user has movie service (regardless of expiration)
+      const hasMovieService = !!(userData.movie_service || userData.is_movie_user || userData.is_admin || userData.is_family);
+      
+      if (!hasMovieService) {
+        console.log(`User ${userData.email} does not have movie service - skipping creation`);
+        return;
+      }
+
+      // Check if donation is expired
+      const isExpired = this._isMovieDonationExpired(userData);
+      const hasAccess = this._shouldHaveMovieServiceAccess(userData);
+
       // Check if user already exists
       const existingUser = await db.user.findFirst({
         where: {
@@ -144,7 +162,7 @@ export class WatchTowerHubService {
         return;
       }
 
-      // Create new user
+      // Create new user with movie service metadata (including expired users)
       await db.user.create({
         data: {
           id: `watchtower_${userData.user_id}_${Date.now()}`,
@@ -153,7 +171,7 @@ export class WatchTowerHubService {
           watchTowerUserId: userData.user_id?.toString(),
           watchTowerUsername: userData.username,
           role: userData.is_admin ? 'ADMIN' : 'USER',
-          isActive: userData.is_active !== false,
+          isActive: hasAccess, // Set to false if expired (will block login)
           password: `watchtower_sso_${Date.now()}`, // Placeholder
           emailVerified: true,
           createdAt: new Date(),
@@ -161,12 +179,27 @@ export class WatchTowerHubService {
           watchTowerMetadata: {
             services: userData.services || [],
             tvDonationDue: userData.tv_donation_due,
-            movieDonationDue: userData.movie_donation_due
+            movieDonationDue: userData.movie_donation_due,
+            movie_service: userData.movie_service || null,
+            movie_service_id: userData.movie_service_id || null,
+            is_movie_user: userData.is_movie_user || false,
+            movie_donation_amount: userData.movie_donation_amount || null,
+            movie_donation_due: userData.movie_donation_due || null,
+            movie_donation_expired: isExpired,
+            is_family: userData.is_family || false
           }
         }
       });
 
-      console.log(`Created user ${userData.email} from WatchTower`);
+      console.log(`Created movie service user ${userData.email} from WatchTower${isExpired ? ' (EXPIRED)' : ''}`);
+      
+      // Emit Socket.io event
+      try {
+        const { emitUserUpdate } = await import('@/lib/socket-io');
+        emitUserUpdate(userData.email, 'created');
+      } catch (error) {
+        // Socket.io might not be initialized, that's okay
+      }
     } catch (error) {
       console.error('Error creating user from webhook:', error);
       throw error;
@@ -184,31 +217,88 @@ export class WatchTowerHubService {
         }
       });
 
+      // Check if user has movie service (regardless of expiration)
+      const hasMovieService = !!(userData.movie_service || userData.is_movie_user || userData.is_admin || userData.is_family);
+      const isExpired = this._isMovieDonationExpired(userData);
+      const hasMovieServiceAccess = this._shouldHaveMovieServiceAccess(userData);
+
       if (!user) {
-        console.log(`User ${userData.email} not found, creating from update event`);
-        await this.handleUserCreated(userData);
+        // User doesn't exist - create if they have movie service (including expired)
+        if (hasMovieService) {
+          console.log(`User ${userData.email} not found, creating from update event (has movie service)`);
+          await this.handleUserCreated(userData);
+        } else {
+          console.log(`User ${userData.email} not found and does not have movie service - skipping`);
+        }
         return;
       }
 
       // Update existing user
+      // If they lost movie service access, deactivate them
+      // If they gained access, activate them
+      const shouldBeActive = hasMovieServiceAccess;
+
       await db.user.update({
         where: { id: user.id },
         data: {
           name: userData.username || userData.email,
           watchTowerUsername: userData.username,
           role: userData.is_admin ? 'ADMIN' : 'USER',
-          isActive: userData.is_active !== false,
+          isActive: shouldBeActive,
           updatedAt: new Date(),
           watchTowerMetadata: {
             ...user.watchTowerMetadata as any,
             services: userData.services || [],
             tvDonationDue: userData.tv_donation_due,
-            movieDonationDue: userData.movie_donation_due
+            movieDonationDue: userData.movie_donation_due,
+            movie_service: userData.movie_service || null,
+            movie_service_id: userData.movie_service_id || null,
+            is_movie_user: userData.is_movie_user || false,
+            movie_donation_amount: userData.movie_donation_amount || null,
+            movie_donation_due: userData.movie_donation_due || null,
+            movie_donation_expired: isExpired,
+            is_family: userData.is_family || false
           }
         }
       });
 
-      console.log(`Updated user ${userData.email} from WatchTower`);
+      if (!shouldBeActive && user.isActive) {
+        console.log(`[Webhook] Deactivated user ${userData.email} - lost movie service access`);
+        // Emit Socket.io event
+        try {
+          const { emitUserUpdate } = await import('@/lib/socket-io');
+          emitUserUpdate(userData.email, 'updated');
+        } catch (error) {
+          // Socket.io might not be initialized, that's okay
+        }
+      } else if (shouldBeActive && !user.isActive) {
+        console.log(`[Webhook] Activated user ${userData.email} - gained movie service access${isExpired ? ' (was expired, now active)' : ''}`);
+        // Emit Socket.io event
+        try {
+          const { emitUserUpdate } = await import('@/lib/socket-io');
+          emitUserUpdate(userData.email, 'updated');
+        } catch (error) {
+          // Socket.io might not be initialized, that's okay
+        }
+      } else if (isExpired !== (user.watchTowerMetadata as any)?.movie_donation_expired) {
+        console.log(`[Webhook] Updated user ${userData.email} expiration status: ${isExpired ? 'EXPIRED' : 'ACTIVE'}`);
+        // Emit Socket.io event
+        try {
+          const { emitUserUpdate } = await import('@/lib/socket-io');
+          emitUserUpdate(userData.email, 'updated');
+        } catch (error) {
+          // Socket.io might not be initialized, that's okay
+        }
+      } else {
+        console.log(`[Webhook] Updated user ${userData.email} from WatchTower`);
+        // Emit Socket.io event for any update
+        try {
+          const { emitUserUpdate } = await import('@/lib/socket-io');
+          emitUserUpdate(userData.email, 'updated');
+        } catch (error) {
+          // Socket.io might not be initialized, that's okay
+        }
+      }
     } catch (error) {
       console.error('Error updating user from webhook:', error);
       throw error;
@@ -249,6 +339,14 @@ export class WatchTowerHubService {
       // });
 
       console.log(`Soft deleted user ${userData.email} from WatchTower`);
+      
+      // Emit Socket.io event
+      try {
+        const { emitUserUpdate } = await import('@/lib/socket-io');
+        emitUserUpdate(userData.email, 'deleted');
+      } catch (error) {
+        // Socket.io might not be initialized, that's okay
+      }
     } catch (error) {
       console.error('Error deleting user from webhook:', error);
       throw error;
@@ -318,13 +416,89 @@ export class WatchTowerHubService {
     }
   }
 
+  /**
+   * Check if movie donation is expired
+   */
+  private _isMovieDonationExpired(userData: any): boolean {
+    // Admins and family users never expire
+    if (userData.is_admin || userData.is_family) {
+      return false;
+    }
+
+    // If no donation due date, consider it expired (unless admin/family)
+    if (!userData.movie_donation_due) {
+      return true;
+    }
+
+    try {
+      const dueDate = new Date(userData.movie_donation_due);
+      const now = new Date();
+      return dueDate < now;
+    } catch (error) {
+      // If we can't parse the date, consider it expired to be safe
+      console.error(`Error parsing movie donation due date for user ${userData.email}:`, error);
+      return true;
+    }
+  }
+
+  /**
+   * Check if user should have movie service access based on WatchTower data
+   * Based on WatchTower logic: admins and family users always have access
+   * Other users must have a valid movie_donation_due date
+   */
+  private _shouldHaveMovieServiceAccess(userData: any): boolean {
+    // Admins always have access
+    if (userData.is_admin) {
+      return true;
+    }
+
+    // Family users always have access (even without donation due date)
+    if (userData.is_family) {
+      console.log(`User ${userData.email} has family access - granting movie service access`);
+      return true;
+    }
+
+    // Must be active
+    if (!userData.is_active) {
+      return false;
+    }
+
+    // Must have movie service indicator
+    if (!userData.movie_service && !userData.is_movie_user) {
+      return false;
+    }
+
+    // Must have a movie donation due date (required for non-admin, non-family users)
+    if (!userData.movie_donation_due) {
+      console.log(`User ${userData.email} has no movie donation due date - denying access`);
+      return false;
+    }
+
+    // Check if donation due date is valid (not expired)
+    try {
+      const dueDate = new Date(userData.movie_donation_due);
+      const now = new Date();
+      if (dueDate < now) {
+        console.log(`Movie donation expired for user ${userData.email}: ${userData.movie_donation_due}`);
+        return false;
+      }
+    } catch (error) {
+      // If we can't parse the date, deny access to be safe
+      console.error(`Error parsing movie donation due date for user ${userData.email}:`, error);
+      return false;
+    }
+
+    return true;
+  }
+
   async fetchUsers(): Promise<WatchTowerUser[]> {
     if (!await this.isConfigured()) {
       throw new Error('WatchTower not configured');
     }
 
     try {
-      const response = await fetch(`${this.watchTowerUrl}/api/v1/users/`, {
+      // Fix URL pattern: use /api/api/v1/ instead of /api/v1/
+      const response = await fetch(`${this.watchTowerUrl}/api/api/v1/users/`, {
         headers: {
           'Authorization': `Bearer ${this.apiToken}`
         }
@@ -335,7 +509,12 @@ export class WatchTowerHubService {
       }
 
       const data = await response.json();
-      return data.results || data;
+      const allUsers = data.results || data;
+      
+      // Filter to only users with movie services
+      return Array.isArray(allUsers) 
+        ? allUsers.filter((user: any) => user.movie_service || user.is_movie_user)
+        : [];
     } catch (error) {
       console.error('Error fetching users from WatchTower:', error);
       throw error;
@@ -348,7 +527,8 @@ export class WatchTowerHubService {
     }
 
     try {
-      const response = await fetch(`${this.watchTowerUrl}/api/v1/auth/login/`, {
+      // Fix URL pattern: use /api/api/v1/ instead of /api/v1/
+      const response = await fetch(`${this.watchTowerUrl}/api/api/v1/auth/login/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -363,7 +543,8 @@ export class WatchTowerHubService {
       const authData = await response.json();
 
       // Get user details
-      const userResponse = await fetch(`${this.watchTowerUrl}/api/v1/users/me/`, {
+      // Fix URL pattern: use /api/api/v1/ instead of /api/v1/
+      const userResponse = await fetch(`${this.watchTowerUrl}/api/api/v1/users/me/`, {
         headers: {
           'Authorization': `Bearer ${authData.access_token}`
         }

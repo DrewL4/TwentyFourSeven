@@ -59,11 +59,26 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { watchTowerUrl, apiToken } = await request.json();
+    const body = await request.json();
+    const { watchTowerUrl, apiToken } = body;
 
-    if (!watchTowerUrl || !apiToken) {
+    console.log('[Save Config] Received request:', {
+      hasWatchTowerUrl: !!watchTowerUrl,
+      watchTowerUrlLength: watchTowerUrl?.length || 0,
+      hasApiToken: !!apiToken,
+      apiTokenLength: apiToken?.length || 0
+    });
+
+    if (!watchTowerUrl || !watchTowerUrl.trim()) {
       return NextResponse.json(
-        { error: 'WatchTower URL and API token are required' },
+        { error: 'WatchTower URL is required', details: 'Please provide a valid WatchTower server URL' },
+        { status: 400 }
+      );
+    }
+
+    if (!apiToken || !apiToken.trim()) {
+      return NextResponse.json(
+        { error: 'API token is required', details: 'Please provide a valid WatchTower API token' },
         { status: 400 }
       );
     }
@@ -96,7 +111,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('💥 Error saving WatchTower config:', error);
     return NextResponse.json(
-      { error: 'Failed to save configuration' },
+      { 
+        error: 'Failed to save configuration',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }

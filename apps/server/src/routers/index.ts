@@ -1162,7 +1162,44 @@ export const appRouter = {
         }>;
       }> => {
         const { PlexService } = await import('../lib/plex-service');
-        return await PlexService.login(input.username, input.password);
+        const { ORPCError } = await import('@orpc/server');
+        
+        try {
+          return await PlexService.login(input.username, input.password);
+        } catch (error: any) {
+          console.error('[plexLogin] Error:', error);
+          
+          // Handle authentication errors
+          if (error?.message?.includes('Invalid username/password') || 
+              error?.message?.includes('username/password') ||
+              error?.status === 401) {
+            throw new ORPCError('UNAUTHORIZED', { message: 'Invalid Plex username or password' });
+          }
+          
+          // Handle network/timeout errors
+          if (error?.message?.includes('fetch') || 
+              error?.message?.includes('network') ||
+              error?.message?.includes('timeout') ||
+              error?.code === 'ETIMEDOUT' ||
+              error?.code === 'ECONNREFUSED') {
+            throw new ORPCError('INTERNAL_SERVER_ERROR', { message: 'Failed to connect to Plex servers. Please check your internet connection and try again.' });
+          }
+          
+          // Handle missing access token errors
+          if (error?.message?.includes('access token') || 
+              error?.message?.includes('No access token')) {
+            throw new ORPCError('UNAUTHORIZED', { message: 'Failed to authenticate with Plex. Please check your credentials.' });
+          }
+          
+          // Handle server discovery errors
+          if (error?.message?.includes('servers') || 
+              error?.message?.includes('Failed to fetch')) {
+            throw new ORPCError('INTERNAL_SERVER_ERROR', { message: 'Failed to discover Plex servers. Please try again later.' });
+          }
+          
+          // Generic error fallback
+          throw new ORPCError('INTERNAL_SERVER_ERROR', { message: error?.message || 'An unexpected error occurred during Plex login' });
+        }
       }),
 
     addPlexServer: protectedProcedure

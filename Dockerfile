@@ -123,6 +123,9 @@ COPY --from=builder --chown=abc:users /app/apps/server/package.json ./apps/serve
 COPY --from=builder --chown=abc:users /app/apps/server/prisma ./apps/server/prisma
 COPY --from=builder --chown=abc:users /app/apps/server/prisma.config.ts ./apps/server/
 
+# Copy server.js (required for running the server)
+COPY --from=builder --chown=abc:users /app/apps/server/server.js ./apps/server/server.js
+
 # Verify ffmpeg is installed and check for common hardware accel encoders
 RUN echo "🔍 Checking ffmpeg installation..." \
     && /usr/bin/ffmpeg -version || (echo "⚠️  ffmpeg not found" && exit 1) \

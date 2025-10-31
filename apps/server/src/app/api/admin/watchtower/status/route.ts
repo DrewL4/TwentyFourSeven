@@ -65,12 +65,22 @@ export async function GET(request: NextRequest) {
         };
       }
 
+      // Check if webhooks are registered
+      const webhookId = await db.setting.findUnique({
+        where: { key: 'watchtower_webhook_id' }
+      });
+      const webhookRegisteredAt = await db.setting.findUnique({
+        where: { key: 'watchtower_webhook_registered_at' }
+      });
+
       return NextResponse.json({
         configured: true,
         connected,
         url: configMap.watchtower_url,
         configuredAt: configMap.watchtower_configured_at,
         connectionDetails,
+        webhookRegistered: !!webhookId,
+        webhookRegisteredAt: webhookRegisteredAt?.value || null,
         message: connected ? 'Connected to WatchTower' : 'Cannot connect to WatchTower'
       });
 

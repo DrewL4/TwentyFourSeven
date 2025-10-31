@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
 
   try {
-    const { watchTowerUrl, apiToken } = await request.json();
+    const { watchTowerUrl, apiToken, webhookUrl: providedWebhookUrl } = await request.json();
 
     if (!watchTowerUrl || !apiToken) {
       return NextResponse.json(
@@ -52,14 +52,35 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Get the current server URL for webhook endpoint
-    const serverUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    const webhookUrl = `${serverUrl}/api/webhooks/watchtower`;
+    // Determine webhook URL - prefer provided URL, then environment variable, then detect from request
+    let webhookUrl = providedWebhookUrl;
+    
+    if (!webhookUrl) {
+      // Try environment variable first
+      webhookUrl = process.env.NEXTAUTH_URL || process.env.WEBHOOK_BASE_URL;
+      
+      // If still not set, try to detect from request headers (for same-domain setups)
+      if (!webhookUrl) {
+        const host = request.headers.get('host');
+        const protocol = request.headers.get('x-forwarded-proto') || 'https';
+        if (host) {
+          webhookUrl = `${protocol}://${host}`;
+        } else {
+          webhookUrl = 'http://localhost:3000';
+        }
+      }
+    }
+    
+    // Ensure webhook URL doesn't end with a slash
+    webhookUrl = webhookUrl.replace(/\/$/, '');
+    const fullWebhookUrl = `${webhookUrl}/api/webhooks/watchtower`;
+    
+    console.log(`[Webhook Registration] Registering webhook with URL: ${fullWebhookUrl}`);
 
     // Register webhook with WatchTower
     const webhookData = {
       app_name: 'twentyfourseven',
-      url: webhookUrl,
+      url: fullWebhookUrl,
       events: [
         'user.created',
         'user.updated', 
@@ -107,12 +128,20 @@ export async function POST(request: NextRequest) {
       create: { key: 'watchtower_webhook_registered_at', value: new Date().toISOString() }
     });
 
+    // Save the webhook URL we used
+    await db.setting.upsert({
+      where: { key: 'watchtower_webhook_url' },
+      update: { value: fullWebhookUrl },
+      create: { key: 'watchtower_webhook_url', value: fullWebhookUrl }
+    });
+
     return NextResponse.json({
       success: true,
       message: 'Webhook registered successfully with WatchTower',
-      webhookUrl,
+      webhookUrl: fullWebhookUrl,
       events: webhookData.events,
-      webhookId: webhookResult.webhook_id
+      webhookId: webhookResult.webhook_id,
+      note: 'Make sure this URL is publicly accessible from WatchTower server'
     });
 
   } catch (error) {
