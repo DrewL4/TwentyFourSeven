@@ -110,13 +110,14 @@ export default function ViewingHistoryTable() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div className="flex-1">
             <Input
               placeholder="Filter by IP address..."
               value={ipFilter}
               onChange={(e) => setIpFilter(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="touch-manipulation"
             />
           </div>
           <div className="flex-1">
@@ -124,7 +125,7 @@ export default function ViewingHistoryTable() {
               value={viewerNameFilter} 
               onValueChange={setViewerNameFilter}
             >
-              <SelectTrigger>
+              <SelectTrigger className="touch-manipulation">
                 <SelectValue placeholder="Filter by viewer..." />
               </SelectTrigger>
               <SelectContent>
@@ -137,40 +138,43 @@ export default function ViewingHistoryTable() {
               </SelectContent>
             </Select>
           </div>
-          <div className="w-full md:w-48">
+          <div className="w-full sm:w-auto">
             <Input
               type="number"
               placeholder="Channel number..."
               value={channelFilter || ""}
               onChange={(e) => setChannelFilter(e.target.value ? parseInt(e.target.value) : undefined)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="touch-manipulation"
             />
           </div>
-          <div className="flex gap-2">
-            <Button onClick={handleSearch}>
+          <div className="flex gap-2 sm:flex-row flex-col">
+            <Button onClick={handleSearch} className="touch-manipulation w-full sm:w-auto">
               <Search className="w-4 h-4 mr-2" />
               Search
             </Button>
-            <Button variant="outline" onClick={() => refetch()}>
+            <Button variant="outline" onClick={() => refetch()} className="touch-manipulation w-full sm:w-auto">
               <RefreshCw className="w-4 h-4" />
             </Button>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
-            <label className="text-sm font-medium mb-1 block">Start Date</label>
+            <label className="text-xs sm:text-sm font-medium mb-1 block">Start Date</label>
             <Input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
+              className="touch-manipulation"
             />
           </div>
           <div>
-            <label className="text-sm font-medium mb-1 block">End Date</label>
+            <label className="text-xs sm:text-sm font-medium mb-1 block">End Date</label>
             <Input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
+              className="touch-manipulation"
             />
           </div>
         </div>
@@ -182,145 +186,149 @@ export default function ViewingHistoryTable() {
         <div className="text-center py-8 text-muted-foreground">No viewing sessions found</div>
       ) : (
         <>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead>IP Address</TableHead>
-                  <TableHead>Viewer</TableHead>
-                  <TableHead>Channel</TableHead>
-                  <TableHead>Start Time</TableHead>
-                  <TableHead>End Time</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Programs</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sessionsData.sessions.map((session) => {
-                  const isExpanded = expandedSessions.has(session.id);
-                  const hasMultiplePrograms = session.history.length > 1;
-                  
-                  return (
-                    <>
-                        <TableRow>
-                          <TableCell>
-                            {hasMultiplePrograms ? (
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-8 w-8 p-0"
-                                onClick={() => toggleSession(session.id)}
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown className="h-4 w-4" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4" />
-                                )}
-                              </Button>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">{session.ipAddress}</TableCell>
-                          <TableCell>{session.viewerName || <span className="text-muted-foreground">—</span>}</TableCell>
-                          <TableCell>
-                            {session.channelNumber}
-                            {session.channelName && (
-                              <span className="text-muted-foreground ml-2">({session.channelName})</span>
-                            )}
-                          </TableCell>
-                          <TableCell>{format(session.sessionStart, "MMM d, HH:mm")}</TableCell>
-                          <TableCell>
-                            {session.sessionEnd ? format(session.sessionEnd, "MMM d, HH:mm") : <span className="text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell>{formatDuration(session.totalDuration)}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{session.programCount}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {session.history.some(h => h.status === 'failed') ? (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <Badge variant="destructive">Failed</Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <div className="max-w-xs">
-                                      {session.history
-                                        .filter(h => h.status === 'failed' && h.statusMessage)
-                                        .map((h, idx) => (
-                                          <div key={idx} className="text-xs mb-1">
-                                            {h.statusMessage}
-                                          </div>
-                                        ))}
-                                    </div>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            ) : session.history.some(h => h.status === 'active') ? (
-                              <Badge variant="secondary">Active</Badge>
-                            ) : (
-                              <Badge variant="default">Completed</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {assigningIp === session.ipAddress ? (
-                              <Select
-                                onValueChange={(userId) => {
-                                  if (userId && userId !== "__cancel__") {
-                                    handleAssignToUser(session.ipAddress, userId);
-                                  } else {
-                                    setAssigningIp(null);
-                                  }
-                                }}
-                                defaultValue="__cancel__"
-                              >
-                                <SelectTrigger className="w-40">
-                                  <SelectValue placeholder="Select user..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__cancel__">Cancel</SelectItem>
-                                  {users?.map((user) => (
-                                    <SelectItem key={user.id} value={user.id}>
-                                      {user.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    <MoreVertical className="w-4 h-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => setAssigningIp(session.ipAddress)}>
-                                    <UserPlus className="w-4 h-4 mr-2" />
-                                    Assign to User
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
-                          </TableCell>
-                        </TableRow>
+          <div className="rounded-md border overflow-hidden">
+            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12 min-w-[48px]"></TableHead>
+                    <TableHead className="min-w-[120px]">IP Address</TableHead>
+                    <TableHead className="min-w-[100px]">Viewer</TableHead>
+                    <TableHead className="min-w-[100px]">Channel</TableHead>
+                    <TableHead className="min-w-[120px]">Start Time</TableHead>
+                    <TableHead className="min-w-[120px]">End Time</TableHead>
+                    <TableHead className="min-w-[80px]">Duration</TableHead>
+                    <TableHead className="min-w-[80px]">Programs</TableHead>
+                    <TableHead className="min-w-[80px]">Status</TableHead>
+                    <TableHead className="min-w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sessionsData.sessions.map((session) => {
+                    const isExpanded = expandedSessions.has(session.id);
+                    const hasMultiplePrograms = session.history.length > 1;
+                    
+                    return (
+                      <>
+                          <TableRow>
+                            <TableCell>
+                              {hasMultiplePrograms ? (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-9 w-9 p-0 touch-manipulation"
+                                  onClick={() => toggleSession(session.id)}
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm">{session.ipAddress}</TableCell>
+                            <TableCell className="text-sm">{session.viewerName || <span className="text-muted-foreground">—</span>}</TableCell>
+                            <TableCell className="text-sm">
+                              {session.channelNumber}
+                              {session.channelName && (
+                                <span className="text-muted-foreground ml-1 sm:ml-2">({session.channelName})</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs sm:text-sm whitespace-nowrap">{format(session.sessionStart, "MMM d, HH:mm")}</TableCell>
+                            <TableCell className="text-xs sm:text-sm whitespace-nowrap">
+                              {session.sessionEnd ? format(session.sessionEnd, "MMM d, HH:mm") : <span className="text-muted-foreground">—</span>}
+                            </TableCell>
+                            <TableCell className="text-sm whitespace-nowrap">{formatDuration(session.totalDuration)}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">{session.programCount}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              {session.history.some(h => h.status === 'failed') ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <Badge variant="destructive" className="text-xs">Failed</Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <div className="max-w-xs">
+                                        {session.history
+                                          .filter(h => h.status === 'failed' && h.statusMessage)
+                                          .map((h, idx) => (
+                                            <div key={idx} className="text-xs mb-1">
+                                              {h.statusMessage}
+                                            </div>
+                                          ))}
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : session.history.some(h => h.status === 'active') ? (
+                                <Badge variant="secondary" className="text-xs">Active</Badge>
+                              ) : (
+                                <Badge variant="default" className="text-xs">Completed</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {assigningIp === session.ipAddress ? (
+                                <Select
+                                  onValueChange={(userId) => {
+                                    if (userId && userId !== "__cancel__") {
+                                      handleAssignToUser(session.ipAddress, userId);
+                                    } else {
+                                      setAssigningIp(null);
+                                    }
+                                  }}
+                                  defaultValue="__cancel__"
+                                >
+                                  <SelectTrigger className="w-full sm:w-40 touch-manipulation">
+                                    <SelectValue placeholder="Select user..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__cancel__">Cancel</SelectItem>
+                                    {users?.map((user) => (
+                                      <SelectItem key={user.id} value={user.id}>
+                                        {user.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="touch-manipulation h-9 w-9 p-0">
+                                      <MoreVertical className="w-4 h-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem 
+                                      onClick={() => setAssigningIp(session.ipAddress)}
+                                      className="touch-manipulation"
+                                    >
+                                      <UserPlus className="w-4 h-4 mr-2" />
+                                      Assign to User
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </TableCell>
+                          </TableRow>
                         {hasMultiplePrograms && isExpanded && (
                           <>
                             {session.history.map((entry) => (
                               <TableRow key={entry.id} className="bg-muted/50">
                                 <TableCell></TableCell>
                                 <TableCell></TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
+                                <TableCell className="text-xs sm:text-sm text-muted-foreground">
                                   {entry.programTitle || "—"}
                                 </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
+                                <TableCell className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
                                   {format(entry.startTime, "HH:mm")}
                                 </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
+                                <TableCell className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
                                   {entry.endTime ? format(entry.endTime, "HH:mm") : "—"}
                                 </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
+                                <TableCell className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
                                   {formatDuration(entry.duration)}
                                 </TableCell>
                                 <TableCell></TableCell>
@@ -336,6 +344,7 @@ export default function ViewingHistoryTable() {
                                               ? 'destructive'
                                               : 'secondary'
                                           }
+                                          className="text-xs"
                                         >
                                           {entry.status}
                                         </Badge>
@@ -360,18 +369,20 @@ export default function ViewingHistoryTable() {
                 })}
               </TableBody>
             </Table>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+            <div className="text-xs sm:text-sm text-muted-foreground">
               Showing {page * 50 + 1} - {Math.min((page + 1) * 50, sessionsData.total)} of {sessionsData.total}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
+                className="touch-manipulation flex-1 sm:flex-none"
               >
                 Previous
               </Button>
@@ -380,6 +391,7 @@ export default function ViewingHistoryTable() {
                 size="sm"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={(page + 1) * 50 >= sessionsData.total}
+                className="touch-manipulation flex-1 sm:flex-none"
               >
                 Next
               </Button>

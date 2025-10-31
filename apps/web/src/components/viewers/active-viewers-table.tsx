@@ -88,100 +88,110 @@ export default function ActiveViewersTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+        <div className="text-xs sm:text-sm text-muted-foreground">
           Last updated: {formatDistanceToNow(lastUpdated, { addSuffix: true })}
         </div>
-        <Button variant="outline" size="sm" onClick={() => { refetch(); setLastUpdated(new Date()); }}>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => { refetch(); setLastUpdated(new Date()); }}
+          className="touch-manipulation w-full sm:w-auto"
+        >
           <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
         </Button>
       </div>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>IP Address</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Channel</TableHead>
-              <TableHead>Program</TableHead>
-              <TableHead>Start Time</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {activeViewers.map((viewer) => (
-              <TableRow key={viewer.sessionId}>
-                <TableCell className="font-mono text-sm">{viewer.ipAddress}</TableCell>
-                <TableCell>{viewer.viewerName || <span className="text-muted-foreground">—</span>}</TableCell>
-                <TableCell>
-                  {viewer.channelNumber}
-                  {viewer.channelName && (
-                    <span className="text-muted-foreground ml-2">({viewer.channelName})</span>
-                  )}
-                </TableCell>
-                <TableCell className="max-w-xs truncate">
-                  {viewer.programTitle || <span className="text-muted-foreground">—</span>}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3 h-3 text-muted-foreground" />
-                    {formatDistanceToNow(viewer.startTime, { addSuffix: true })}
-                  </div>
-                </TableCell>
-                <TableCell>{formatDuration(viewer.duration)}</TableCell>
-                <TableCell>
-                  <Badge variant={viewer.status === 'active' ? 'default' : 'secondary'}>
-                    {viewer.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {assigningIp === viewer.ipAddress ? (
-                    <Select
-                      onValueChange={(userId) => {
-                        if (userId && userId !== "__cancel__") {
-                          handleAssignToUser(viewer.ipAddress, userId);
-                        } else {
-                          setAssigningIp(null);
-                        }
-                      }}
-                      defaultValue="__cancel__"
-                    >
-                      <SelectTrigger className="w-40">
-                        <SelectValue placeholder="Select user..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__cancel__">Cancel</SelectItem>
-                        {users?.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setAssigningIp(viewer.ipAddress)}>
-                          <UserPlus className="w-4 h-4 mr-2" />
-                          Assign to User
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </TableCell>
+      <div className="rounded-md border overflow-hidden">
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[120px]">IP Address</TableHead>
+                <TableHead className="min-w-[100px]">Name</TableHead>
+                <TableHead className="min-w-[100px]">Channel</TableHead>
+                <TableHead className="min-w-[150px]">Program</TableHead>
+                <TableHead className="min-w-[120px]">Start Time</TableHead>
+                <TableHead className="min-w-[80px]">Duration</TableHead>
+                <TableHead className="min-w-[80px]">Status</TableHead>
+                <TableHead className="min-w-[100px]">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {activeViewers.map((viewer) => (
+                <TableRow key={viewer.sessionId}>
+                  <TableCell className="font-mono text-xs sm:text-sm">{viewer.ipAddress}</TableCell>
+                  <TableCell className="text-sm">{viewer.viewerName || <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell className="text-sm">
+                    {viewer.channelNumber}
+                    {viewer.channelName && (
+                      <span className="text-muted-foreground ml-1 sm:ml-2">({viewer.channelName})</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="max-w-[150px] sm:max-w-xs truncate text-sm">
+                    {viewer.programTitle || <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <Clock className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                      <span className="whitespace-nowrap">{formatDistanceToNow(viewer.startTime, { addSuffix: true })}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm whitespace-nowrap">{formatDuration(viewer.duration)}</TableCell>
+                  <TableCell>
+                    <Badge variant={viewer.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                      {viewer.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {assigningIp === viewer.ipAddress ? (
+                      <Select
+                        onValueChange={(userId) => {
+                          if (userId && userId !== "__cancel__") {
+                            handleAssignToUser(viewer.ipAddress, userId);
+                          } else {
+                            setAssigningIp(null);
+                          }
+                        }}
+                        defaultValue="__cancel__"
+                      >
+                        <SelectTrigger className="w-full sm:w-40 touch-manipulation">
+                          <SelectValue placeholder="Select user..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__cancel__">Cancel</SelectItem>
+                          {users?.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="touch-manipulation h-9 w-9 p-0">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={() => setAssigningIp(viewer.ipAddress)}
+                            className="touch-manipulation"
+                          >
+                            <UserPlus className="w-4 h-4 mr-2" />
+                            Assign to User
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   );

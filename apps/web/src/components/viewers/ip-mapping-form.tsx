@@ -83,14 +83,14 @@ export default function IpMappingForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="ipAddress">IP Address</Label>
+        <Label htmlFor="ipAddress" className="text-sm">IP Address</Label>
         {unassignedIps && unassignedIps.length > 0 ? (
           <Autocomplete
             options={unassignedIps}
             value={ipAddress}
             onValueChange={setIpAddress}
             placeholder="Type or select an IP address..."
-            className="w-full"
+            className="w-full touch-manipulation"
           />
         ) : (
           <Input
@@ -99,6 +99,7 @@ export default function IpMappingForm() {
             value={ipAddress}
             onChange={(e) => setIpAddress(e.target.value)}
             required
+            className="touch-manipulation"
           />
         )}
       </div>
@@ -109,8 +110,9 @@ export default function IpMappingForm() {
             id="useExistingUser"
             checked={useExistingUser}
             onCheckedChange={(checked) => setUseExistingUser(checked === true)}
+            className="touch-manipulation"
           />
-          <Label htmlFor="useExistingUser" className="cursor-pointer">
+          <Label htmlFor="useExistingUser" className="cursor-pointer text-sm">
             Assign to existing user
           </Label>
         </div>
@@ -118,9 +120,9 @@ export default function IpMappingForm() {
 
       {useExistingUser ? (
         <div className="space-y-2">
-          <Label htmlFor="userId">User</Label>
+          <Label htmlFor="userId" className="text-sm">User</Label>
           <Select value={userId} onValueChange={setUserId}>
-            <SelectTrigger>
+            <SelectTrigger className="touch-manipulation">
               <SelectValue placeholder="Select a user..." />
             </SelectTrigger>
             <SelectContent>
@@ -134,25 +136,27 @@ export default function IpMappingForm() {
         </div>
       ) : (
         <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
+          <Label htmlFor="name" className="text-sm">Name</Label>
           <Input
             id="name"
             placeholder="John's TV"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            className="touch-manipulation"
           />
         </div>
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="notes">Notes (optional)</Label>
+        <Label htmlFor="notes" className="text-sm">Notes (optional)</Label>
         <Textarea
           id="notes"
           placeholder="Additional information about this viewer..."
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
+          className="touch-manipulation"
         />
       </div>
 
@@ -161,13 +165,18 @@ export default function IpMappingForm() {
           id="blocked"
           checked={blocked}
           onCheckedChange={(checked) => setBlocked(checked === true)}
+          className="touch-manipulation"
         />
-        <Label htmlFor="blocked" className="cursor-pointer">
+        <Label htmlFor="blocked" className="cursor-pointer text-sm">
           Block this IP address
         </Label>
       </div>
 
-      <Button type="submit" disabled={createMapping.isPending} className="w-full">
+      <Button 
+        type="submit" 
+        disabled={createMapping.isPending} 
+        className="w-full touch-manipulation"
+      >
         {createMapping.isPending ? (
           <>
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />

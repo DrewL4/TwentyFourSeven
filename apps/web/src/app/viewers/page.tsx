@@ -34,26 +34,28 @@ export default function ViewersPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Viewer Tracking</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="text-2xl md:text-3xl font-bold">Viewer Tracking</h1>
+        <p className="text-muted-foreground mt-2 text-sm md:text-base">
           Monitor active viewers and manage IP address mappings
         </p>
       </div>
 
       <Tabs defaultValue="active" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="active">Active Viewers</TabsTrigger>
-          <TabsTrigger value="history">Viewing History</TabsTrigger>
-          <TabsTrigger value="mappings">IP Mappings</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <TabsList className="w-full md:w-auto min-w-max md:min-w-0">
+            <TabsTrigger value="active" className="touch-manipulation whitespace-nowrap">Active Viewers</TabsTrigger>
+            <TabsTrigger value="history" className="touch-manipulation whitespace-nowrap">Viewing History</TabsTrigger>
+            <TabsTrigger value="mappings" className="touch-manipulation whitespace-nowrap">IP Mappings</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="active" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Currently Active Viewers</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-lg md:text-xl">Currently Active Viewers</CardTitle>
+              <CardDescription className="text-sm">
                 Real-time list of all active video streams
               </CardDescription>
             </CardHeader>
@@ -66,8 +68,8 @@ export default function ViewersPage() {
         <TabsContent value="history" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Viewing History</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-lg md:text-xl">Viewing History</CardTitle>
+              <CardDescription className="text-sm">
                 Session-based viewing history grouped by channel and viewer
               </CardDescription>
             </CardHeader>
@@ -81,8 +83,8 @@ export default function ViewersPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Add IP Mapping</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-lg md:text-xl">Add IP Mapping</CardTitle>
+                <CardDescription className="text-sm">
                   Assign a name to an IP address for easier identification
                 </CardDescription>
               </CardHeader>
@@ -93,8 +95,8 @@ export default function ViewersPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Existing Mappings</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-lg md:text-xl">Existing Mappings</CardTitle>
+                <CardDescription className="text-sm">
                   Manage IP address name mappings
                 </CardDescription>
               </CardHeader>

@@ -120,125 +120,133 @@ export default function IpMappingList() {
 
   return (
     <>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>IP Address</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>User</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Notes</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {mappings.map((mapping) => {
-              const assignedUser = mapping.userId ? users?.find(u => u.id === mapping.userId) : null;
-              return (
-                <TableRow key={mapping.id}>
-                  <TableCell className="font-mono text-sm">{mapping.ipAddress}</TableCell>
-                  <TableCell className="font-medium">{mapping.name}</TableCell>
-                  <TableCell>
-                    {assignedUser ? (
-                      <span className="text-sm">{assignedUser.name}</span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {mapping.blocked ? (
-                      <Badge variant="destructive">Blocked</Badge>
-                    ) : (
-                      <Badge variant="outline">Active</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {mapping.notes || <span className="text-muted-foreground">—</span>}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {new Date(mapping.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(mapping)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      {mapping.blocked ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleUnblock(mapping.ipAddress)}
-                          disabled={unblockIp.isPending}
-                          title="Unblock IP"
-                        >
-                          {unblockIp.isPending ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                          )}
-                        </Button>
+      <div className="rounded-md border overflow-hidden">
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[120px]">IP Address</TableHead>
+                <TableHead className="min-w-[100px]">Name</TableHead>
+                <TableHead className="min-w-[100px]">User</TableHead>
+                <TableHead className="min-w-[80px]">Status</TableHead>
+                <TableHead className="min-w-[150px]">Notes</TableHead>
+                <TableHead className="min-w-[100px]">Created</TableHead>
+                <TableHead className="min-w-[140px]">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {mappings.map((mapping) => {
+                const assignedUser = mapping.userId ? users?.find(u => u.id === mapping.userId) : null;
+                return (
+                  <TableRow key={mapping.id}>
+                    <TableCell className="font-mono text-xs sm:text-sm">{mapping.ipAddress}</TableCell>
+                    <TableCell className="font-medium text-sm">{mapping.name}</TableCell>
+                    <TableCell className="text-sm">
+                      {assignedUser ? (
+                        <span>{assignedUser.name}</span>
                       ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {mapping.blocked ? (
+                        <Badge variant="destructive" className="text-xs">Blocked</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">Active</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="max-w-[150px] sm:max-w-xs truncate text-sm">
+                      {mapping.notes || <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                      {new Date(mapping.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1 sm:gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleBlock(mapping.ipAddress)}
-                          disabled={blockIp.isPending}
-                          title="Block IP"
+                          onClick={() => handleEdit(mapping)}
+                          className="touch-manipulation h-9 w-9 p-0"
+                          title="Edit"
                         >
-                          {blockIp.isPending ? (
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        {mapping.blocked ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleUnblock(mapping.ipAddress)}
+                            disabled={unblockIp.isPending}
+                            title="Unblock IP"
+                            className="touch-manipulation h-9 w-9 p-0"
+                          >
+                            {unblockIp.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                            )}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleBlock(mapping.ipAddress)}
+                            disabled={blockIp.isPending}
+                            title="Block IP"
+                            className="touch-manipulation h-9 w-9 p-0"
+                          >
+                            {blockIp.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Ban className="w-4 h-4 text-red-600" />
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(mapping.id, mapping.ipAddress)}
+                          disabled={deleteMapping.isPending}
+                          className="touch-manipulation h-9 w-9 p-0"
+                          title="Delete"
+                        >
+                          {deleteMapping.isPending ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
-                            <Ban className="w-4 h-4 text-red-600" />
+                            <Trash2 className="w-4 h-4" />
                           )}
                         </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(mapping.id, mapping.ipAddress)}
-                        disabled={deleteMapping.isPending}
-                      >
-                        {deleteMapping.isPending ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <Dialog open={!!editingMapping} onOpenChange={() => setEditingMapping(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit IP Mapping</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg sm:text-xl">Edit IP Mapping</DialogTitle>
+            <DialogDescription className="text-sm">
               Update the name and notes for {editingMapping?.ipAddress}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>IP Address</Label>
-              <Input value={editingMapping?.ipAddress} disabled />
+              <Label className="text-sm">IP Address</Label>
+              <Input value={editingMapping?.ipAddress} disabled className="touch-manipulation" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-user">Assign to User (optional)</Label>
+              <Label htmlFor="edit-user" className="text-sm">Assign to User (optional)</Label>
               <Select 
                 value={editForm.userId || "__none__"} 
                 onValueChange={(value) => setEditForm({ ...editForm, userId: value === "__none__" ? "" : value })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="touch-manipulation">
                   <SelectValue placeholder="Select a user..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -252,21 +260,23 @@ export default function IpMappingList() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Name</Label>
+              <Label htmlFor="edit-name" className="text-sm">Name</Label>
               <Input
                 id="edit-name"
                 value={editForm.name}
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 required
+                className="touch-manipulation"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-notes">Notes</Label>
+              <Label htmlFor="edit-notes" className="text-sm">Notes</Label>
               <Textarea
                 id="edit-notes"
                 value={editForm.notes}
                 onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                 rows={3}
+                className="touch-manipulation"
               />
             </div>
             <div className="flex items-center space-x-2">
@@ -274,17 +284,26 @@ export default function IpMappingList() {
                 id="edit-blocked"
                 checked={editForm.blocked}
                 onCheckedChange={(checked) => setEditForm({ ...editForm, blocked: checked === true })}
+                className="touch-manipulation"
               />
-              <Label htmlFor="edit-blocked" className="cursor-pointer">
+              <Label htmlFor="edit-blocked" className="cursor-pointer text-sm">
                 Block this IP address
               </Label>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingMapping(null)}>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            <Button 
+              variant="outline" 
+              onClick={() => setEditingMapping(null)}
+              className="touch-manipulation w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button onClick={handleSaveEdit} disabled={updateMapping.isPending}>
+            <Button 
+              onClick={handleSaveEdit} 
+              disabled={updateMapping.isPending}
+              className="touch-manipulation w-full sm:w-auto"
+            >
               {updateMapping.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
