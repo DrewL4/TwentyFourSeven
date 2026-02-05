@@ -1,177 +1,175 @@
-import { prisma } from '@/lib/prisma';
-import { TimingService } from '@/lib/timing-service';
-import { PlexAPI } from '@/lib/plex';
+import { prisma } from "@/lib/prisma";
 
 /**
- * CatchupService – resolves catchup/timeshift requests.
- *
- * The service translates a (channel, time) pair into a Plex stream URL with
- * the correct seek offset so the viewer can watch previously aired content.
- *
- * No segment recording is required – Plex's native seeking handles everything.
+ * CatchupService - Handles all catchup/timeshift functionality
+ * 
+ * This service manages the logic for determining which programs are available
+ * for catchup and calculating the correct seek offsets for Plex streams.
  */
-export class CatchupService {
+
+export const CatchupService = {
   /**
-   * Find the program that was airing on `channelNumber` at `requestedTime`.
+   * Get the program that was airing at a specific time for a channel
    */
-  static async getProgramAtTime(channelNumber: number, requestedTime: Date) {
-    const channel = await prisma.channel.findUnique({
-      where: { number: channelNumber },
-    });
-    if (!channel) return null;
-
-    // Check the catchup window
-    if (!channel.catchupEnabled) return null;
-    const { start: windowStart } = TimingService.calculateCatchupWindow(channel, new Date());
-    if (requestedTime < windowStart) return null;
-
-    // Find the program whose air-window contains `requestedTime`
+  async getProgramAtTime(channelNumber: number, requestedTime: Date) {
+    // Find the most recent program that has started
     const program = await prisma.program.findFirst({
       where: {
-        channelId: channel.id,
+        channel: { number: channelNumber },
         startTime: { lte: requestedTime },
-        catchupAvailable: true,
       },
       include: {
-        episode: { include: { show: { include: { library: { include: { server: true } } } } } },
-        movie: { include: { library: { include: { server: true } } } },
-        channel: true,
+        episode: {
+          include: { show: { include: { library: { include: { server: true } } } } }
+        },
+        movie: {
+          include: { library: { include: { server: true } } }
+        },
       },
       orderBy: { startTime: 'desc' },
     });
 
     if (!program) return null;
 
-    // Verify the program actually covers the requested time
+    // Check if the requested time is within the program's duration
     const programEnd = new Date(program.startTime.getTime() + program.duration);
-    if (requestedTime > programEnd) return null;
-
-    // Verify the program is within the catchup window
-    if (!TimingService.isProgramCatchupAvailable(program, channel)) return null;
+    if (requestedTime > programEnd) {
+      return null;
+    }
 
     return program;
-  }
+  },
 
   /**
-   * Find a program by its ID and verify catchup availability.
+   * Get a program by its ID
    */
-  static async getProgramById(programId: string) {
+  async getProgramById(programId: string) {
     const program = await prisma.program.findUnique({
       where: { id: programId },
       include: {
-        episode: { include: { show: { include: { library: { include: { server: true } } } } } },
-        movie: { include: { library: { include: { server: true } } } },
+        episode: {
+          include: { show: true }
+        },
+        movie: true,
         channel: true,
       },
     });
 
-    if (!program) return null;
-    if (!TimingService.isProgramCatchupAvailable(program, program.channel)) return null;
-
     return program;
-  }
+  },
 
   /**
-   * Build a catchup stream URL from Plex for a given program + seek position.
-   *
-   * Returns { streamUrl, seekSeconds, programTitle, remainingMs, programId }.
+   * Get catchup stream information for a specific time
    */
-  static async getCatchupStreamInfo(
-    channelNumber: number,
-    requestedTime: Date
-  ): Promise<{
-    streamUrl: string;
-    seekSeconds: number;
-    programTitle: string;
-    remainingMs: number;
-    programId: string;
-    programStartTime: Date;
-    programDuration: number;
-  } | null> {
+  async getCatchupStreamInfo(channelNumber: number, requestedTime: Date) {
     const program = await this.getProgramAtTime(channelNumber, requestedTime);
-    if (!program) return null;
-
-    const mediaInfo = program.movie ?? program.episode;
-    const server = program.movie?.library.server ?? program.episode?.show.library.server;
-
-    if (!mediaInfo || !server || server.type !== 'PLEX' || !server.token) {
-      return null;
+    
+    if (!program) {
+      throw new Error(`No program found for channel ${channelNumber} at ${requestedTime.toISOString()}`);
     }
 
-    // Calculate seek offset
-    const { seekOffsetMs, remainingMs } = TimingService.getCatchupSeekOffset(program, requestedTime);
-    const seekSeconds = Math.floor(seekOffsetMs / 1000);
+    // Calculate seek offset from program start
+    const startTimeMs = (program as any).startTime.getTime();
+    const requestedTimeMs = requestedTime.getTime();
+    const seekOffsetMs = requestedTimeMs - startTimeMs;
 
-    // Resolve stream URL from Plex
-    const plex = new PlexAPI({ uri: server.url });
-    let streamUrl: string;
-    try {
-      const mediaParts = await plex.getMediaParts(server.url, server.token, mediaInfo.ratingKey);
-      if (mediaParts?.partKey) {
-        streamUrl = `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`;
-      } else {
-        streamUrl = `${server.url}/library/metadata/${mediaInfo.ratingKey}?X-Plex-Token=${server.token}`;
-      }
-    } catch {
-      streamUrl = `${server.url}/library/metadata/${mediaInfo.ratingKey}?X-Plex-Token=${server.token}`;
+    // Calculate end time from start + duration
+    const endTime = new Date(startTimeMs + (program as any).duration);
+    const remainingMs = endTime.getTime() - requestedTimeMs;
+
+    // Get Plex server info with type assertion
+    const progWithIncludes = program as any;
+    const server = progWithIncludes.episode?.show?.library?.server ?? progWithIncludes.movie?.library?.server;
+
+    if (!server?.token || server.type !== 'PLEX') {
+      throw new Error(`No Plex server found for program ${program.id}`);
     }
 
-    // Build program title
-    let programTitle = 'Unknown';
-    if (program.movie) {
-      programTitle = program.movie.title;
-    } else if (program.episode) {
-      programTitle = `${program.episode.show.title} - S${program.episode.seasonNumber}E${program.episode.episodeNumber}: ${program.episode.title}`;
-    }
+    // Construct URL using the pattern from the rest of the app
+    const baseUrl = process.env.BASE_URL || `http://localhost:3000`;
+    const videoUrl = `${baseUrl}/api/video?channel=${channelNumber}`;
 
     return {
-      streamUrl,
-      seekSeconds,
-      programTitle,
+      channelNumber,
+      program: {
+        id: program.id,
+        title: (program as any).title,
+        startTime: (program as any).startTime.toISOString(),
+        endTime: endTime.toISOString(),
+      },
+      videoUrl,
+      seekOffsetMs,
       remainingMs,
-      programId: program.id,
-      programStartTime: program.startTime,
-      programDuration: program.duration,
     };
-  }
+  },
 
   /**
-   * List all programs available for catchup on a channel.
+   * List all catchup-available programs for a channel
    */
-  static async listCatchupPrograms(channelNumber: number) {
-    const channel = await prisma.channel.findUnique({
+  async listCatchupPrograms(channelNumber: number) {
+    const now = new Date();
+    const channel = await prisma.channel.findFirst({
       where: { number: channelNumber },
     });
-    if (!channel || !channel.catchupEnabled) return [];
 
-    const now = new Date();
-    const { start: windowStart } = TimingService.calculateCatchupWindow(channel, now);
+    if (!channel) {
+      return [];
+    }
+
+    if (!channel.catchupEnabled) {
+      return [];
+    }
+
+    // Calculate catchup window - programs that have ended within the window
+    const windowStart = new Date(now.getTime() - (channel.catchupWindowHours * 60 * 60 * 1000));
 
     const programs = await prisma.program.findMany({
       where: {
         channelId: channel.id,
-        startTime: { gte: windowStart, lte: now },
+        startTime: { gte: windowStart },
+        // Programs that have ended (endTime = startTime + duration < now)
+        // Filter in JS since we don't have endTime in the schema
         catchupAvailable: true,
       },
-      include: {
-        episode: { include: { show: true } },
-        movie: true,
-        channel: true,
-      },
       orderBy: { startTime: 'desc' },
+      include: {
+        episode: {
+          include: { show: true }
+        },
+        movie: true,
+      },
     });
 
-    return programs;
-  }
+    // Filter to only programs that have ended
+    const endedPrograms = programs.filter(p => {
+      const progEnd = new Date(p.startTime.getTime() + p.duration);
+      return progEnd <= now;
+    });
+
+    return endedPrograms.map((program: any) => {
+      const progEnd = new Date(program.startTime.getTime() + program.duration);
+      return {
+        id: program.id,
+        title: program.title,
+        startTime: program.startTime.toISOString(),
+        endTime: progEnd.toISOString(),
+        duration: program.duration,
+      };
+    });
+  },
 
   /**
-   * Check whether catchup is available for a specific channel right now.
+   * Check if catchup is available for a channel
    */
-  static async isCatchupAvailable(channelNumber: number): Promise<boolean> {
-    const channel = await prisma.channel.findUnique({
+  async isCatchupAvailable(channelNumber: number): Promise<boolean> {
+    const channel = await prisma.channel.findFirst({
       where: { number: channelNumber },
-      select: { catchupEnabled: true, catchupWindowHours: true },
     });
-    return channel?.catchupEnabled ?? false;
-  }
-}
+
+    if (!channel) {
+      return false;
+    }
+
+    return channel.catchupEnabled;
+  },
+};

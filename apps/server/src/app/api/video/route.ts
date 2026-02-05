@@ -7,6 +7,7 @@ import { PassThrough } from 'stream';
 import { streamMonitorService } from '@/lib/stream-monitor-service';
 import { streamRecoveryService } from '@/lib/stream-recovery-service';
 import { viewingHistoryService } from '@/lib/viewing-history-service';
+import { CatchupService } from '@/lib/catchup-service';
 
 // This is a requirement for using readable streams in a NextResponse.
 export const dynamic = 'force-dynamic';
@@ -258,8 +259,9 @@ export async function GET(request: NextRequest) {
 
       // Build compatible structures for the rest of the pipeline
       const catchupProgram = await CatchupService.getProgramAtTime(channelNumber, requestedTime);
-      const media = catchupProgram?.movie ?? catchupProgram?.episode;
-      const srv = catchupProgram?.movie?.library?.server ?? catchupProgram?.episode?.show?.library?.server;
+      const programWithMedia = catchupProgram as typeof catchupProgram & { movie?: any; episode?: any };
+      const media = programWithMedia?.movie ?? programWithMedia?.episode;
+      const srv = programWithMedia?.movie?.library?.server ?? programWithMedia?.episode?.show?.library?.server;
 
       if (!media || !srv || !srv.token) {
         return new NextResponse('Catchup program or Plex server unavailable', { status: 500 });
@@ -268,7 +270,7 @@ export async function GET(request: NextRequest) {
       programInfo = media;
       server = srv;
       timing = {
-        seekOffsetMs: catchupInfo.seekSeconds * 1000,
+        seekOffsetMs: catchupInfo.seekOffsetMs,
         isActive: true,
         remainingMs: catchupInfo.remainingMs,
       };

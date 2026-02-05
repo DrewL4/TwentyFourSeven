@@ -1746,7 +1746,7 @@ function ChannelsPageContent() {
       
       // Clear the form and select the new channel
       const nextChannelNumber = channelsQuery.data ? Math.max(...(channelsQuery.data as any[]).map((ch: any) => ch.number)) + 1 : 1;
-      setNewChannel({ number: nextChannelNumber, name: "", icon: "", groupTitle: "" });
+      setNewChannel({ number: nextChannelNumber, name: "", icon: "", groupTitle: "", catchupEnabled: true, catchupWindowHours: 24 });
       setSelectedChannelId(data.id);
       updateChannelInUrl(data.id);
       setShowCreateForm(false);

@@ -1459,7 +1459,7 @@ export const appRouter = {
     getPrograms: publicProcedure
       .input(z.object({ channelNumber: z.number() }))
       .handler(async ({ input }) => {
-        const { CatchupService } = await import('@/lib/catchup-service');
+        const { CatchupService } = await import('../lib/catchup-service');
         return await CatchupService.listCatchupPrograms(input.channelNumber);
       }),
 
@@ -1469,26 +1469,26 @@ export const appRouter = {
         time: z.string(), // ISO-8601
       }))
       .handler(async ({ input }) => {
-        const { CatchupService } = await import('@/lib/catchup-service');
+        const { CatchupService } = await import('../lib/catchup-service');
         const requestedTime = new Date(input.time);
         const info = await CatchupService.getCatchupStreamInfo(input.channelNumber, requestedTime);
         if (!info) {
           throw new Error('No catchup stream available for the requested time');
         }
         return {
-          programId: info.programId,
-          programTitle: info.programTitle,
-          seekOffset: info.seekSeconds,
+          programId: info.program.id,
+          programTitle: info.program.title,
+          seekOffset: Math.floor(info.seekOffsetMs / 1000),
           remainingMs: info.remainingMs,
-          programStartTime: info.programStartTime.toISOString(),
-          programDuration: info.programDuration,
+          programStartTime: info.program.startTime,
+          programDuration: info.remainingMs,
         };
       }),
 
     isAvailable: publicProcedure
       .input(z.object({ channelNumber: z.number() }))
       .handler(async ({ input }) => {
-        const { CatchupService } = await import('@/lib/catchup-service');
+        const { CatchupService } = await import('../lib/catchup-service');
         const available = await CatchupService.isCatchupAvailable(input.channelNumber);
         return { available };
       }),

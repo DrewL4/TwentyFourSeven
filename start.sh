@@ -243,15 +243,15 @@ echo "=== Initializing database ==="
 cd /app/apps/server
 
 echo "Generating Prisma client..."
-npx prisma generate
+npx prisma generate --schema ./prisma/schema
 
 echo "Setting up database (preserving existing data)..."
 if [ -f "/app/database/production.db" ] && [ -s "/app/database/production.db" ]; then
     echo "Existing database found, running migration to update schema..."
-    npx prisma db push
+    npx prisma db push --schema ./prisma/schema
 else
     echo "No existing database found, creating new database..."
-    npx prisma db push
+    npx prisma db push --schema ./prisma/schema
 fi
 
 cd /app

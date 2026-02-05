@@ -121,7 +121,6 @@ COPY --from=builder --chown=abc:users /app/apps/server/package.json ./apps/serve
 
 # Copy prisma files
 COPY --from=builder --chown=abc:users /app/apps/server/prisma ./apps/server/prisma
-COPY --from=builder --chown=abc:users /app/apps/server/prisma.config.ts ./apps/server/
 
 # Copy server.js (required for running the server)
 COPY --from=builder --chown=abc:users /app/apps/server/server.js ./apps/server/server.js

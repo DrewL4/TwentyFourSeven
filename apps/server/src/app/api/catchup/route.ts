@@ -45,15 +45,9 @@ export async function GET(request: NextRequest) {
         catchupAvailable: true,
         programs: programs.map((p) => ({
           id: p.id,
-          startTime: p.startTime.toISOString(),
+          startTime: new Date(p.startTime).toISOString(),
           duration: p.duration,
-          title: p.movie
-            ? p.movie.title
-            : p.episode
-              ? `${p.episode.show.title} - S${p.episode.seasonNumber}E${p.episode.episodeNumber}`
-              : 'Unknown',
-          type: p.movie ? 'movie' : 'episode',
-          poster: p.movie?.poster ?? p.episode?.show?.poster ?? null,
+          title: p.title,
         })),
       });
     }
@@ -91,16 +85,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       channel: channelNumber,
-      programId: info.programId,
-      programTitle: info.programTitle,
-      seekOffset: info.seekSeconds,
+      programId: info.program.id,
+      programTitle: info.program.title,
+      seekOffset: Math.floor(info.seekOffsetMs / 1000),
       remainingMs: info.remainingMs,
-      programStartTime: info.programStartTime.toISOString(),
-      programDuration: info.programDuration,
+      programStartTime: info.program.startTime,
+      programDuration: info.remainingMs,
       videoUrl,
-      expiresAt: new Date(
-        info.programStartTime.getTime() + info.programDuration
-      ).toISOString(),
+      expiresAt: info.program.endTime,
     });
   } catch (error: any) {
     console.error('[Catchup API] Error:', error);
