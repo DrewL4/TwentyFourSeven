@@ -132,13 +132,13 @@ export async function GET(request: NextRequest) {
       }
 
       // Catchup / Timeshift attributes (IPTV standard catchup tags)
-      // Supported by TiviMate, OTT Navigator, IPTV Smarters, and similar players
+      // Supported by TiviMate, OTT Navigator, IPTV Smarters, and ESPG
       if (globalCatchupEnabled && channel.catchupEnabled) {
         const catchupDays = Math.ceil(channel.catchupWindowHours / 24);
         extinf += ` catchup="vod"`;
         extinf += ` catchup-days="${catchupDays}"`;
-        // Template URL: ${start} and ${end} are Unix timestamps, ${duration} is seconds
-        extinf += ` catchup-source="${baseUrl}/api/video?channel=${channel.number}&catchup=true&utc=\${start}&lutc=\${timestamp}"`;
+        // Use {timestamp} so ESPG and other apps can substitute program start Unix time; 24/7 API accepts utc=
+        extinf += ` catchup-source="${baseUrl}/api/video?channel=${channel.number}&catchup=true&utc={timestamp}"`;
       }
       
       extinf += `,${channel.name}\n`;
