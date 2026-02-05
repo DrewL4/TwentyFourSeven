@@ -1,6 +1,6 @@
 import { PlexAPI } from './plex';
 import { prisma } from './prisma';
-import type { MediaServer, MediaLibrary } from '../../prisma/generated';
+import type { MediaServer, MediaLibrary } from '../../prisma/generated/client';
 
 interface PlexLoginResult {
   accessToken: string;

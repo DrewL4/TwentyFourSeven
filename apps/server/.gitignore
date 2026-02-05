@@ -47,6 +47,9 @@ lerna-debug.log*
 # local db
 *.db*
 
+# Prisma generated client (regenerated on build)
+prisma/generated/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

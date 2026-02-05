@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import type { Channel, MediaMovie, MediaShow } from '../../prisma/generated';
+import type { Channel, MediaMovie, MediaShow } from '../../prisma/generated/client';
 
 export class ChannelAutomationService {
   private automationLocks = new Set<string>();
