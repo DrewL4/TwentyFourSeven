@@ -1,4 +1,19 @@
 /**
+ * Minimal types for catchup calculations to avoid importing Prisma in this utility module.
+ */
+interface CatchupChannel {
+  catchupEnabled: boolean;
+  catchupWindowHours: number;
+}
+
+interface CatchupProgram {
+  startTime: Date;
+  duration: number;
+  catchupAvailable?: boolean;
+  catchupExpiry?: Date | null;
+}
+
+/**
  * Service for handling program timing calculations
  */
 export class TimingService {
@@ -130,6 +145,93 @@ export class TimingService {
     } else {
       return `${seconds}s`;
     }
+  }
+
+  // ───────────────────────────────────────────────────
+  // Catchup / Timeshift helpers
+  // ───────────────────────────────────────────────────
+
+  /**
+   * Calculate the catchup window boundaries for a channel.
+   * The window stretches from (now - catchupWindowHours) to now.
+   */
+  static calculateCatchupWindow(
+    channel: CatchupChannel,
+    now: Date = new Date()
+  ): { start: Date; end: Date } {
+    if (!channel.catchupEnabled) {
+      // No catchup — return a zero-width window at "now"
+      return { start: now, end: now };
+    }
+    const windowMs = channel.catchupWindowHours * 60 * 60 * 1000;
+    const start = new Date(now.getTime() - windowMs);
+    return { start, end: now };
+  }
+
+  /**
+   * Determine whether a program is still within the catchup window.
+   */
+  static isProgramCatchupAvailable(
+    program: CatchupProgram,
+    channel: CatchupChannel,
+    now: Date = new Date()
+  ): boolean {
+    if (!channel.catchupEnabled) return false;
+    if (program.catchupAvailable === false) return false;
+
+    // If an explicit expiry is set and has passed, catchup is gone
+    if (program.catchupExpiry && new Date(program.catchupExpiry) < now) {
+      return false;
+    }
+
+    const programStart = new Date(program.startTime);
+    const programEnd = new Date(programStart.getTime() + program.duration);
+
+    // Program must have already started (at least partially aired)
+    if (programStart > now) return false;
+
+    // The programme's air time must fall inside the catchup window
+    const { start: windowStart } = this.calculateCatchupWindow(channel, now);
+    return programEnd > windowStart;
+  }
+
+  /**
+   * Calculate the seek offset (in ms) for a catchup request.
+   *
+   * If `requestedTime` is within the programme's air window, the seek offset
+   * is the distance from the programme start to the requested time.
+   * Otherwise, seek to the beginning of the programme (offset 0).
+   */
+  static getCatchupSeekOffset(
+    program: CatchupProgram,
+    requestedTime: Date
+  ): { seekOffsetMs: number; remainingMs: number } {
+    const programStart = new Date(program.startTime);
+    const programEnd = new Date(programStart.getTime() + program.duration);
+
+    // Clamp the requested time to within the programme
+    const clampedTime = new Date(
+      Math.max(programStart.getTime(), Math.min(programEnd.getTime(), requestedTime.getTime()))
+    );
+
+    const seekOffsetMs = clampedTime.getTime() - programStart.getTime();
+    const remainingMs = programEnd.getTime() - clampedTime.getTime();
+
+    return {
+      seekOffsetMs: Math.max(0, seekOffsetMs),
+      remainingMs: Math.max(0, remainingMs),
+    };
+  }
+
+  /**
+   * Calculate the catchup expiry DateTime for a program based on its channel settings.
+   * Used when generating programs to pre-populate the catchupExpiry field.
+   */
+  static calculateCatchupExpiry(
+    programEndTime: Date,
+    catchupWindowHours: number
+  ): Date {
+    return new Date(programEndTime.getTime() + catchupWindowHours * 60 * 60 * 1000);
   }
 }
 

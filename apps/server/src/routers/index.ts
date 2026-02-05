@@ -251,6 +251,9 @@ export const appRouter = {
         onDemandModulo: z.number().default(1),
         // Episode memory settings
         episodeMemoryEnabled: z.boolean().default(false),
+        // Catchup / Timeshift settings
+        catchupEnabled: z.boolean().default(true),
+        catchupWindowHours: z.number().min(1).max(48).default(24),
         // Automation filter settings
         autoFilterEnabled: z.boolean().default(false),
         filterGenres: z.string().optional(),
@@ -290,6 +293,9 @@ export const appRouter = {
         onDemandModulo: z.number().optional(),
         // Episode memory settings
         episodeMemoryEnabled: z.boolean().optional(),
+        // Catchup / Timeshift settings
+        catchupEnabled: z.boolean().optional(),
+        catchupWindowHours: z.number().min(1).max(48).optional(),
         // Automation filter settings
         autoFilterEnabled: z.boolean().optional(),
         filterGenres: z.string().optional(),
@@ -1448,6 +1454,46 @@ export const appRouter = {
       })
   },
 
+  // Catchup / Timeshift
+  catchup: {
+    getPrograms: publicProcedure
+      .input(z.object({ channelNumber: z.number() }))
+      .handler(async ({ input }) => {
+        const { CatchupService } = await import('@/lib/catchup-service');
+        return await CatchupService.listCatchupPrograms(input.channelNumber);
+      }),
+
+    getStreamInfo: publicProcedure
+      .input(z.object({
+        channelNumber: z.number(),
+        time: z.string(), // ISO-8601
+      }))
+      .handler(async ({ input }) => {
+        const { CatchupService } = await import('@/lib/catchup-service');
+        const requestedTime = new Date(input.time);
+        const info = await CatchupService.getCatchupStreamInfo(input.channelNumber, requestedTime);
+        if (!info) {
+          throw new Error('No catchup stream available for the requested time');
+        }
+        return {
+          programId: info.programId,
+          programTitle: info.programTitle,
+          seekOffset: info.seekSeconds,
+          remainingMs: info.remainingMs,
+          programStartTime: info.programStartTime.toISOString(),
+          programDuration: info.programDuration,
+        };
+      }),
+
+    isAvailable: publicProcedure
+      .input(z.object({ channelNumber: z.number() }))
+      .handler(async ({ input }) => {
+        const { CatchupService } = await import('@/lib/catchup-service');
+        const available = await CatchupService.isCatchupAvailable(input.channelNumber);
+        return { available };
+      }),
+  },
+
   // Programming/Guide
   guide: {
     current: publicProcedure.handler(async () => {
@@ -1459,12 +1505,14 @@ export const appRouter = {
       
       const now = new Date();
       const endTime = new Date(now.getTime() + guideDays * 24 * 60 * 60 * 1000); // Use guideDays setting
+      // Look back up to 48 hours for catchup-eligible programs
+      const lookbackMs = 48 * 60 * 60 * 1000;
 
       return await prisma.program.findMany({
         where: {
           startTime: { lte: endTime },
           AND: {
-            startTime: { gte: new Date(now.getTime() - 4 * 60 * 60 * 1000) } // Past 4 hours
+            startTime: { gte: new Date(now.getTime() - lookbackMs) }
           }
         },
         include: {
@@ -1615,7 +1663,9 @@ export const appRouter = {
         hdhrDeviceId: z.string().optional(),
         hdhrFriendlyName: z.string().optional(),
         hdhrTunerCount: z.number().optional(),
-        guideDays: z.number().optional()
+        guideDays: z.number().optional(),
+        catchupEnabled: z.boolean().optional(),
+        catchupDefaultWindow: z.number().min(1).max(48).optional(),
       }))
       .handler(async ({ input }) => {
         return await prisma.settings.upsert({

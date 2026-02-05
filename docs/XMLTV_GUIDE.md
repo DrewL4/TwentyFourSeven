@@ -235,4 +235,10 @@ Most IPTV players support XMLTV URLs for EPG data alongside M3U playlists.
 ### XMLTV Version
 - Compatible with XMLTV DTD specification
 - Follows XMLTV best practices
-- Supports all major XMLTV elements 
+- Supports all major XMLTV elements
+
+### Catchup / Timeshift Extensions
+The XMLTV guide includes catchup metadata when enabled. See [CATCHUP_TIMESHIFT_GUIDE.md](./CATCHUP_TIMESHIFT_GUIDE.md) for full details on:
+- `catchup` attribute on channel elements
+- `catchup-id` attribute on programme elements
+- `<previously-shown>` tags for past programs within the catchup window

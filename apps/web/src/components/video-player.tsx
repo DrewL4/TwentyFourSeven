@@ -15,6 +15,12 @@ export interface VideoPlayerProps {
   startTime?: number;
   isLiveTV?: boolean;
   channelNumber?: number;
+  /** Catchup/timeshift mode: play a past programme */
+  isCatchup?: boolean;
+  /** ISO-8601 time of the programme to catch up to */
+  catchupTime?: string;
+  /** Program ID for catchup (alternative to time) */
+  catchupProgramId?: string;
 }
 
 export default function VideoPlayer({
@@ -27,6 +33,9 @@ export default function VideoPlayer({
   startTime = 0,
   isLiveTV = false,
   channelNumber,
+  isCatchup = false,
+  catchupTime,
+  catchupProgramId,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,10 +66,17 @@ export default function VideoPlayer({
   const getVideoUrl = useCallback(() => {
     if (channelNumber) {
       const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
-      return `${serverUrl}/api/video?channel=${channelNumber}`;
+      let videoUrl = `${serverUrl}/api/video?channel=${channelNumber}`;
+
+      // Catchup mode: append catchup params
+      if (isCatchup && catchupTime) {
+        videoUrl += `&catchup=true&time=${encodeURIComponent(catchupTime)}`;
+      }
+
+      return videoUrl;
     }
     return url;
-  }, [url, channelNumber]);
+  }, [url, channelNumber, isCatchup, catchupTime]);
 
   const [currentUrl, setCurrentUrl] = useState(getVideoUrl());
 
@@ -369,12 +385,12 @@ export default function VideoPlayer({
           setIsMuted(video.muted);
           break;
         case 'ArrowLeft':
-          if (!isLiveTV) {
+          if (!isLiveTV || isCatchup) {
             video.currentTime = Math.max(0, video.currentTime - 10);
           }
           break;
         case 'ArrowRight':
-          if (!isLiveTV) {
+          if (!isLiveTV || isCatchup) {
             video.currentTime = Math.min(video.duration, video.currentTime + 10);
           }
           break;
@@ -457,18 +473,47 @@ export default function VideoPlayer({
               {title && (
                 <h2 className="text-white text-lg font-semibold truncate">{title}</h2>
               )}
-              {isLiveTV && (
+              {isCatchup ? (
+                <span className="px-2 py-1 bg-amber-500 text-white text-xs rounded font-medium">CATCHUP</span>
+              ) : isLiveTV ? (
                 <span className="px-2 py-1 bg-red-500 text-white text-xs rounded">LIVE</span>
-              )}
+              ) : null}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="text-white hover:bg-white/20"
-            >
-              <X className="w-5 h-5" />
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* Jump to Live button (only in catchup mode) */}
+              {isCatchup && channelNumber && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    // Switch from catchup to live by reloading without catchup params
+                    const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
+                    const liveUrl = `${serverUrl}/api/video?channel=${channelNumber}`;
+                    const video = videoRef.current;
+                    if (video) {
+                      video.src = liveUrl;
+                      video.load();
+                      video.play().catch(() => {});
+                    }
+                    setCurrentUrl(liveUrl);
+                  }}
+                  className="text-white hover:bg-white/20 text-xs"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                  </svg>
+                  Jump to Live
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="text-white hover:bg-white/20"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -501,12 +546,15 @@ export default function VideoPlayer({
               )}
             </Button>
 
-            {!isLiveTV && (
+            {(!isLiveTV || isCatchup) && (
               <div className="flex items-center gap-2 text-white text-sm flex-1">
                 <span>{Math.floor(currentTime / 60)}:{(currentTime % 60).toFixed(0).padStart(2, '0')}</span>
                 <div className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-white rounded-full transition-all"
+                    className={cn(
+                      "h-full rounded-full transition-all",
+                      isCatchup ? "bg-amber-400" : "bg-white"
+                    )}
                     style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
                   />
                 </div>

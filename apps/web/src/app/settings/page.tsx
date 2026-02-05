@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Settings, Server, Radio, Video, Save, ExternalLink, Calendar, Download } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Settings, Server, Radio, Video, Save, ExternalLink, Calendar, Download, Rewind } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import FirstTimeSetup from "@/components/first-time-setup";
@@ -21,7 +23,9 @@ export default function SettingsPage() {
     hdhrDeviceId: '12345678',
     hdhrFriendlyName: 'My TwentyFourSeven',
     hdhrTunerCount: 2,
-    guideDays: 3
+    guideDays: 3,
+    catchupEnabled: true,
+    catchupDefaultWindow: 24,
   });
 
   const [showWatchTowerSetup, setShowWatchTowerSetup] = useState(false);
@@ -47,7 +51,9 @@ export default function SettingsPage() {
         hdhrDeviceId: settingsQuery.data.hdhrDeviceId,
         hdhrFriendlyName: settingsQuery.data.hdhrFriendlyName,
         hdhrTunerCount: settingsQuery.data.hdhrTunerCount,
-        guideDays: settingsQuery.data.guideDays || 3
+        guideDays: settingsQuery.data.guideDays || 3,
+        catchupEnabled: settingsQuery.data.catchupEnabled ?? true,
+        catchupDefaultWindow: settingsQuery.data.catchupDefaultWindow ?? 24,
       });
     }
   }, [settingsQuery.data]);
@@ -61,7 +67,9 @@ export default function SettingsPage() {
       hdhrDeviceId: settings.hdhrDeviceId,
       hdhrFriendlyName: settings.hdhrFriendlyName,
       hdhrTunerCount: settings.hdhrTunerCount,
-      guideDays: settings.guideDays
+      guideDays: settings.guideDays,
+      catchupEnabled: settings.catchupEnabled,
+      catchupDefaultWindow: settings.catchupDefaultWindow,
     });
   };
 
@@ -76,7 +84,9 @@ export default function SettingsPage() {
       settings.hdhrDeviceId !== settingsQuery.data.hdhrDeviceId ||
       settings.hdhrFriendlyName !== settingsQuery.data.hdhrFriendlyName ||
       settings.hdhrTunerCount !== settingsQuery.data.hdhrTunerCount ||
-      settings.guideDays !== (settingsQuery.data.guideDays || 3)
+      settings.guideDays !== (settingsQuery.data.guideDays || 3) ||
+      settings.catchupEnabled !== (settingsQuery.data.catchupEnabled ?? true) ||
+      settings.catchupDefaultWindow !== (settingsQuery.data.catchupDefaultWindow ?? 24)
     );
   };
 
@@ -201,6 +211,56 @@ export default function SettingsPage() {
                   If there isn't enough content to fill the time period, programming will loop back to the beginning.
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Catchup / Timeshift Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Rewind className="w-5 h-5" />
+                Catchup / Timeshift
+              </CardTitle>
+              <CardDescription>
+                Allow viewers to watch previously aired programs on demand
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">Enable Catchup Globally</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Master toggle for catchup functionality across all channels. When disabled, no catchup metadata will be included in M3U or XMLTV outputs.
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.catchupEnabled}
+                  onCheckedChange={(checked) => setSettings(prev => ({ ...prev, catchupEnabled: checked }))}
+                />
+              </div>
+
+              {settings.catchupEnabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="catchupDefaultWindow">Default Catchup Window (hours)</Label>
+                  <Select
+                    value={String(settings.catchupDefaultWindow)}
+                    onValueChange={(value) => setSettings(prev => ({ ...prev, catchupDefaultWindow: parseInt(value) }))}
+                  >
+                    <SelectTrigger id="catchupDefaultWindow">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="6">6 hours</SelectItem>
+                      <SelectItem value="12">12 hours</SelectItem>
+                      <SelectItem value="24">24 hours (1 day)</SelectItem>
+                      <SelectItem value="48">48 hours (2 days)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Default catchup window for newly created channels. Individual channels can override this value.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 

@@ -175,6 +175,10 @@ model Channel {
   // Franchise automation – automatically add sibling shows in same franchise
   franchiseAutomation Boolean @default(false)
   
+  // Catchup/Timeshift settings
+  catchupEnabled      Boolean @default(true)    // Enable catchup for this channel
+  catchupWindowHours  Int @default(24)           // Hours of catchup available (1-48)
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
@@ -196,6 +200,10 @@ model Program {
   
   startTime   DateTime
   duration    Int // Duration in milliseconds
+  
+  // Catchup metadata
+  catchupAvailable Boolean @default(true)  // Can this program be watched on catchup?
+  catchupExpiry    DateTime?               // When catchup expires (auto-calculated)
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -280,6 +288,10 @@ model Settings {
   
   // Guide settings
   guideDays Int @default(3) // Number of days of guide data to generate
+  
+  // Global Catchup / Timeshift settings
+  catchupEnabled        Boolean @default(true)   // Global toggle for catchup functionality
+  catchupDefaultWindow  Int     @default(24)      // Default catchup window in hours for new channels (1-48)
   
   // WatchTower integration settings
   watchTowerEnabled Boolean @default(false)

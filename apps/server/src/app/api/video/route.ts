@@ -219,8 +219,68 @@ export async function GET(request: NextRequest) {
     return new NextResponse('Invalid channel number', { status: 400 });
   }
 
+  // ── Catchup / Timeshift support ──
+  // Catchup requests arrive with `catchup=true` and one of:
+  //   • `time`  – ISO-8601 timestamp
+  //   • `utc`   – Unix epoch seconds (IPTV player standard)
+  //   • `lutc`  – "live" Unix epoch (current wall-clock when player made request)
+  const isCatchup = request.nextUrl.searchParams.get('catchup') === 'true';
+  const timeParam = request.nextUrl.searchParams.get('time');
+  const utcParam = request.nextUrl.searchParams.get('utc');
+
   try {
-    const { programInfo, server, timing } = await getProgramInfo(channelNumber);
+    let programInfo: any;
+    let server: any;
+    let timing: { seekOffsetMs: number; isActive: boolean; remainingMs: number };
+
+    if (isCatchup) {
+      // Resolve the requested timestamp
+      let requestedTime: Date;
+      if (timeParam) {
+        requestedTime = new Date(timeParam);
+      } else if (utcParam) {
+        requestedTime = new Date(parseInt(utcParam, 10) * 1000);
+      } else {
+        return new NextResponse('Catchup requires a time or utc parameter', { status: 400 });
+      }
+
+      if (isNaN(requestedTime.getTime())) {
+        return new NextResponse('Invalid time value', { status: 400 });
+      }
+
+      // Use the CatchupService to look up the program and calculate seek
+      const { CatchupService } = await import('@/lib/catchup-service');
+      const catchupInfo = await CatchupService.getCatchupStreamInfo(channelNumber, requestedTime);
+
+      if (!catchupInfo) {
+        return new NextResponse('No catchup program found for the requested time', { status: 404 });
+      }
+
+      // Build compatible structures for the rest of the pipeline
+      const catchupProgram = await CatchupService.getProgramAtTime(channelNumber, requestedTime);
+      const media = catchupProgram?.movie ?? catchupProgram?.episode;
+      const srv = catchupProgram?.movie?.library?.server ?? catchupProgram?.episode?.show?.library?.server;
+
+      if (!media || !srv || !srv.token) {
+        return new NextResponse('Catchup program or Plex server unavailable', { status: 500 });
+      }
+
+      programInfo = media;
+      server = srv;
+      timing = {
+        seekOffsetMs: catchupInfo.seekSeconds * 1000,
+        isActive: true,
+        remainingMs: catchupInfo.remainingMs,
+      };
+    } else {
+      // Standard live playback
+      const liveInfo = await getProgramInfo(channelNumber);
+      programInfo = liveInfo.programInfo;
+      server = liveInfo.server;
+      timing = liveInfo.timing;
+    }
+
+    // ── From here, the rest of the pipeline is shared between live and catchup ──
     
     if (!server.token) {
       return new NextResponse('Plex server token is missing.', { status: 500 });

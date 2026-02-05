@@ -8,6 +8,12 @@ export async function GET(request: NextRequest) {
       orderBy: { number: 'asc' }
     });
 
+    // Fetch global settings to check if catchup is enabled globally
+    const globalSettings = await prisma.settings.findUnique({
+      where: { id: "singleton" }
+    });
+    const globalCatchupEnabled = globalSettings?.catchupEnabled ?? true;
+
     // Force HTTPS for all URLs
     const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '247.midweststreams.us';
     const baseUrl = `https://${forwardedHost}`;
@@ -123,6 +129,16 @@ export async function GET(request: NextRequest) {
       })() : undefined);
       if (iconUrl) {
         extinf += ` tvg-logo="${iconUrl}"`;
+      }
+
+      // Catchup / Timeshift attributes (IPTV standard catchup tags)
+      // Supported by TiviMate, OTT Navigator, IPTV Smarters, and similar players
+      if (globalCatchupEnabled && channel.catchupEnabled) {
+        const catchupDays = Math.ceil(channel.catchupWindowHours / 24);
+        extinf += ` catchup="vod"`;
+        extinf += ` catchup-days="${catchupDays}"`;
+        // Template URL: ${start} and ${end} are Unix timestamps, ${duration} is seconds
+        extinf += ` catchup-source="${baseUrl}/api/video?channel=${channel.number}&catchup=true&utc=\${start}&lutc=\${timestamp}"`;
       }
       
       extinf += `,${channel.name}\n`;

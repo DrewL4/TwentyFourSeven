@@ -44,7 +44,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, X, ChevronDown, ChevronRight, Filter, User, Calendar, Tag } from "lucide-react";
+import { Search, X, ChevronDown, ChevronRight, Filter, User, Calendar, Tag, Rewind } from "lucide-react";
 import { toast } from "sonner";
 import { Autocomplete } from "@/components/ui/combobox"
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -90,6 +90,9 @@ type Channel = {
   blockShuffle?: boolean;
   blockShuffleSize?: number;
   autoSortMethod?: string;
+  // Catchup / Timeshift
+  catchupEnabled?: boolean;
+  catchupWindowHours?: number;
 };
 
 type Show = {
@@ -1620,14 +1623,18 @@ function ChannelsPageContent() {
     number: 1,
     name: "",
     icon: "",
-    groupTitle: ""
+    groupTitle: "",
+    catchupEnabled: true,
+    catchupWindowHours: 24,
   });
   const [editChannel, setEditChannel] = useState({
     id: "",
     number: 1,
     name: "",
     icon: "",
-    groupTitle: ""
+    groupTitle: "",
+    catchupEnabled: true,
+    catchupWindowHours: 24,
   });
   
   // Programming Rules state
@@ -2021,7 +2028,9 @@ function ChannelsPageContent() {
       number: newChannel.number,
       name: newChannel.name,
       icon: newChannel.icon || undefined,
-      groupTitle: newChannel.groupTitle || undefined
+      groupTitle: newChannel.groupTitle || undefined,
+      catchupEnabled: newChannel.catchupEnabled,
+      catchupWindowHours: newChannel.catchupWindowHours,
     });
   };
 
@@ -2033,7 +2042,9 @@ function ChannelsPageContent() {
       number: editChannel.number,
       name: editChannel.name,
       icon: editChannel.icon || undefined,
-      groupTitle: editChannel.groupTitle || undefined
+      groupTitle: editChannel.groupTitle || undefined,
+      catchupEnabled: editChannel.catchupEnabled,
+      catchupWindowHours: editChannel.catchupWindowHours,
     });
   };
 
@@ -3171,6 +3182,50 @@ function ChannelsPageContent() {
                 )}
               </div>
             </div>
+
+            {/* Catchup / Timeshift Settings */}
+            <div className="border-t pt-4 mt-4">
+              <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                <Rewind className="w-4 h-4" />
+                Catchup / Timeshift
+              </h4>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-medium">Enable Catchup</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Allow viewers to watch previously aired programs
+                    </p>
+                  </div>
+                  <Switch
+                    checked={editChannel.catchupEnabled ?? true}
+                    onCheckedChange={(checked) => setEditChannel(prev => ({ ...prev, catchupEnabled: checked }))}
+                  />
+                </div>
+                {(editChannel.catchupEnabled ?? true) && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-catchupWindowHours">Catchup Window (hours)</Label>
+                    <Select
+                      value={String(editChannel.catchupWindowHours ?? 24)}
+                      onValueChange={(value) => setEditChannel(prev => ({ ...prev, catchupWindowHours: parseInt(value) }))}
+                    >
+                      <SelectTrigger className="touch-manipulation">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="6">6 hours</SelectItem>
+                        <SelectItem value="12">12 hours</SelectItem>
+                        <SelectItem value="24">24 hours (1 day)</SelectItem>
+                        <SelectItem value="48">48 hours (2 days)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      How far back viewers can go to watch past programs
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
             
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
               <Tooltip>
@@ -3313,7 +3368,9 @@ function ChannelsPageContent() {
                                  number: channel.number,
                                  name: channel.name,
                                  icon: channel.icon || "",
-                                 groupTitle: channel.groupTitle || ""
+                                 groupTitle: channel.groupTitle || "",
+                                 catchupEnabled: channel.catchupEnabled ?? true,
+                                 catchupWindowHours: channel.catchupWindowHours ?? 24,
                                });
                                setEditingChannelId(channel.id);
                              }}

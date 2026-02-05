@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
 
     const settings = await prisma.settings.findUnique({ where: { id: "singleton" } });
     const guideDays = settings?.guideDays || 3;
+    const globalCatchupEnabled = settings?.catchupEnabled ?? true;
     const settingsLoadTime = performance.now();
 
     const channels = await prisma.channel.findMany({ where: { stealth: false }, orderBy: { number: 'asc' } });
@@ -195,10 +196,25 @@ export async function GET(request: NextRequest) {
       '<tv generator-info-name="TwentyFourSeven" generator-info-url="https://github.com/vexorian/TwentyFourSeven" source-info-name="TwentyFourSeven">'
     ];
 
+    // Build a map of channel catchup settings for use in programme elements
+    const channelCatchupMap = new Map<string, { enabled: boolean; windowHours: number }>();
+
     for (const channel of channels) {
+      const channelCatchup = globalCatchupEnabled && channel.catchupEnabled;
+      channelCatchupMap.set(channel.id, {
+        enabled: channelCatchup,
+        windowHours: channel.catchupWindowHours,
+      });
+
       // Use the exact channel name for XML id to align with M3U tvg-id
       const channelId = escapeXml(channel.name);
-      xmltvParts.push(`  <channel id="${channelId}">`);
+
+      // Include catchup attribute on channel element when enabled
+      if (channelCatchup) {
+        xmltvParts.push(`  <channel id="${channelId}" catchup="${escapeXml(String(channel.catchupWindowHours))}">`);
+      } else {
+        xmltvParts.push(`  <channel id="${channelId}">`);
+      }
       // Emit a single display-name without attributes to avoid list/dict parsing in xmltodict
       xmltvParts.push(`    <display-name>${escapeXml(channel.name)}</display-name>`);
       const iconUrl = channelIconMap.get(channel.id) || (isAbsolute(channel.icon) ? (() => {
@@ -212,6 +228,12 @@ export async function GET(request: NextRequest) {
       if (iconUrl) {
         xmltvParts.push(`    <icon src="${escapeXml(iconUrl)}" />`);
       }
+
+      // Emit catchup URL template for supported EPG readers
+      if (channel.catchupEnabled) {
+        xmltvParts.push(`    <url catchup="vod" catchup-days="${Math.ceil(channel.catchupWindowHours / 24)}">${escapeXml(baseUrl)}/api/video?channel=${channel.number}&amp;catchup=true&amp;utc={start}&amp;lutc={timestamp}</url>`);
+      }
+
       xmltvParts.push('  </channel>');
     }
     // Pre-build channel ID map to avoid repeated escaping
@@ -227,7 +249,14 @@ export async function GET(request: NextRequest) {
       const programEndTime = new Date(programStartTime.getTime() + program.duration);
       // Use cached channel ID to avoid repeated escaping
       const channelId = channelIdMap.get(program.channelId) || escapeXml(program.channel.name);
-      xmltvParts.push(`  <programme start="${formatXmltvTime(programStartTime)}" stop="${formatXmltvTime(programEndTime)}" channel="${channelId}">`);
+
+      // Build programme attributes – add catchup-id when catchup is enabled
+      const catchupInfo = channelCatchupMap.get(program.channelId);
+      let programmeAttrs = `start="${formatXmltvTime(programStartTime)}" stop="${formatXmltvTime(programEndTime)}" channel="${channelId}"`;
+      if (catchupInfo?.enabled && program.catchupAvailable) {
+        programmeAttrs += ` catchup-id="${escapeXml(program.id)}"`;
+      }
+      xmltvParts.push(`  <programme ${programmeAttrs}>`);
       if (program.episode) {
         const show = program.episode.show;
         const episode = program.episode;
@@ -444,6 +473,16 @@ export async function GET(request: NextRequest) {
       } else if (isNewSoon) {
         xmltvParts.push('    <new />');
       }
+
+      // Mark past programmes that are still available for catchup
+      const catchupMeta = channelCatchupMap.get(program.channelId);
+      if (catchupMeta?.enabled && program.catchupAvailable && endTime < currentNow) {
+        const windowStart = new Date(currentNow.getTime() - catchupMeta.windowHours * 60 * 60 * 1000);
+        if (endTime > windowStart) {
+          xmltvParts.push(`    <previously-shown start="${formatXmltvTime(startTime)}" />`);
+        }
+      }
+
       xmltvParts.push('  </programme>');
     } // Close the for (const program of programs) loop
     xmltvParts.push('</tv>');

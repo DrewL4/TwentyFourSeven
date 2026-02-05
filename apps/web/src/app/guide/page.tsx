@@ -4,7 +4,7 @@ import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tv, Clock, Calendar, Play, Film, RefreshCw, Zap, Settings, ChevronLeft, ChevronRight } from "lucide-react";
+import { Tv, Clock, Calendar, Play, Film, RefreshCw, Zap, Settings, ChevronLeft, ChevronRight, Rewind } from "lucide-react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -49,6 +49,9 @@ export default function GuidePage() {
   const [isMobileView, setIsMobileView] = useState(false);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
   const [playingChannel, setPlayingChannel] = useState<{ number: number; name: string; icon?: string | null } | null>(null);
+  // Catchup state
+  const [isCatchupMode, setIsCatchupMode] = useState(false);
+  const [catchupTime, setCatchupTime] = useState<string | undefined>(undefined);
   const queryClient = useQueryClient();
   
   const guideQuery = useQuery(orpc.guide.current.queryOptions());
@@ -274,6 +277,30 @@ export default function GuidePage() {
     });
   };
 
+  // Check if a program is in the past but within catchup window (24h default)
+  const isPastProgram = (startTime: string | Date, duration: number) => {
+    const start = (typeof startTime === 'string' ? new Date(startTime) : startTime).getTime();
+    const end = start + duration;
+    return end < currentTime.getTime();
+  };
+
+  // Check if a past program is within the catchup window (assume max 48h)
+  const isCatchupEligible = (startTime: string | Date, duration: number) => {
+    if (!isPastProgram(startTime, duration)) return false;
+    const end = (typeof startTime === 'string' ? new Date(startTime) : startTime).getTime() + duration;
+    const catchupWindowMs = 48 * 60 * 60 * 1000; // Max 48h window
+    return (currentTime.getTime() - end) < catchupWindowMs;
+  };
+
+  // Launch catchup playback for a past program
+  const playCatchup = (channel: { number: number; name: string; icon?: string | null }, programStartTime: string | Date) => {
+    const startStr = typeof programStartTime === 'string' ? programStartTime : programStartTime.toISOString();
+    setPlayingChannel({ number: channel.number, name: channel.name, icon: channel.icon });
+    setIsCatchupMode(true);
+    setCatchupTime(startStr);
+    setIsPlayerOpen(true);
+  };
+
   // Mobile Timeline View Component
   const MobileGuideView = () => {
     const sortedChannels = channelsQuery.data ? 
@@ -314,6 +341,8 @@ export default function GuidePage() {
                       className="h-8 w-8 p-0"
                       onClick={() => {
                         setPlayingChannel({ number: channel.number, name: channel.name, icon: channel.icon });
+                        setIsCatchupMode(false);
+                        setCatchupTime(undefined);
                         setIsPlayerOpen(true);
                       }}
                     >
@@ -565,7 +594,8 @@ export default function GuidePage() {
                     onClick={() => setGuideStartTime(prev => new Date(prev.getTime() - 3 * 60 * 60 * 1000))}
                     disabled={(() => {
                       const now = new Date();
-                      const minTime = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+                      // Allow scrolling back up to 48 hours for catchup
+                      const minTime = new Date(now.getTime() - 48 * 60 * 60 * 1000);
                       return guideStartTime <= minTime;
                     })()}
                     className="touch-manipulation"
@@ -800,14 +830,26 @@ export default function GuidePage() {
                                     const expandedWidthPercent = isShortProgram ? 
                                       (hourDuration / (6 * 60 * 60 * 1000)) * 100 : widthPercent;
                                     
+                                    const isPast = isPastProgram(program.startTime, program.duration);
+                                    const catchupEligible = isCatchupEligible(program.startTime, program.duration);
+                                    
                                     return (
                                       <div
                                         key={program.id}
                                         className={`absolute top-1 bottom-1 mx-0.5 rounded text-xs overflow-visible cursor-pointer transition-all duration-300 hover:z-50 hover:shadow-2xl group ${
                                           isCurrentProgram 
                                             ? 'bg-blue-500 text-white border-2 border-blue-600' 
-                                            : 'bg-accent text-accent-foreground border border-border'
+                                            : catchupEligible
+                                              ? 'bg-amber-100 dark:bg-amber-900/40 text-accent-foreground border border-amber-300 dark:border-amber-700'
+                                              : isPast
+                                                ? 'bg-muted/50 text-muted-foreground border border-border/50 opacity-60'
+                                                : 'bg-accent text-accent-foreground border border-border'
                                         }`}
+                                        onClick={() => {
+                                          if (catchupEligible) {
+                                            playCatchup(channel, program.startTime);
+                                          }
+                                        }}
                                         style={{
                                           left: `${leftPercent}%`,
                                           width: `${widthPercent}%`,
@@ -831,7 +873,10 @@ export default function GuidePage() {
                                       >
                                         {/* Regular content - visible by default */}
                                         <div className={`p-1.5 h-full overflow-hidden ${isShortProgram ? 'group-hover:hidden' : ''}`}>
-                                          <div className="font-medium leading-tight line-clamp-1">
+                                          <div className="font-medium leading-tight line-clamp-1 flex items-center gap-1">
+                                            {catchupEligible && (
+                                              <Rewind className="w-3 h-3 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                                            )}
                                             {program.episode ? program.episode.show.title : program.movie?.title}
                                           </div>
                                           {program.episode && (
@@ -928,10 +973,14 @@ export default function GuidePage() {
           onClose={() => {
             setIsPlayerOpen(false);
             setPlayingChannel(null);
+            setIsCatchupMode(false);
+            setCatchupTime(undefined);
           }}
           posterImage={playingChannel.icon || undefined}
           autoPlay={true}
-          isLiveTV={true}
+          isLiveTV={!isCatchupMode}
+          isCatchup={isCatchupMode}
+          catchupTime={catchupTime}
           channelNumber={playingChannel.number}
         />
       )}
