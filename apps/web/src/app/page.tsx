@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tv, Library, Settings, Play, Radio, FileText } from "lucide-react";
+import { AppLogo } from "@/components/app-logo";
+import { Library, Settings, Play, Radio, FileText, Tv } from "lucide-react";
 import { getServerUrl } from "@/utils/server-url";
 
 // Type for channel data from the API
@@ -30,9 +31,7 @@ export default function Home() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-            <Tv className="w-6 h-6 text-white" />
-          </div>
+          <AppLogo size="md" />
           <div>
             <h1 className="text-3xl font-bold">TwentyFour/Seven</h1>
             <p className="text-muted-foreground">Live TV from your media library</p>

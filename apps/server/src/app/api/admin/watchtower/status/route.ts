@@ -33,10 +33,17 @@ export async function GET(request: NextRequest) {
     const isConfigured = !!(configMap.watchtower_url && configMap.watchtower_api_token);
 
     if (!isConfigured) {
+      const userCount = await db.user.count();
+      const existingConfig = await db.setting.findFirst({
+        where: { key: 'watchtower_configured_at' },
+      });
+      const allowInitialSetup = userCount === 0 || !existingConfig;
+
       return NextResponse.json({
         configured: false,
         connected: false,
-        message: 'WatchTower not configured'
+        allowInitialSetup,
+        message: 'WatchTower not configured',
       });
     }
 

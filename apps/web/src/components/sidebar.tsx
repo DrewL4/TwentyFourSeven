@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { 
-  Tv, 
   Radio, 
   Library, 
   Settings, 
@@ -14,10 +13,10 @@ import {
   User,
   LogOut,
   Home,
-  Rocket,
   Users,
   Eye
 } from "lucide-react";
+import { AppLogo } from "@/components/app-logo";
 import { Button } from "./ui/button";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
@@ -65,9 +64,7 @@ export default function Sidebar() {
         {!isCollapsed ? (
           <>
             <Link href="/" className="flex items-center gap-2 font-bold text-lg">
-              <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
-                <Rocket className="w-5 h-5 text-white" />
-              </div>
+              <AppLogo size="sm" />
               <span className="hidden lg:inline">TwentyFour/Seven</span>
               <span className="lg:hidden">24/7</span>
             </Link>
@@ -83,14 +80,12 @@ export default function Sidebar() {
           </>
         ) : (
           <>
-            <Link 
-              href="/" 
+            <Link
+              href="/"
               className="flex items-center justify-center touch-manipulation"
               aria-label="Home"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
-                <Rocket className="w-5 h-5 text-white" />
-              </div>
+              <AppLogo size="sm" />
             </Link>
             <Button
               variant="ghost"

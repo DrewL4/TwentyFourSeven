@@ -3,10 +3,15 @@ import "../index.css";
 import Providers from "@/components/providers";
 import AuthGuard from "@/components/auth-guard";
 import AppLayout from "@/components/app-layout";
+import { APP_LOGO_SRC } from "@/components/app-logo";
 
 export const metadata: Metadata = {
   title: "TwentyFour/Seven",
   description: "Live TV from your media library",
+  icons: {
+    icon: APP_LOGO_SRC,
+    apple: APP_LOGO_SRC,
+  },
 };
 
 export default function RootLayout({

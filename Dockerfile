@@ -185,6 +185,11 @@ ENV PGID=100
 # Individual applications will drop privileges as needed
 # USER abc
 
+# Unraid Docker tab metadata (icon URL must be publicly reachable after you push icon.png to GitHub)
+LABEL net.unraid.docker.icon="https://raw.githubusercontent.com/drew4/twentyfourseven/main/icon.png"
+LABEL net.unraid.docker.webui="http://[IP]:[PORT:80]/"
+LABEL net.unraid.docker.support="https://github.com/drew4/twentyfourseven"
+
 # Expose ports
 EXPOSE 80 3000
 

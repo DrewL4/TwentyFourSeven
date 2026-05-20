@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { ModeToggle } from "@/components/mode-toggle";
 
 export const metadata: Metadata = {
-  title: "Login - TwentyFour/Seven",
-  description: "Sign in to your TwentyFour/Seven account",
+  title: "Sign in - TwentyFour/Seven",
+  description: "Sign in with your WatchTower account",
 };
 
 export default function LoginLayout({
@@ -12,27 +12,27 @@ export default function LoginLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="absolute top-4 right-4 z-50">
+    <div className="relative min-h-svh overflow-hidden bg-background">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(251,146,60,0.18),transparent)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(251,146,60,0.12),transparent)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-orange-500/10 blur-3xl dark:bg-orange-500/5"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-24 -left-24 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl dark:bg-amber-500/5"
+      />
+
+      <div className="absolute right-4 top-4 z-50">
         <ModeToggle />
       </div>
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="w-full max-w-md">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8">
-            <div className="flex items-center justify-center mb-8">
-              <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
-                <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                </svg>
-              </div>
-            </div>
-            <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-8">
-              TwentyFour/Seven
-            </h1>
-            {children}
-          </div>
-        </div>
-      </div>
+
+      <main className="relative flex min-h-svh items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md">{children}</div>
+      </main>
     </div>
   );
-} 
+}

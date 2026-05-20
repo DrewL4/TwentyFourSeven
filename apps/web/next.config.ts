@@ -68,6 +68,10 @@ const nextConfig: NextConfig = {
         source: '/api/:path*',
         destination: `http://localhost:${serverPort}/api/:path*`,
       },
+      {
+        source: '/rpc/:path*',
+        destination: `http://localhost:${serverPort}/rpc/:path*`,
+      },
     ];
   },
 };

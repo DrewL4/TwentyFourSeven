@@ -2,8 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { AppLogo } from "@/components/app-logo";
 import { ModeToggle } from "./mode-toggle";
-import { Rocket } from "lucide-react";
 import Sidebar from "./sidebar";
 import MobileBottomNav from "./mobile-bottom-nav";
 
@@ -28,9 +28,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="md:hidden flex flex-col h-svh">
           <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="flex items-center gap-2 font-bold text-lg">
-              <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
-                <Rocket className="w-5 h-5 text-white" />
-              </div>
+              <AppLogo size="sm" href="/" />
               <span>24/7</span>
             </div>
             <ModeToggle />

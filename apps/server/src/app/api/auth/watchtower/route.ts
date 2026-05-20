@@ -260,8 +260,24 @@ export async function POST(request: NextRequest) {
 
     
 
-    // Update with WatchTower-specific fields
-    const updatedUser = await prisma.user.update({
+    // Sign in before clearing credentials so Better Auth can issue session cookies
+    const signInResponse = await auth.api.signInEmail({
+      body: {
+        email: userData.email,
+        password: tempPassword,
+      },
+      asResponse: true,
+    }) as Response;
+
+    if (!signInResponse.ok) {
+      const signInError = await signInResponse.clone().text().catch(() => "");
+      throw new Error(
+        signInError || "Failed to create session after WatchTower sign-in",
+      );
+    }
+
+    // Attach WatchTower fields after session is established
+    await prisma.user.update({
       where: { id: signUpResult.user.id },
       data: {
         watchTowerUserId: userData.watchTowerUserId,
@@ -269,23 +285,12 @@ export async function POST(request: NextRequest) {
         role: userData.role,
         isActive: userData.isActive,
         watchTowerMetadata: userData.watchTowerMetadata,
-        watchTowerJoinDate: userData.watchTowerMetadata?.dateJoined ? new Date(userData.watchTowerMetadata.dateJoined) : new Date(),
-        password: null, // Clear password for SSO users
-      }
-    });
-
-
-    // Sign in the user to create a proper session
-    const signInResponse = await auth.api.signInEmail({
-      body: {
-        email: userData.email,
-        password: tempPassword
+        watchTowerJoinDate: userData.watchTowerMetadata?.dateJoined
+          ? new Date(userData.watchTowerMetadata.dateJoined)
+          : new Date(),
+        password: null,
       },
-      asResponse: true // Receive a full Response object so we get the signed cookies
-    }) as Response;
-
-    // Extract JSON payload (user + token) from the Better-Auth response
-    const signInResult = await signInResponse.clone().json().catch(() => ({}));
+    });
 
     // Create response
     const response = NextResponse.json({
@@ -298,7 +303,7 @@ export async function POST(request: NextRequest) {
         role: userData.role,
         isActive: userData.isActive
       },
-      redirectTo: '/dashboard'
+      redirectTo: '/'
     });
 
     // Copy any Set-Cookie headers Better-Auth produced (these are already signed)

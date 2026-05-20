@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Eye, EyeOff, Users, Settings, CheckCircle, Download } from 'lucide-react';
+import { AppBrandHeader } from '@/components/app-logo';
 
 interface FirstTimeSetupProps {
   onComplete: () => void;
@@ -334,12 +335,11 @@ export default function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">
-            TwentyFour/Seven Setup
-          </CardTitle>
-          <CardDescription>
-            Connect to your WatchTower application to get started
-          </CardDescription>
+          <AppBrandHeader
+            className="mb-4"
+            title="TwentyFour/Seven Setup"
+            description="Connect to your WatchTower application to get started"
+          />
         </CardHeader>
         
         <CardContent className="space-y-6">
