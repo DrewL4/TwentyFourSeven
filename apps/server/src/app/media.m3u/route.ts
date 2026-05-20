@@ -137,8 +137,8 @@ export async function GET(request: NextRequest) {
         const catchupDays = Math.ceil(channel.catchupWindowHours / 24);
         extinf += ` catchup="vod"`;
         extinf += ` catchup-days="${catchupDays}"`;
-        // Use {timestamp} so ESPG and other apps can substitute program start Unix time; 24/7 API accepts utc=
-        extinf += ` catchup-source="${baseUrl}/api/video?channel=${channel.number}&catchup=true&utc={timestamp}"`;
+        // {start} = programme start (Unix s); {timestamp} = player wall clock — matches XMLTV template
+        extinf += ` catchup-source="${baseUrl}/api/video?channel=${channel.number}&catchup=true&utc={start}&lutc={timestamp}"`;
       }
       
       extinf += `,${channel.name}\n`;

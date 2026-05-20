@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,6 +62,29 @@ interface PlexLibrary {
   createdAt: number;
 }
 
+type LibrarySelectionServer = {
+  id?: string;
+  name: string;
+  uri: string;
+  accessToken: string;
+};
+
+type GetLibrariesVariables = {
+  url: string;
+  token: string;
+  mode: "create" | "edit";
+  requestId: string;
+  preselectedKeys?: string[];
+};
+
+const SUPPORTED_PLEX_LIBRARY_TYPES = new Set(["movie", "show"]);
+
+function normalizeSelectableLibraries(libraries: PlexLibrary[]): PlexLibrary[] {
+  return libraries
+    .filter((lib) => SUPPORTED_PLEX_LIBRARY_TYPES.has(lib.type))
+    .map((lib) => ({ ...lib, key: String(lib.key) }));
+}
+
 export default function PlexSettingsPage() {
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
@@ -74,7 +97,9 @@ export default function PlexSettingsPage() {
   const [showLibrarySelection, setShowLibrarySelection] = useState(false);
   const [availableLibraries, setAvailableLibraries] = useState<PlexLibrary[]>([]);
   const [selectedLibraries, setSelectedLibraries] = useState<string[]>([]);
-  const [librarySelectionServer, setLibrarySelectionServer] = useState<any>(null);
+  const [librarySelectionServer, setLibrarySelectionServer] =
+    useState<LibrarySelectionServer | null>(null);
+  const libraryFetchRequestIdRef = useRef<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState('');
 
   // Set webhook URL on client side
@@ -254,85 +279,142 @@ export default function PlexSettingsPage() {
   });
 
   const getLibrariesMutation = useMutation({
-    mutationFn: async (variables: { url: string; token: string }) => {
+    mutationFn: async (variables: GetLibrariesVariables) => {
       const { client } = await import("@/utils/orpc");
-      return await client.servers.getLibraries(variables);
+      const libraries = await client.servers.getLibraries({
+        url: variables.url,
+        token: variables.token,
+      });
+      return {
+        libraries: normalizeSelectableLibraries(libraries as PlexLibrary[]),
+        mode: variables.mode,
+        requestId: variables.requestId,
+        preselectedKeys: variables.preselectedKeys?.map(String),
+      };
     },
-    onSuccess: (data, variables) => {
-      setAvailableLibraries(data);
-      
-      // If editing existing server, pre-select only currently active libraries
-      if (librarySelectionServer?.id) {
-        const server = serversQuery.data?.find(s => s.id === librarySelectionServer.id);
-        const currentLibraryKeys = server?.libraries?.map(lib => lib.key) || [];
-        setSelectedLibraries(currentLibraryKeys);
-      } else {
-        // For new servers, select all by default
-        setSelectedLibraries(data.map(lib => lib.key));
+    onSuccess: (result) => {
+      if (result.requestId !== libraryFetchRequestIdRef.current) {
+        return;
       }
-      
-      setShowLibrarySelection(true);
+
+      setAvailableLibraries(result.libraries);
+
+      if (result.mode === "edit") {
+        const preselected = result.preselectedKeys ?? [];
+        setSelectedLibraries(
+          preselected.filter((key) =>
+            result.libraries.some((lib) => lib.key === key),
+          ),
+        );
+      } else {
+        setSelectedLibraries(result.libraries.map((lib) => lib.key));
+      }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (variables.requestId !== libraryFetchRequestIdRef.current) {
+        return;
+      }
+      setShowLibrarySelection(false);
+      setLibrarySelectionServer(null);
       toast.error(`Failed to get libraries: ${error.message}`);
-    }
+    },
   });
 
   const addServerWithLibrariesMutation = useMutation({
     mutationFn: async (variables: { name: string; uri: string; accessToken: string; selectedLibraries: string[] }) => {
       const { client } = await import("@/utils/orpc");
-      // Add the server first
       const server = await client.servers.addPlexServer({
         name: variables.name,
         uri: variables.uri,
-        accessToken: variables.accessToken
+        accessToken: variables.accessToken,
+        skipInitialLibrarySync: true,
       });
-      return server;
-    },
-    onSuccess: async (server: any, variables) => {
-      try {
-        // Persist the initial library selection immediately
-        const { client } = await import("@/utils/orpc");
-        if (variables?.selectedLibraries && variables.selectedLibraries.length > 0) {
-          await client.servers.updateLibrarySelection({
-            serverId: server.id,
-            selectedLibraryKeys: variables.selectedLibraries
-          });
-        }
-      } catch (e: any) {
-        console.error('Failed to persist initial library selection:', e);
-        toast.error('Added server, but failed to save library selection');
+      const selection = await client.servers.updateLibrarySelection({
+        serverId: server.id,
+        selectedLibraryKeys: variables.selectedLibraries.map(String),
+      });
+      if (!selection.success) {
+        throw new Error(selection.message || "Failed to save library selection");
       }
-      queryClient.invalidateQueries({ queryKey: ['servers', 'list'] });
+      return { server, selection };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["servers", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["library"] });
+      libraryFetchRequestIdRef.current = null;
       setShowLibrarySelection(false);
       setLibrarySelectionServer(null);
       setSelectedLibraries([]);
       setAvailableLibraries([]);
-      setServerForm({ name: '', uri: '', accessToken: '' });
-      toast.success('Plex server added with selected libraries');
+      setServerForm({ name: "", uri: "", accessToken: "" });
+      toast.success("Plex server added with selected libraries");
     },
     onError: (error) => {
       toast.error(`Failed to add server: ${error.message}`);
-    }
+    },
   });
 
   const updateLibrarySelectionMutation = useMutation({
     mutationFn: async (variables: { serverId: string; selectedLibraryKeys: string[] }) => {
       const { client } = await import("@/utils/orpc");
-      return await client.servers.updateLibrarySelection(variables);
+      const result = await client.servers.updateLibrarySelection({
+        serverId: variables.serverId,
+        selectedLibraryKeys: variables.selectedLibraryKeys.map(String),
+      });
+      if (!result.success) {
+        throw new Error(result.message || "Failed to update library selection");
+      }
+      return result;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['servers', 'list'] });
+      queryClient.invalidateQueries({ queryKey: ["servers", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["library"] });
+      libraryFetchRequestIdRef.current = null;
       setShowLibrarySelection(false);
       setLibrarySelectionServer(null);
       setSelectedLibraries([]);
       setAvailableLibraries([]);
-      toast.success(data.message || 'Library selection updated successfully');
+      toast.success(data.message || "Library selection updated successfully");
     },
     onError: (error) => {
       toast.error(`Failed to update library selection: ${error.message}`);
-    }
+    },
   });
+
+  const isLibrarySelectionBusy =
+    getLibrariesMutation.isPending ||
+    addServerWithLibrariesMutation.isPending ||
+    updateLibrarySelectionMutation.isPending;
+
+  const openLibrarySelection = useCallback(
+    (params: {
+      server: LibrarySelectionServer;
+      mode: "create" | "edit";
+      preselectedKeys?: string[];
+    }) => {
+      const requestId = crypto.randomUUID();
+      libraryFetchRequestIdRef.current = requestId;
+
+      setLibrarySelectionServer(params.server);
+      setShowLibrarySelection(true);
+      setAvailableLibraries([]);
+
+      if (params.mode === "edit" && params.preselectedKeys) {
+        setSelectedLibraries(params.preselectedKeys.map(String));
+      } else {
+        setSelectedLibraries([]);
+      }
+
+      getLibrariesMutation.mutate({
+        url: params.server.uri,
+        token: params.server.accessToken,
+        mode: params.mode,
+        requestId,
+        preselectedKeys: params.preselectedKeys?.map(String),
+      });
+    },
+    [getLibrariesMutation],
+  );
 
   const handlePlexLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -350,16 +432,13 @@ export default function PlexSettingsPage() {
       return;
     }
 
-    // First get libraries for selection
-    setLibrarySelectionServer({
-      name: server.name,
-      uri: uriCandidate,
-      accessToken: server.accessToken
-    });
-    
-    getLibrariesMutation.mutate({
-      url: uriCandidate,
-      token: server.accessToken
+    openLibrarySelection({
+      server: {
+        name: server.name,
+        uri: uriCandidate,
+        accessToken: server.accessToken,
+      },
+      mode: "create",
     });
   };
 
@@ -381,11 +460,13 @@ export default function PlexSettingsPage() {
       return;
     }
     
-    // Set up for library selection
-    setLibrarySelectionServer(serverForm);
-    getLibrariesMutation.mutate({
-      url: serverForm.uri,
-      token: serverForm.accessToken
+    openLibrarySelection({
+      server: {
+        name: serverForm.name,
+        uri: serverForm.uri,
+        accessToken: serverForm.accessToken,
+      },
+      mode: "create",
     });
   };
 
@@ -404,16 +485,17 @@ export default function PlexSettingsPage() {
       return;
     }
     
-    setLibrarySelectionServer({
-      id: server.id,
-      name: server.name,
-      uri: server.url,
-      accessToken: server.token
-    });
-    
-    getLibrariesMutation.mutate({
-      url: server.url,
-      token: server.token
+    const preselectedKeys = (server.libraries ?? []).map((lib) => String(lib.key));
+
+    openLibrarySelection({
+      server: {
+        id: server.id,
+        name: server.name,
+        uri: server.url,
+        accessToken: server.token,
+      },
+      mode: "edit",
+      preselectedKeys,
     });
   };
 
@@ -455,10 +537,9 @@ export default function PlexSettingsPage() {
   };
 
   const handleLibraryToggle = (libraryKey: string) => {
-    setSelectedLibraries(prev => 
-      prev.includes(libraryKey) 
-        ? prev.filter(key => key !== libraryKey)
-        : [...prev, libraryKey]
+    const key = String(libraryKey);
+    setSelectedLibraries((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
     );
   };
 
@@ -467,9 +548,9 @@ export default function PlexSettingsPage() {
     
     if (librarySelectionServer.id) {
       // Editing existing server - update library selection
-      updateLibrarySelectionMutation.mutate({ 
+      updateLibrarySelectionMutation.mutate({
         serverId: librarySelectionServer.id,
-        selectedLibraryKeys: selectedLibraries
+        selectedLibraryKeys: selectedLibraries.map(String),
       });
     } else {
       // Adding new server
@@ -477,12 +558,13 @@ export default function PlexSettingsPage() {
         name: librarySelectionServer.name,
         uri: librarySelectionServer.uri,
         accessToken: librarySelectionServer.accessToken,
-        selectedLibraries
+        selectedLibraries: selectedLibraries.map(String),
       });
     }
   };
 
   const handleCancelLibrarySelection = () => {
+    libraryFetchRequestIdRef.current = null;
     setShowLibrarySelection(false);
     setLibrarySelectionServer(null);
     setSelectedLibraries([]);
@@ -770,25 +852,33 @@ export default function PlexSettingsPage() {
 
       {/* Library Selection Modal */}
       {showLibrarySelection && (
-        <Card className="mt-6 border-2 border-blue-200 bg-blue-50/50">
+        <Card className="mt-6 border-2 border-blue-200 bg-blue-50/50 dark:border-blue-800/60 dark:bg-blue-950/25">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-blue-600" />
+              <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               {librarySelectionServer?.id ? 'Manage Server Libraries' : 'Select Libraries to Sync'}
             </CardTitle>
             <CardDescription>
               {librarySelectionServer?.id 
                 ? `Manage which libraries from "${librarySelectionServer?.name}" are synced with TwentyFourSeven.`
-                : `Choose which libraries from "${librarySelectionServer?.name}" you want to sync with TwentyFourSeven. You can change this selection later.`
-              }
+                : `Choose which libraries from "${librarySelectionServer?.name}" you want to sync with TwentyFourSeven. You can change this selection later.`}{" "}
+              Only Movies and TV Show libraries can be synced.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {getLibrariesMutation.isPending ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                <span>Loading libraries...</span>
+                <span>Loading libraries from Plex...</span>
               </div>
+            ) : availableLibraries.length === 0 ? (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  No Movies or TV Show libraries were found on this Plex server. Add those
+                  library types in Plex, then try again.
+                </AlertDescription>
+              </Alert>
             ) : (
               <>
                 <div className="flex items-center justify-between mb-4">
@@ -819,8 +909,8 @@ export default function PlexSettingsPage() {
                       key={library.key}
                       className={`p-4 border rounded-lg cursor-pointer transition-colors ${
                         selectedLibraries.includes(library.key)
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40'
+                          : 'border-border bg-card hover:border-blue-300/60 dark:hover:border-blue-700/60'
                       }`}
                       onClick={() => handleLibraryToggle(library.key)}
                     >
@@ -830,7 +920,7 @@ export default function PlexSettingsPage() {
                             {getLibraryTypeIcon(library.type)}
                           </span>
                           <div>
-                            <h4 className="font-medium">{library.title}</h4>
+                            <h4 className="font-medium text-foreground">{library.title}</h4>
                             <p className="text-sm text-muted-foreground">
                               {getLibraryTypeLabel(library.type)}
                             </p>
@@ -838,8 +928,8 @@ export default function PlexSettingsPage() {
                         </div>
                         <div className={`w-5 h-5 border-2 rounded flex items-center justify-center ${
                           selectedLibraries.includes(library.key)
-                            ? 'border-blue-500 bg-blue-500'
-                            : 'border-gray-300'
+                            ? 'border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-500'
+                            : 'border-muted-foreground/40'
                         }`}>
                           {selectedLibraries.includes(library.key) && (
                             <CheckCircle className="w-3 h-3 text-white" />
@@ -853,10 +943,16 @@ export default function PlexSettingsPage() {
                 <div className="flex items-center gap-3 pt-4">
                   <Button
                     onClick={handleConfirmLibrarySelection}
-                    disabled={selectedLibraries.length === 0 || addServerWithLibrariesMutation.isPending || syncLibrariesMutation.isPending}
+                    disabled={
+                      selectedLibraries.length === 0 ||
+                      isLibrarySelectionBusy ||
+                      getLibrariesMutation.isPending ||
+                      availableLibraries.length === 0
+                    }
                     className="flex-1"
                   >
-                    {(addServerWithLibrariesMutation.isPending || syncLibrariesMutation.isPending) ? (
+                    {(addServerWithLibrariesMutation.isPending ||
+                      updateLibrarySelectionMutation.isPending) ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         {librarySelectionServer?.id ? 'Updating Libraries...' : 'Adding Server...'}
@@ -870,7 +966,7 @@ export default function PlexSettingsPage() {
                   <Button
                     variant="outline"
                     onClick={handleCancelLibrarySelection}
-                    disabled={addServerWithLibrariesMutation.isPending || syncLibrariesMutation.isPending}
+                    disabled={isLibrarySelectionBusy}
                   >
                     Cancel
                   </Button>
@@ -1043,10 +1139,10 @@ export default function PlexSettingsPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleEditServerLibraries(server)}
-                          disabled={getLibrariesMutation.isPending || showLibrarySelection}
+                          disabled={isLibrarySelectionBusy}
                           title="Manage Libraries"
                         >
-                          {getLibrariesMutation.isPending ? (
+                          {isLibrarySelectionBusy && showLibrarySelection ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <Settings className="w-4 h-4" />
@@ -1154,7 +1250,11 @@ export default function PlexSettingsPage() {
               </div>
               <Badge 
                 variant={plexSettingsQuery.data?.webhookEnabled ? "default" : "secondary"} 
-                className={plexSettingsQuery.data?.webhookEnabled ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}
+                className={
+                  plexSettingsQuery.data?.webhookEnabled
+                    ? "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300"
+                    : "bg-muted text-muted-foreground"
+                }
               >
                 {plexSettingsQuery.data?.webhookEnabled ? (
                   <>
@@ -1173,21 +1273,21 @@ export default function PlexSettingsPage() {
             {/* Webhook Stats */}
             {webhookStatsQuery.data && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-muted/50 p-3 rounded-lg">
-                  <p className="text-sm font-medium">Total Events</p>
+                <div className="rounded-lg border bg-muted/50 p-3">
+                  <p className="text-sm font-medium text-muted-foreground">Total Events</p>
                   <p className="text-2xl font-bold text-primary">{webhookStatsQuery.data.total}</p>
                 </div>
-                <div className="bg-green-50 p-3 rounded-lg">
-                  <p className="text-sm font-medium">Processed</p>
-                  <p className="text-2xl font-bold text-green-600">{webhookStatsQuery.data.processed}</p>
+                <div className="rounded-lg border bg-green-50 p-3 dark:bg-green-950/30 dark:border-green-900/50">
+                  <p className="text-sm font-medium text-green-900 dark:text-green-200">Processed</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">{webhookStatsQuery.data.processed}</p>
                 </div>
-                <div className="bg-red-50 p-3 rounded-lg">
-                  <p className="text-sm font-medium">Failed</p>
-                  <p className="text-2xl font-bold text-red-600">{webhookStatsQuery.data.failed}</p>
+                <div className="rounded-lg border bg-red-50 p-3 dark:bg-red-950/30 dark:border-red-900/50">
+                  <p className="text-sm font-medium text-red-900 dark:text-red-200">Failed</p>
+                  <p className="text-2xl font-bold text-red-600 dark:text-red-400">{webhookStatsQuery.data.failed}</p>
                 </div>
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="text-sm font-medium">Last 24h</p>
-                  <p className="text-2xl font-bold text-blue-600">{webhookStatsQuery.data.last24Hours}</p>
+                <div className="rounded-lg border bg-blue-50 p-3 dark:bg-blue-950/30 dark:border-blue-900/50">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-200">Last 24h</p>
+                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{webhookStatsQuery.data.last24Hours}</p>
                 </div>
               </div>
             )}

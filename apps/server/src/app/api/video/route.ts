@@ -8,6 +8,8 @@ import { streamMonitorService } from '@/lib/stream-monitor-service';
 import { streamRecoveryService } from '@/lib/stream-recovery-service';
 import { viewingHistoryService } from '@/lib/viewing-history-service';
 import { CatchupService } from '@/lib/catchup-service';
+import { shouldRejectNewTranscode } from '@/lib/stream-limit';
+import { finalizeStreamSession } from '@/lib/finalize-stream-session';
 
 // This is a requirement for using readable streams in a NextResponse.
 export const dynamic = 'force-dynamic';
@@ -228,51 +230,63 @@ export async function GET(request: NextRequest) {
   const isCatchup = request.nextUrl.searchParams.get('catchup') === 'true';
   const timeParam = request.nextUrl.searchParams.get('time');
   const utcParam = request.nextUrl.searchParams.get('utc');
+  const programIdParam = request.nextUrl.searchParams.get('programId');
 
   try {
     let programInfo: any;
     let server: any;
     let timing: { seekOffsetMs: number; isActive: boolean; remainingMs: number };
+    let catchupProgramTitle: string | undefined;
 
     if (isCatchup) {
-      // Resolve the requested timestamp
-      let requestedTime: Date;
+      let requestedTime: Date | undefined;
       if (timeParam) {
         requestedTime = new Date(timeParam);
+        if (isNaN(requestedTime.getTime())) {
+          return new NextResponse('Invalid time value', { status: 400 });
+        }
       } else if (utcParam) {
-        requestedTime = new Date(parseInt(utcParam, 10) * 1000);
-      } else {
-        return new NextResponse('Catchup requires a time or utc parameter', { status: 400 });
+        const utcSeconds = parseInt(utcParam, 10);
+        if (isNaN(utcSeconds)) {
+          return new NextResponse('Invalid utc value', { status: 400 });
+        }
+        requestedTime = new Date(utcSeconds * 1000);
+      } else if (!programIdParam) {
+        return new NextResponse(
+          'Catchup requires time, utc, or programId',
+          { status: 400 },
+        );
       }
 
-      if (isNaN(requestedTime.getTime())) {
-        return new NextResponse('Invalid time value', { status: 400 });
+      const resolved = await CatchupService.resolveCatchupRequest(channelNumber, {
+        requestedTime,
+        programId: programIdParam ?? undefined,
+      });
+
+      if (!resolved) {
+        return new NextResponse(
+          'No catchup program found for the requested time or catchup is disabled',
+          { status: 404 },
+        );
       }
 
-      // Use the CatchupService to look up the program and calculate seek
-      const { CatchupService } = await import('@/lib/catchup-service');
-      const catchupInfo = await CatchupService.getCatchupStreamInfo(channelNumber, requestedTime);
+      const { program, seekOffsetMs, remainingMs } = resolved;
+      const media = program.movie ?? program.episode;
+      const srv =
+        program.movie?.library?.server ??
+        program.episode?.show?.library?.server;
 
-      if (!catchupInfo) {
-        return new NextResponse('No catchup program found for the requested time', { status: 404 });
-      }
-
-      // Build compatible structures for the rest of the pipeline
-      const catchupProgram = await CatchupService.getProgramAtTime(channelNumber, requestedTime);
-      const programWithMedia = catchupProgram as typeof catchupProgram & { movie?: any; episode?: any };
-      const media = programWithMedia?.movie ?? programWithMedia?.episode;
-      const srv = programWithMedia?.movie?.library?.server ?? programWithMedia?.episode?.show?.library?.server;
-
-      if (!media || !srv || !srv.token) {
+      if (!media || !srv?.token) {
         return new NextResponse('Catchup program or Plex server unavailable', { status: 500 });
       }
 
       programInfo = media;
       server = srv;
+      catchupProgramTitle = CatchupService.getProgramTitle(program);
       timing = {
-        seekOffsetMs: catchupInfo.seekOffsetMs,
+        seekOffsetMs,
         isActive: true,
-        remainingMs: catchupInfo.remainingMs,
+        remainingMs,
       };
     } else {
       // Standard live playback
@@ -309,27 +323,50 @@ export async function GET(request: NextRequest) {
       select: { name: true },
     });
 
-    // Get program title (movie or episode)
-    let programTitle: string | undefined;
-    const currentProgram = (await prisma.channel.findUnique({
-      where: { number: channelNumber },
-      include: {
-        programs: {
-          where: { startTime: { lte: new Date() } },
-          include: {
-            movie: true,
-            episode: { include: { show: true } },
+    let programTitle: string | undefined = catchupProgramTitle;
+    if (!programTitle) {
+      const currentProgram = (await prisma.channel.findUnique({
+        where: { number: channelNumber },
+        include: {
+          programs: {
+            where: { startTime: { lte: new Date() } },
+            include: {
+              movie: true,
+              episode: { include: { show: true } },
+            },
+            orderBy: { startTime: 'desc' },
+            take: 1,
           },
-          orderBy: { startTime: 'desc' },
-          take: 1,
         },
-      },
-    }))?.programs[0];
-    
-    if (currentProgram?.movie) {
-      programTitle = currentProgram.movie.title;
-    } else if (currentProgram?.episode) {
-      programTitle = `${currentProgram.episode.show.title} - ${currentProgram.episode.title || 'Episode'}`;
+      }))?.programs[0];
+
+      if (currentProgram?.movie) {
+        programTitle = currentProgram.movie.title;
+      } else if (currentProgram?.episode) {
+        programTitle = `${currentProgram.episode.show.title} - ${currentProgram.episode.title || 'Episode'}`;
+      }
+    }
+
+    streamMonitorService.cleanupStaleSessions();
+    const streamSettings = await prisma.settings.findUnique({
+      where: { id: "singleton" },
+      select: { concurrentStreams: true },
+    });
+    const streamLimit = streamSettings?.concurrentStreams ?? 1;
+    if (
+      shouldRejectNewTranscode(
+        streamMonitorService.getActiveSessions(),
+        channelNumber,
+        programInfo.ratingKey,
+        streamLimit,
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error: `Maximum concurrent streams (${streamLimit}) reached. Try again later.`,
+        },
+        { status: 503 },
+      );
     }
 
     // Create stream session for monitoring
@@ -419,6 +456,24 @@ export async function GET(request: NextRequest) {
     let restartedToSoftware = false;
     let currentFfmpeg: ChildProcess | null = null;
     let isAborted = false;
+    let sessionFinalized = false;
+
+    const endStreamSession = (options?: { killFfmpeg?: boolean }) => {
+      if (sessionFinalized) {
+        return;
+      }
+      sessionFinalized = true;
+      if (options?.killFfmpeg !== false) {
+        try {
+          currentFfmpeg?.kill('SIGKILL');
+        } catch {
+          // ignore
+        }
+      }
+      finalizeStreamSession(sessionId, {
+        killFfmpeg: options?.killFfmpeg ?? true,
+      });
+    };
 
     const startFfmpeg = async (forceSoftware: boolean) => {
       if (isAborted) {
@@ -477,6 +532,7 @@ export async function GET(request: NextRequest) {
             streamMonitorService.addError(sessionId, `Software fallback failed: ${err.message}`);
             streamMonitorService.updateStatus(sessionId, 'failed');
             passthrough.end();
+            endStreamSession({ killFfmpeg: false });
           });
           return;
         }
@@ -506,12 +562,14 @@ export async function GET(request: NextRequest) {
                 
                 streamMonitorService.updateStatus(sessionId, 'failed');
                 passthrough.end();
+                endStreamSession({ killFfmpeg: false });
               }
             })
             .catch((err) => {
               
               streamMonitorService.updateStatus(sessionId, 'failed');
               passthrough.end();
+              endStreamSession({ killFfmpeg: false });
             });
         }
       });
@@ -536,6 +594,7 @@ export async function GET(request: NextRequest) {
               } else {
                 streamMonitorService.updateStatus(sessionId, 'failed');
                 passthrough.end();
+                endStreamSession({ killFfmpeg: false });
               }
           });
         }
@@ -561,35 +620,41 @@ export async function GET(request: NextRequest) {
             streamMonitorService.addError(sessionId, `Software fallback failed: ${err.message}`);
             streamMonitorService.updateStatus(sessionId, 'failed');
             passthrough.end();
+            endStreamSession({ killFfmpeg: false });
           });
           return;
         }
 
         // Normal end (client abort or final process finished)
         if (!isAborted) {
-          streamMonitorService.updateStatus(sessionId, 'failed');
-          
-          // Get error details from stream monitor
           const session = streamMonitorService.getSession(sessionId);
-          const errorMessage = session?.lastError || 'Stream ended unexpectedly';
-          const errorDetails = session ? {
-            lastError: session.lastError,
-            errorHistory: session.errorHistory,
-            recoveryAttempts: session.recoveryAttempts,
-            status: session.status,
-          } : undefined;
-          
-          // Record session end with failed status
-          viewingHistoryService.recordSessionEnd(
-            sessionId,
-            'failed',
-            errorMessage,
-            errorDetails
-          ).catch((error) => {
-            console.error('[Video] Failed to record session end:', error);
-          });
+          const historyStatus = code === 0 ? 'completed' : 'failed';
+          const errorMessage =
+            code === 0
+              ? 'Stream completed'
+              : session?.lastError || 'Stream ended unexpectedly';
+          const errorDetails = session
+            ? {
+                lastError: session.lastError,
+                errorHistory: session.errorHistory,
+                recoveryAttempts: session.recoveryAttempts,
+                status: session.status,
+              }
+            : undefined;
+
+          viewingHistoryService
+            .recordSessionEnd(
+              sessionId,
+              historyStatus,
+              errorMessage,
+              errorDetails,
+            )
+            .catch((error) => {
+              console.error('[Video] Failed to record session end:', error);
+            });
         }
         passthrough.end();
+        endStreamSession({ killFfmpeg: false });
       });
 
       currentFfmpeg = child;
@@ -602,29 +667,27 @@ export async function GET(request: NextRequest) {
     // Handle client abort
     request.signal.addEventListener('abort', () => {
       isAborted = true;
-      
-      try { 
-        currentFfmpeg?.kill('SIGKILL'); 
-      } catch {}
-      
-      // Record session end
+
       const session = streamMonitorService.getSession(sessionId);
-      viewingHistoryService.recordSessionEnd(
-        sessionId,
-        'completed',
-        'Client disconnected',
-        session ? {
-          lastError: session.lastError,
-          errorHistory: session.errorHistory,
-          recoveryAttempts: session.recoveryAttempts,
-          status: session.status,
-        } : undefined
-      ).catch((error) => {
-        console.error('[Video] Failed to record session end:', error);
-      });
-      
-      streamMonitorService.removeSession(sessionId);
-      streamRecoveryService.cleanup(sessionId);
+      viewingHistoryService
+        .recordSessionEnd(
+          sessionId,
+          'completed',
+          'Client disconnected',
+          session
+            ? {
+                lastError: session.lastError,
+                errorHistory: session.errorHistory,
+                recoveryAttempts: session.recoveryAttempts,
+                status: session.status,
+              }
+            : undefined,
+        )
+        .catch((error) => {
+          console.error('[Video] Failed to record session end:', error);
+        });
+
+      endStreamSession({ killFfmpeg: true });
     });
     
     return new NextResponse(passthrough as any, {

@@ -12,6 +12,8 @@ interface OptimizedPosterProps {
   type?: 'movie' | 'show' | 'music';
   className?: string;
   priority?: boolean;
+  /** Smaller fallback icon and tighter tile for dense grids (e.g. library browse). */
+  compact?: boolean;
 }
 
 export function OptimizedPoster({ 
@@ -20,7 +22,8 @@ export function OptimizedPoster({
   title, 
   type = 'movie', 
   className,
-  priority = false 
+  priority = false,
+  compact = false,
 }: OptimizedPosterProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -42,8 +45,8 @@ export function OptimizedPoster({
         "relative w-full aspect-[2/3] bg-muted rounded-md overflow-hidden group border-2 border-dashed border-gray-300 flex flex-col items-center justify-center",
         className
       )}>
-        <Icon className="w-12 h-12 text-gray-400 mb-2" />
-        <div className="text-xs text-gray-500 text-center px-2">
+        <Icon className={cn(compact ? "w-8 h-8 mb-1" : "w-12 h-12 mb-2", "text-gray-400")} />
+        <div className={cn("text-gray-500 text-center px-2", compact ? "text-[10px]" : "text-xs")}>
           No Image Available
         </div>
       </div>
@@ -71,7 +74,11 @@ export function OptimizedPoster({
         onError={() => {
           setHasError(true);
         }}
-        sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+        sizes={
+          compact
+            ? "(max-width: 640px) 33vw, (max-width: 1024px) 20vw, 150px"
+            : "(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+        }
         unoptimized={src.includes('plex.direct') || src.includes('192.168') || src.includes('127.0.0.1') || src.includes('localhost')}
       />
 
@@ -85,8 +92,8 @@ export function OptimizedPoster({
       {/* Error fallback */}
       {hasError && (
         <div className="absolute inset-0 bg-gray-100 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center">
-          <Icon className="w-12 h-12 text-gray-400 mb-2" />
-          <div className="text-xs text-gray-500 text-center px-2">
+          <Icon className={cn(compact ? "w-8 h-8 mb-1" : "w-12 h-12 mb-2", "text-gray-400")} />
+          <div className={cn("text-gray-500 text-center px-2", compact ? "text-[10px]" : "text-xs")}>
             Failed to Load Image
           </div>
         </div>

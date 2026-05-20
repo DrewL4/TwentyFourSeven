@@ -85,9 +85,27 @@ export class StreamMonitorService {
   setFfmpegProcess(sessionId: string, process: ChildProcess | null): void {
     const session = this.sessions.get(sessionId);
     if (session) {
-      session.ffmpegProcess = process;
       session.ffmpegPid = process?.pid ?? null;
+      session.ffmpegProcess = null;
       session.lastActivity = new Date();
+    }
+  }
+
+  private killFfmpegForSession(session: StreamSession): void {
+    if (session.ffmpegProcess) {
+      try {
+        session.ffmpegProcess.kill("SIGKILL");
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    if (session.ffmpegPid) {
+      try {
+        process.kill(session.ffmpegPid, "SIGKILL");
+      } catch {
+        // ignore — process may already be gone
+      }
     }
   }
 
@@ -218,13 +236,14 @@ export class StreamMonitorService {
    */
   removeSession(sessionId: string): boolean {
     const session = this.sessions.get(sessionId);
-    if (session?.ffmpegProcess) {
-      try {
-        session.ffmpegProcess.kill('SIGKILL');
-      } catch (error) {
-        // Ignore errors when killing process
-      }
+    if (session) {
+      this.killFfmpegForSession(session);
     }
+    return this.sessions.delete(sessionId);
+  }
+
+  /** Drop session metadata without killing FFmpeg (caller already stopped the process). */
+  dropSession(sessionId: string): boolean {
     return this.sessions.delete(sessionId);
   }
 

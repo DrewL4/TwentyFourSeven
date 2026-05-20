@@ -1,21 +1,10 @@
-"use client";
+import ChannelRedirectClient from "./redirect-client";
 
-import { useParams, useRouter } from "next/navigation";
-import { useEffect } from "react";
+/** Static export: prebuild placeholder; nginx serves /channels/index.html for other ids */
+export function generateStaticParams() {
+  return [{ id: "redirect" }];
+}
 
-export default function ChannelRedirect() {
-  const params = useParams();
-  const router = useRouter();
-  const channelId = params.id as string;
-
-  useEffect(() => {
-    // Redirect to the main channels page with this channel selected via search params
-    router.replace(`/channels?channelId=${channelId}`);
-  }, [router, channelId]);
-
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="text-lg">Loading channel configuration...</div>
-    </div>
-  );
-} 
+export default function ChannelRedirectPage() {
+  return <ChannelRedirectClient />;
+}

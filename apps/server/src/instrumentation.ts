@@ -3,6 +3,8 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     
     // Use dynamic import to avoid loading Prisma-dependent code in Edge Runtime
+    const { initSqlitePragmas } = await import('./lib/prisma');
+    await initSqlitePragmas();
     const { StartupService } = await import('./lib/startup');
     await StartupService.initialize();
     

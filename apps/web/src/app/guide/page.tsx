@@ -5,7 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tv, Clock, Calendar, Play, Film, RefreshCw, Zap, Settings, ChevronLeft, ChevronRight, Rewind } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { FixedSizeList as List, type ListChildComponentProps } from "react-window";
+import {
+  GuideDesktopChannelRow,
+  type GuideChannel,
+} from "@/components/guide/GuideDesktopChannelRow";
+import { HEAVY_QUERY_OPTIONS } from "@/utils/query-options";
 import Link from "next/link";
 import { toast } from "sonner";
 import VideoPlayer from "@/components/video-player";
@@ -54,9 +60,79 @@ export default function GuidePage() {
   const [catchupTime, setCatchupTime] = useState<string | undefined>(undefined);
   const queryClient = useQueryClient();
   
-  const guideQuery = useQuery(orpc.guide.current.queryOptions());
-  const channelsQuery = useQuery(orpc.channels.list.queryOptions());
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
+
+  const guideWindowInput = useMemo(() => {
+    const guideDays = settingsQuery.data?.guideDays ?? 3;
+    return {
+      lookbackHours: 48,
+      forwardHours: guideDays * 24,
+    };
+  }, [settingsQuery.data?.guideDays]);
+
+  const guideQuery = useQuery({
+    ...orpc.guide.current.queryOptions({ input: guideWindowInput }),
+    ...HEAVY_QUERY_OPTIONS,
+    enabled: settingsQuery.isSuccess,
+  });
+  const channelsQuery = useQuery(orpc.channels.listSummary.queryOptions());
+
+  const programsByChannelId = useMemo(() => {
+    const map = new Map<string, Program[]>();
+    if (!guideQuery.data) {
+      return map;
+    }
+    for (const program of guideQuery.data as Program[]) {
+      const existing = map.get(program.channel.id);
+      if (existing) {
+        existing.push(program);
+      } else {
+        map.set(program.channel.id, [program]);
+      }
+    }
+    for (const programs of map.values()) {
+      programs.sort((a, b) => {
+        const aTime =
+          typeof a.startTime === "string"
+            ? new Date(a.startTime)
+            : a.startTime;
+        const bTime =
+          typeof b.startTime === "string"
+            ? new Date(b.startTime)
+            : b.startTime;
+        return aTime.getTime() - bTime.getTime();
+      });
+    }
+    return map;
+  }, [guideQuery.data]);
+
+  const sortedChannels = useMemo((): GuideChannel[] => {
+    if (!channelsQuery.data) {
+      return [];
+    }
+    return [...(channelsQuery.data as GuideChannel[])].sort(
+      (a, b) => a.number - b.number,
+    );
+  }, [channelsQuery.data]);
+
+  const catchupByChannelId = useMemo(() => {
+    const map = new Map<string, { enabled: boolean; windowHours: number }>();
+    const globalCatchupEnabled = settingsQuery.data?.catchupEnabled ?? true;
+    if (!channelsQuery.data) {
+      return map;
+    }
+    for (const channel of channelsQuery.data as Array<{
+      id: string;
+      catchupEnabled: boolean;
+      catchupWindowHours: number;
+    }>) {
+      map.set(channel.id, {
+        enabled: globalCatchupEnabled && channel.catchupEnabled,
+        windowHours: channel.catchupWindowHours ?? 24,
+      });
+    }
+    return map;
+  }, [channelsQuery.data, settingsQuery.data?.catchupEnabled]);
 
   const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -179,15 +255,10 @@ export default function GuidePage() {
 
   // Get current and next programs for a channel (mobile view)
   const getCurrentAndNextPrograms = (channelId: string) => {
-    if (!guideQuery.data) return { current: null, next: null };
-    
-    const channelPrograms = guideQuery.data
-      .filter((program: Program) => program.channel.id === channelId)
-      .sort((a: Program, b: Program) => {
-        const aTime = typeof a.startTime === 'string' ? new Date(a.startTime) : a.startTime;
-        const bTime = typeof b.startTime === 'string' ? new Date(b.startTime) : b.startTime;
-        return aTime.getTime() - bTime.getTime();
-      });
+    const channelPrograms = programsByChannelId.get(channelId) ?? [];
+    if (channelPrograms.length === 0) {
+      return { current: null, next: null };
+    }
 
     const now = currentTime.getTime();
     let current = null;
@@ -270,12 +341,14 @@ export default function GuidePage() {
   };
 
   const getCurrentlyPlayingProgram = (channelId: string) => {
-    if (!guideQuery.data) return null;
-    
-    return guideQuery.data.find((program: Program) => {
-      return program.channel.id === channelId && isCurrentlyPlaying(program.startTime, program.duration);
-    });
+    const channelPrograms = programsByChannelId.get(channelId) ?? [];
+    return (
+      channelPrograms.find((program) =>
+        isCurrentlyPlaying(program.startTime, program.duration),
+      ) ?? null
+    );
   };
+
 
   // Check if a program is in the past but within catchup window (24h default)
   const isPastProgram = (startTime: string | Date, duration: number) => {
@@ -284,13 +357,23 @@ export default function GuidePage() {
     return end < currentTime.getTime();
   };
 
-  // Check if a past program is within the catchup window (assume max 48h)
-  const isCatchupEligible = (startTime: string | Date, duration: number) => {
-    if (!isPastProgram(startTime, duration)) return false;
-    const end = (typeof startTime === 'string' ? new Date(startTime) : startTime).getTime() + duration;
-    const catchupWindowMs = 48 * 60 * 60 * 1000; // Max 48h window
-    return (currentTime.getTime() - end) < catchupWindowMs;
-  };
+  const isCatchupEligible = useCallback(
+    (channelId: string, startTime: string | Date, duration: number) => {
+      const catchup = catchupByChannelId.get(channelId);
+      if (!catchup?.enabled) {
+        return false;
+      }
+      if (!isPastProgram(startTime, duration)) {
+        return false;
+      }
+      const end =
+        (typeof startTime === "string" ? new Date(startTime) : startTime).getTime() +
+        duration;
+      const catchupWindowMs = catchup.windowHours * 60 * 60 * 1000;
+      return currentTime.getTime() - end < catchupWindowMs;
+    },
+    [catchupByChannelId, currentTime],
+  );
 
   // Launch catchup playback for a past program
   const playCatchup = (channel: { number: number; name: string; icon?: string | null }, programStartTime: string | Date) => {
@@ -300,6 +383,73 @@ export default function GuidePage() {
     setCatchupTime(startStr);
     setIsPlayerOpen(true);
   };
+
+  const desktopTimeSlots = useMemo(
+    () => generateTimeSlots(guideStartTime),
+    [guideStartTime],
+  );
+
+  const GUIDE_ROW_HEIGHT = 60;
+  const GUIDE_VIRTUALIZE_THRESHOLD = 15;
+
+  const handlePlayLive = useCallback((channel: GuideChannel) => {
+    setPlayingChannel({
+      number: channel.number,
+      name: channel.name,
+      icon: channel.icon,
+    });
+    setIsCatchupMode(false);
+    setCatchupTime(undefined);
+    setIsPlayerOpen(true);
+  }, []);
+
+  const handleRegenerateChannel = useCallback(
+    (channelId: string) => {
+      generateForChannelMutation.mutate({ channelId, hours: 24 });
+    },
+    [generateForChannelMutation],
+  );
+
+  const renderDesktopChannelRow = useCallback(
+    (channel: GuideChannel) => (
+      <GuideDesktopChannelRow
+        channel={channel}
+        channelPrograms={programsByChannelId.get(channel.id) ?? []}
+        timeSlots={desktopTimeSlots}
+        guideStartTime={guideStartTime}
+        currentTime={currentTime}
+        formatTime={formatTime}
+        isCurrentlyPlaying={isCurrentlyPlaying}
+        getProgressPercentage={getProgressPercentage}
+        isPastProgram={isPastProgram}
+        isCatchupEligible={isCatchupEligible}
+        onPlayLive={handlePlayLive}
+        onPlayCatchup={playCatchup}
+        onRegenerate={handleRegenerateChannel}
+        isRegeneratePending={generateForChannelMutation.isPending}
+      />
+    ),
+    [
+      programsByChannelId,
+      desktopTimeSlots,
+      guideStartTime,
+      currentTime,
+      generateForChannelMutation.isPending,
+      handlePlayLive,
+      handleRegenerateChannel,
+      playCatchup,
+      isPastProgram,
+      isCatchupEligible,
+    ],
+  );
+
+  function VirtualGuideRow({ index, style }: ListChildComponentProps) {
+    const channel = sortedChannels[index];
+    if (!channel) {
+      return null;
+    }
+    return <div style={style}>{renderDesktopChannelRow(channel)}</div>;
+  }
 
   // Mobile Timeline View Component
   const MobileGuideView = () => {
@@ -669,8 +819,8 @@ export default function GuidePage() {
                     <div className="flex border-b bg-muted/30">
                       <div className="w-48 p-2 font-semibold border-r bg-background text-sm">Channel</div>
                       <div className="flex-1 flex">
-                        {generateTimeSlots(guideStartTime).map((slot, index) => {
-                          const isNewDay = index > 0 && slot.getDate() !== generateTimeSlots(guideStartTime)[index - 1].getDate();
+                        {desktopTimeSlots.map((slot, index) => {
+                          const isNewDay = index > 0 && slot.getDate() !== desktopTimeSlots[index - 1].getDate();
                           const isFirstSlotOfDay = index === 0 || isNewDay;
                           
                           return (
@@ -690,267 +840,26 @@ export default function GuidePage() {
                     </div>
 
                     {/* Channel Rows */}
-                    {channelsQuery.data && channelsQuery.data.length > 0 ? (
-                      (channelsQuery.data as any[])
-                        .sort((a, b) => a.number - b.number)
-                        .map((channel) => {
-                          const channelPrograms = guideQuery.data?.filter((p: Program) => p.channel.id === channel.id) || [];
-                          const timeSlots = generateTimeSlots(guideStartTime);
-                          const slotDuration = 30 * 60 * 1000;
-                          
-                          return (
-                            <div key={channel.id} className="flex border-b hover:bg-muted/20 min-h-[60px]">
-                              {/* Channel Info */}
-                              <div className="w-48 p-2 border-r bg-background sticky left-0 z-10 flex items-center">
-                                <div className="flex items-center gap-2 w-full">
-                                  <Badge variant="outline" className="text-xs px-1.5 py-0.5 flex-shrink-0">
-                                    {channel.number}
-                                  </Badge>
-                                  {channel.icon && (
-                                    <img 
-                                      src={channel.icon} 
-                                      alt=""
-                                      className="w-6 h-6 rounded object-cover flex-shrink-0"
-                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                    />
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <p
-                                      className="font-medium text-xs leading-tight whitespace-nowrap overflow-hidden relative group"
-                                      title={channel.name}
-                                    >
-                                      <span
-                                        className="inline-block min-w-full will-change-transform group-hover:animate-marquee"
-                                        style={{ display: 'inline-block' }}
-                                      >
-                                        {channel.name}
-                                      </span>
-                                      <style jsx global>{`
-                                        @keyframes marquee {
-                                          0% { transform: translateX(0); }
-                                          100% { transform: translateX(calc(-100% + 12rem)); }
-                                        }
-                                        .group:hover .group-hover\\:animate-marquee {
-                                          animation: marquee 4s linear infinite;
-                                        }
-                                      `}</style>
-                                    </p>
-                                  </div>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="flex-shrink-0 h-6 w-6 p-0"
-                                    onClick={() => {
-                                      setPlayingChannel({ number: channel.number, name: channel.name, icon: channel.icon });
-                                      setIsPlayerOpen(true);
-                                    }}
-                                  >
-                                      <Play className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="flex-shrink-0 h-6 w-6 p-0"
-                                    title="Regenerate this channel's guide"
-                                    onClick={() => generateForChannelMutation.mutate({ channelId: channel.id, hours: 24 })}
-                                    disabled={generateForChannelMutation.isPending}
-                                  >
-                                    <Zap className="w-3 h-3" />
-                                  </Button>
-                                </div>
-                              </div>
-
-                              {/* Time Slots */}
-                              <div className="flex-1 relative">
-                                <div className="flex relative">
-                                  {timeSlots.map((slotStart, slotIndex) => {
-                                    const slotEnd = new Date(slotStart.getTime() + slotDuration);
-                                    const isCurrentSlot = currentTime >= slotStart && currentTime < slotEnd;
-                                    
-                                    return (
-                                      <div
-                                        key={slotIndex}
-                                        className={`flex-1 border-r min-h-[60px] relative min-w-[80px] max-w-[100px] ${
-                                          isCurrentSlot ? 'bg-blue-50 dark:bg-blue-950/30' : ''
-                                        }`}
-                                      >
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                                
-                                {/* Current time indicator - positioned precisely */}
-                                {(() => {
-                                  const guideEnd = new Date(guideStartTime.getTime() + (6 * 60 * 60 * 1000));
-                                  const isWithinGuideWindow = currentTime >= guideStartTime && currentTime <= guideEnd;
-                                  
-                                  if (isWithinGuideWindow) {
-                                    const timeOffset = currentTime.getTime() - guideStartTime.getTime();
-                                    const totalDuration = 6 * 60 * 60 * 1000; // 6 hours
-                                    const leftPercent = (timeOffset / totalDuration) * 100;
-                                    
-                                    return (
-                                      <div
-                                        className="absolute top-0 w-px h-full bg-blue-500 z-30"
-                                        style={{ left: `${leftPercent}%` }}
-                                      >
-                                        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-blue-500 rounded-full"></div>
-                                        <div className="absolute top-6 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-1 py-0.5 rounded whitespace-nowrap">
-                                          {formatTime(currentTime)}
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                                
-                                {/* Programs */}
-                                <div className="absolute inset-0 flex">
-                                  {channelPrograms.map((program: Program) => {
-                                    const programStart = typeof program.startTime === 'string' ? new Date(program.startTime) : program.startTime;
-                                    const programEnd = new Date(programStart.getTime() + program.duration);
-                                    const guideEnd = new Date(guideStartTime.getTime() + (6 * 60 * 60 * 1000));
-                                    
-                                    // Skip programs that don't overlap with our time window
-                                    if (programEnd <= guideStartTime || programStart >= guideEnd) return null;
-                                    
-                                    // Calculate position and width
-                                    const startOffset = Math.max(0, programStart.getTime() - guideStartTime.getTime());
-                                    const endOffset = Math.min(guideEnd.getTime() - guideStartTime.getTime(), programEnd.getTime() - guideStartTime.getTime());
-                                    const totalDuration = 6 * 60 * 60 * 1000; // 6 hours
-                                    
-                                    const leftPercent = (startOffset / totalDuration) * 100;
-                                    const widthPercent = ((endOffset - startOffset) / totalDuration) * 100;
-                                    
-                                    const isCurrentProgram = isCurrentlyPlaying(program.startTime, program.duration);
-                                    const isShortProgram = program.duration <= (30 * 60 * 1000); // 30 minutes or less
-                                    const hourDuration = 60 * 60 * 1000; // 1 hour in milliseconds
-                                    
-                                    // Calculate expanded width for short programs (make them as wide as 1 hour show)
-                                    const expandedWidthPercent = isShortProgram ? 
-                                      (hourDuration / (6 * 60 * 60 * 1000)) * 100 : widthPercent;
-                                    
-                                    const isPast = isPastProgram(program.startTime, program.duration);
-                                    const catchupEligible = isCatchupEligible(program.startTime, program.duration);
-                                    
-                                    return (
-                                      <div
-                                        key={program.id}
-                                        className={`absolute top-1 bottom-1 mx-0.5 rounded text-xs overflow-visible cursor-pointer transition-all duration-300 hover:z-50 hover:shadow-2xl group ${
-                                          isCurrentProgram 
-                                            ? 'bg-blue-500 text-white border-2 border-blue-600' 
-                                            : catchupEligible
-                                              ? 'bg-amber-100 dark:bg-amber-900/40 text-accent-foreground border border-amber-300 dark:border-amber-700'
-                                              : isPast
-                                                ? 'bg-muted/50 text-muted-foreground border border-border/50 opacity-60'
-                                                : 'bg-accent text-accent-foreground border border-border'
-                                        }`}
-                                        onClick={() => {
-                                          if (catchupEligible) {
-                                            playCatchup(channel, program.startTime);
-                                          }
-                                        }}
-                                        style={{
-                                          left: `${leftPercent}%`,
-                                          width: `${widthPercent}%`,
-                                          transformOrigin: 'left center',
-                                          '--expanded-width': `${expandedWidthPercent}%`
-                                        } as React.CSSProperties & { '--expanded-width': string }}
-                                        title={`${program.episode ? 
-                                          `${program.episode.show.title} - S${program.episode.seasonNumber}E${program.episode.episodeNumber}: ${program.episode.title}` :
-                                          program.movie?.title
-                                        } (${formatTime(program.startTime)} - ${formatTime(programEnd)})`}
-                                        onMouseEnter={(e) => {
-                                          if (isShortProgram) {
-                                            e.currentTarget.style.width = `${expandedWidthPercent}%`;
-                                          }
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          if (isShortProgram) {
-                                            e.currentTarget.style.width = `${widthPercent}%`;
-                                          }
-                                        }}
-                                      >
-                                        {/* Regular content - visible by default */}
-                                        <div className={`p-1.5 h-full overflow-hidden ${isShortProgram ? 'group-hover:hidden' : ''}`}>
-                                          <div className="font-medium leading-tight line-clamp-1 flex items-center gap-1">
-                                            {catchupEligible && (
-                                              <Rewind className="w-3 h-3 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-                                            )}
-                                            {program.episode ? program.episode.show.title : program.movie?.title}
-                                          </div>
-                                          {program.episode && (
-                                            <div className="text-[10px] opacity-75 line-clamp-1">
-                                              S{program.episode.seasonNumber}E{program.episode.episodeNumber}
-                                            </div>
-                                          )}
-                                          <div className="text-[10px] opacity-75">
-                                            {formatTime(program.startTime)}
-                                          </div>
-                                          {isCurrentProgram && (
-                                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/30">
-                                              <div 
-                                                className="h-full bg-white transition-all duration-1000"
-                                                style={{ width: `${getProgressPercentage(program.startTime, program.duration)}%` }}
-                                              />
-                                            </div>
-                                          )}
-                                        </div>
-
-                                        {/* Expanded hover content - only visible on hover for short programs */}
-                                        {isShortProgram && (
-                                          <div className="absolute inset-0 p-2 hidden group-hover:flex bg-inherit rounded border-2 border-primary/20 shadow-lg">
-                                            <div className="flex flex-col justify-center space-y-1 w-full text-center">
-                                              <div className="font-bold text-sm leading-tight">
-                                                {program.episode ? program.episode.show.title : program.movie?.title}
-                                              </div>
-                                              {program.episode && (
-                                                <>
-                                                  <div className="text-xs opacity-90 font-medium">
-                                                    S{program.episode.seasonNumber}E{program.episode.episodeNumber}
-                                                  </div>
-                                                  {program.episode.title && (
-                                                    <div className="text-xs opacity-85 font-medium leading-tight">
-                                                      "{program.episode.title}"
-                                                    </div>
-                                                  )}
-                                                </>
-                                              )}
-                                              {program.movie?.year && (
-                                                <div className="text-xs opacity-90 font-medium">
-                                                  ({program.movie.year})
-                                                </div>
-                                              )}
-                                              <div className="text-xs opacity-80 font-medium">
-                                                {formatTime(program.startTime)} - {formatTime(programEnd)}
-                                              </div>
-                                              <div className="text-xs opacity-80 font-medium">
-                                                {formatDuration(program.duration)}
-                                              </div>
-                                              {isCurrentProgram && (
-                                                <div className="mt-1">
-                                                  <div className="h-1.5 bg-black/20 dark:bg-white/20 rounded-full overflow-hidden mx-2">
-                                                    <div 
-                                                      className="h-full bg-white dark:bg-white transition-all duration-1000"
-                                                      style={{ width: `${getProgressPercentage(program.startTime, program.duration)}%` }}
-                                                    />
-                                                  </div>
-                                                  <div className="text-[10px] text-center mt-1 opacity-80 font-medium">
-                                                    {Math.round(getProgressPercentage(program.startTime, program.duration))}% complete
-                                                  </div>
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
+                    {sortedChannels.length > 0 ? (
+                      sortedChannels.length > GUIDE_VIRTUALIZE_THRESHOLD ? (
+                        <List
+                          height={Math.min(
+                            720,
+                            sortedChannels.length * GUIDE_ROW_HEIGHT,
+                          )}
+                          itemCount={sortedChannels.length}
+                          itemSize={GUIDE_ROW_HEIGHT}
+                          width="100%"
+                        >
+                          {VirtualGuideRow}
+                        </List>
+                      ) : (
+                        sortedChannels.map((channel) => (
+                          <div key={channel.id}>
+                            {renderDesktopChannelRow(channel)}
+                          </div>
+                        ))
+                      )
                     ) : (
                       <div className="p-8 text-center text-muted-foreground">
                         No channels available

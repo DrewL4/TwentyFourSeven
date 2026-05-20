@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  getXmlTvCachePath,
+  readXmlTvCacheIfFresh,
+  writeXmlTvCacheStreaming,
+} from "@/lib/xmltv-static-cache";
+import { readFile } from "fs/promises";
 
-// Simple in-memory cache for XMLTV data
-let xmltvCache: { data: string; timestamp: number } | null = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-// Function to clear cache (useful for debugging)
-function clearXmltvCache() {
-  xmltvCache = null;
-}
 
 /**
  * XMLTV Guide Generator - Timezone Best Practices Implementation
@@ -55,17 +54,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const bypassCache = searchParams.get('bypass-cache') === 'true';
 
-    // Check cache first (unless bypassing)
-    const now = Date.now();
-    if (!bypassCache && xmltvCache && (now - xmltvCache.timestamp) < CACHE_DURATION) {
-      return new NextResponse(xmltvCache.data, {
-        headers: {
-          'Content-Type': 'application/xml; charset=utf-8',
-          'Content-Disposition': 'attachment; filename="xmltv.xml"',
-          'Cache-Control': 'public, max-age=300', // 5 minutes browser cache
-          'X-Cache': 'HIT'
-        }
-      });
+    if (!bypassCache) {
+      const cachedXml = await readXmlTvCacheIfFresh(CACHE_DURATION);
+      if (cachedXml) {
+        return new NextResponse(cachedXml, {
+          headers: {
+            "Content-Type": "application/xml; charset=utf-8",
+            "Content-Disposition": 'attachment; filename="xmltv.xml"',
+            "Cache-Control": "public, max-age=300",
+            "X-Cache": "HIT-DISK",
+          },
+        });
+      }
     }
 
     const startTime = performance.now();
@@ -229,8 +229,7 @@ export async function GET(request: NextRequest) {
         xmltvParts.push(`    <icon src="${escapeXml(iconUrl)}" />`);
       }
 
-      // Emit catchup URL template for supported EPG readers
-      if (channel.catchupEnabled) {
+      if (channelCatchup) {
         xmltvParts.push(`    <url catchup="vod" catchup-days="${Math.ceil(channel.catchupWindowHours / 24)}">${escapeXml(baseUrl)}/api/video?channel=${channel.number}&amp;catchup=true&amp;utc={start}&amp;lutc={timestamp}</url>`);
       }
 
@@ -487,22 +486,20 @@ export async function GET(request: NextRequest) {
     } // Close the for (const program of programs) loop
     xmltvParts.push('</tv>');
 
-    // Join all parts into final XML string
-    const xmltv = xmltvParts.join('\n');
-    const xmlGeneratedTime = performance.now();
-    const xmlGenerationDuration = xmlGeneratedTime - programsLoadTime;
+    await writeXmlTvCacheStreaming(async (write) => {
+      for (const part of xmltvParts) {
+        write(part);
+      }
+    });
 
-    // Cache the generated XMLTV data
-    xmltvCache = { data: xmltv, timestamp: Date.now() };
-
-    const totalTime = performance.now() - startTime;
+    const xmltv = await readFile(getXmlTvCachePath(), 'utf8');
     return new NextResponse(xmltv, {
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',
         'Content-Disposition': 'attachment; filename="xmltv.xml"',
-        'Cache-Control': 'public, max-age=300', // 5 minutes browser cache
-        'X-Cache': 'MISS'
-      }
+        'Cache-Control': 'public, max-age=300',
+        'X-Cache': 'MISS',
+      },
     });
   } catch (error) {
     console.error('Error generating XMLTV:', error);

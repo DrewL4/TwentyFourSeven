@@ -1,3 +1,4 @@
+import { maintainBoundedMap } from "./bounded-cache";
 import { streamMonitorService } from './stream-monitor-service';
 import { streamRecoveryService } from './stream-recovery-service';
 
@@ -5,8 +6,9 @@ export class StreamHealthMonitor {
   private static instance: StreamHealthMonitor;
   private programInfoCache: Map<
     number,
-    { data: any; timestamp: number }
+    { value: any; timestamp: number }
   > = new Map();
+  private static readonly PROGRAM_INFO_CACHE_MAX = 200;
   private cacheTTL: number;
 
   private constructor() {
@@ -82,8 +84,10 @@ export class StreamHealthMonitor {
     const now = Date.now();
 
     if (cached && now - cached.timestamp < this.cacheTTL) {
-      return cached.data;
+      return cached.value;
     }
+
+    this.evictProgramInfoCache(now);
 
     // Fetch fresh program info
     try {
@@ -139,11 +143,14 @@ export class StreamHealthMonitor {
         timing,
       };
 
-      // Cache the result
       this.programInfoCache.set(channelNumber, {
-        data: programData,
+        value: programData,
         timestamp: now,
       });
+      maintainBoundedMap(this.programInfoCache, {
+        ttlMs: this.cacheTTL,
+        maxEntries: StreamHealthMonitor.PROGRAM_INFO_CACHE_MAX,
+      }, now);
 
       return programData;
     } catch (error) {
@@ -270,6 +277,13 @@ export class StreamHealthMonitor {
   /**
    * Clear cache (useful for testing or when programs change)
    */
+  evictProgramInfoCache(now: number = Date.now()): void {
+    maintainBoundedMap(this.programInfoCache, {
+      ttlMs: this.cacheTTL,
+      maxEntries: StreamHealthMonitor.PROGRAM_INFO_CACHE_MAX,
+    }, now);
+  }
+
   clearCache(): void {
     this.programInfoCache.clear();
   }

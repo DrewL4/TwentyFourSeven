@@ -401,6 +401,18 @@ export class StreamRecoveryService {
   cleanup(sessionId: string): void {
     this.activeRecoveries.delete(sessionId);
   }
+
+  /** Drop circuit breaker entries that have not been updated recently. */
+  evictStaleCircuitBreakers(
+    maxAgeMs: number = 24 * 60 * 60 * 1000,
+    now: number = Date.now(),
+  ): void {
+    for (const [channelNumber, state] of this.circuitBreakers.entries()) {
+      if (now - state.openedAt.getTime() > maxAgeMs) {
+        this.circuitBreakers.delete(channelNumber);
+      }
+    }
+  }
 }
 
 export const streamRecoveryService = StreamRecoveryService.getInstance();

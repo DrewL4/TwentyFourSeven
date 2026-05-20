@@ -10,7 +10,8 @@
     "db:push": "prisma db push --schema ./prisma/schema",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate --schema ./prisma/schema",
-    "db:migrate": "prisma migrate dev"
+    "db:migrate": "prisma migrate dev",
+    "test": "node --import tsx --test src/lib/stream-limit.test.ts src/lib/channel-summary-shape.test.ts src/lib/library-summary-shape.test.ts src/lib/timing-service.catchup.test.ts"
   },
   "dependencies": {
     "@orpc/client": "^1.4.1",
@@ -27,6 +28,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "prisma": "^6.7.0",
+    "tsx": "^4.19.4",
     "typescript": "^5"
   }
 }

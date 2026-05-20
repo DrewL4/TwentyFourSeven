@@ -1,39 +1,120 @@
+import type { Prisma } from "../../prisma/generated/client";
 import { prisma } from "@/lib/prisma";
+import { TimingService } from "@/lib/timing-service";
+
+const programWithMediaInclude = {
+  episode: {
+    include: { show: { include: { library: { include: { server: true } } } } },
+  },
+  movie: {
+    include: { library: { include: { server: true } } },
+  },
+  channel: true,
+} as const;
+
+export type CatchupProgramRecord = Prisma.ProgramGetPayload<{
+  include: typeof programWithMediaInclude;
+}>;
+
+export type CatchupStreamInfo = {
+  channelNumber: number;
+  program: {
+    id: string;
+    title: string;
+    startTime: string;
+    endTime: string;
+    catchupExpiry: string | null;
+  };
+  seekOffsetMs: number;
+  remainingMs: number;
+};
+
+async function getCatchupContext(channelNumber: number) {
+  const [channel, settings] = await Promise.all([
+    prisma.channel.findFirst({ where: { number: channelNumber } }),
+    prisma.settings.findUnique({
+      where: { id: "singleton" },
+      select: { catchupEnabled: true },
+    }),
+  ]);
+
+  if (!channel) {
+    return null;
+  }
+
+  const globalCatchupEnabled = settings?.catchupEnabled ?? true;
+  const enabled = globalCatchupEnabled && channel.catchupEnabled;
+
+  return { channel, globalCatchupEnabled, enabled };
+}
+
+function getProgramTitle(program: CatchupProgramRecord): string {
+  if (program.movie?.title) {
+    return program.movie.title;
+  }
+  if (program.episode) {
+    const episodeTitle = program.episode.title?.trim();
+    return episodeTitle
+      ? `${program.episode.show.title} - ${episodeTitle}`
+      : program.episode.show.title;
+  }
+  return "Unknown program";
+}
+
+function getPlexServerFromProgram(program: CatchupProgramRecord) {
+  return (
+    program.movie?.library?.server ??
+    program.episode?.show?.library?.server ??
+    null
+  );
+}
 
 /**
- * CatchupService - Handles all catchup/timeshift functionality
- * 
- * This service manages the logic for determining which programs are available
- * for catchup and calculating the correct seek offsets for Plex streams.
+ * CatchupService - catchup/timeshift lookups and stream timing.
+ *
+ * Eligibility and seek math delegate to TimingService so M3U, XMLTV, API,
+ * and /api/video share one definition of the catchup window.
  */
-
 export const CatchupService = {
+  async getCatchupContext(channelNumber: number) {
+    return getCatchupContext(channelNumber);
+  },
+
   /**
-   * Get the program that was airing at a specific time for a channel
+   * Find the program airing at `requestedTime` (start inclusive, end exclusive).
    */
-  async getProgramAtTime(channelNumber: number, requestedTime: Date) {
-    // Find the most recent program that has started
+  async getProgramAtTime(
+    channelNumber: number,
+    requestedTime: Date,
+  ): Promise<CatchupProgramRecord | null> {
     const program = await prisma.program.findFirst({
       where: {
         channel: { number: channelNumber },
         startTime: { lte: requestedTime },
       },
-      include: {
-        episode: {
-          include: { show: { include: { library: { include: { server: true } } } } }
-        },
-        movie: {
-          include: { library: { include: { server: true } } }
-        },
-      },
-      orderBy: { startTime: 'desc' },
+      include: programWithMediaInclude,
+      orderBy: { startTime: "desc" },
     });
 
-    if (!program) return null;
+    if (!program?.channel) {
+      return null;
+    }
 
-    // Check if the requested time is within the program's duration
     const programEnd = new Date(program.startTime.getTime() + program.duration);
-    if (requestedTime > programEnd) {
+    if (requestedTime.getTime() >= programEnd.getTime()) {
+      return null;
+    }
+
+    return program;
+  },
+
+  async getProgramById(programId: string): Promise<CatchupProgramRecord | null> {
+    const program = await prisma.program.findUnique({
+      where: { id: programId },
+      include: programWithMediaInclude,
+    });
+
+    if (!program?.channel) {
       return null;
     }
 
@@ -41,135 +122,145 @@ export const CatchupService = {
   },
 
   /**
-   * Get a program by its ID
+   * Resolve catchup from ISO time, Unix utc seconds, or program id.
    */
-  async getProgramById(programId: string) {
-    const program = await prisma.program.findUnique({
-      where: { id: programId },
-      include: {
-        episode: {
-          include: { show: true }
-        },
-        movie: true,
-        channel: true,
-      },
-    });
+  async resolveCatchupRequest(
+    channelNumber: number,
+    options: {
+      requestedTime?: Date;
+      programId?: string;
+    },
+  ): Promise<{
+    program: CatchupProgramRecord;
+    requestedTime: Date;
+    seekOffsetMs: number;
+    remainingMs: number;
+  } | null> {
+    const context = await getCatchupContext(channelNumber);
+    if (!context?.enabled) {
+      return null;
+    }
 
-    return program;
+    const { channel } = context;
+    const now = new Date();
+
+    let program: CatchupProgramRecord | null = null;
+    let requestedTime = options.requestedTime;
+
+    if (options.programId) {
+      program = await this.getProgramById(options.programId);
+      if (!program || program.channel.number !== channelNumber) {
+        return null;
+      }
+      requestedTime = program.startTime;
+    } else if (requestedTime) {
+      program = await this.getProgramAtTime(channelNumber, requestedTime);
+    } else {
+      return null;
+    }
+
+    if (!program || !requestedTime) {
+      return null;
+    }
+
+    if (
+      !TimingService.isProgramCatchupAvailable(program, channel, now)
+    ) {
+      return null;
+    }
+
+    const { seekOffsetMs, remainingMs } = TimingService.getCatchupSeekOffset(
+      program,
+      requestedTime,
+    );
+
+    return { program, requestedTime, seekOffsetMs, remainingMs };
   },
 
-  /**
-   * Get catchup stream information for a specific time
-   */
-  async getCatchupStreamInfo(channelNumber: number, requestedTime: Date) {
-    const program = await this.getProgramAtTime(channelNumber, requestedTime);
-    
-    if (!program) {
-      throw new Error(`No program found for channel ${channelNumber} at ${requestedTime.toISOString()}`);
+  async getCatchupStreamInfo(
+    channelNumber: number,
+    requestedTime: Date,
+  ): Promise<CatchupStreamInfo | null> {
+    const resolved = await this.resolveCatchupRequest(channelNumber, {
+      requestedTime,
+    });
+
+    if (!resolved) {
+      return null;
     }
 
-    // Calculate seek offset from program start
-    const startTimeMs = (program as any).startTime.getTime();
-    const requestedTimeMs = requestedTime.getTime();
-    const seekOffsetMs = requestedTimeMs - startTimeMs;
+    const { program, seekOffsetMs, remainingMs } = resolved;
+    const programEnd = new Date(program.startTime.getTime() + program.duration);
+    const expiry = program.catchupExpiry
+      ? new Date(program.catchupExpiry)
+      : TimingService.calculateCatchupExpiry(
+          programEnd,
+          program.channel.catchupWindowHours,
+        );
 
-    // Calculate end time from start + duration
-    const endTime = new Date(startTimeMs + (program as any).duration);
-    const remainingMs = endTime.getTime() - requestedTimeMs;
-
-    // Get Plex server info with type assertion
-    const progWithIncludes = program as any;
-    const server = progWithIncludes.episode?.show?.library?.server ?? progWithIncludes.movie?.library?.server;
-
-    if (!server?.token || server.type !== 'PLEX') {
+    const server = getPlexServerFromProgram(program);
+    if (!server?.token || server.type !== "PLEX") {
       throw new Error(`No Plex server found for program ${program.id}`);
     }
-
-    // Construct URL using the pattern from the rest of the app
-    const baseUrl = process.env.BASE_URL || `http://localhost:3000`;
-    const videoUrl = `${baseUrl}/api/video?channel=${channelNumber}`;
 
     return {
       channelNumber,
       program: {
         id: program.id,
-        title: (program as any).title,
-        startTime: (program as any).startTime.toISOString(),
-        endTime: endTime.toISOString(),
+        title: getProgramTitle(program),
+        startTime: program.startTime.toISOString(),
+        endTime: programEnd.toISOString(),
+        catchupExpiry: expiry.toISOString(),
       },
-      videoUrl,
       seekOffsetMs,
       remainingMs,
     };
   },
 
-  /**
-   * List all catchup-available programs for a channel
-   */
   async listCatchupPrograms(channelNumber: number) {
+    const context = await getCatchupContext(channelNumber);
+    if (!context?.enabled) {
+      return [];
+    }
+
+    const { channel } = context;
     const now = new Date();
-    const channel = await prisma.channel.findFirst({
-      where: { number: channelNumber },
-    });
-
-    if (!channel) {
-      return [];
-    }
-
-    if (!channel.catchupEnabled) {
-      return [];
-    }
-
-    // Calculate catchup window - programs that have ended within the window
-    const windowStart = new Date(now.getTime() - (channel.catchupWindowHours * 60 * 60 * 1000));
+    const { start: windowStart } = TimingService.calculateCatchupWindow(
+      channel,
+      now,
+    );
 
     const programs = await prisma.program.findMany({
       where: {
         channelId: channel.id,
         startTime: { gte: windowStart },
-        // Programs that have ended (endTime = startTime + duration < now)
-        // Filter in JS since we don't have endTime in the schema
         catchupAvailable: true,
       },
-      orderBy: { startTime: 'desc' },
-      include: {
-        episode: {
-          include: { show: true }
-        },
-        movie: true,
-      },
+      orderBy: { startTime: "desc" },
+      include: programWithMediaInclude,
     });
 
-    // Filter to only programs that have ended
-    const endedPrograms = programs.filter(p => {
-      const progEnd = new Date(p.startTime.getTime() + p.duration);
-      return progEnd <= now;
-    });
-
-    return endedPrograms.map((program: any) => {
-      const progEnd = new Date(program.startTime.getTime() + program.duration);
-      return {
-        id: program.id,
-        title: program.title,
-        startTime: program.startTime.toISOString(),
-        endTime: progEnd.toISOString(),
-        duration: program.duration,
-      };
-    });
+    return programs
+      .filter((program) =>
+        TimingService.isProgramCatchupAvailable(program, channel, now),
+      )
+      .map((program) => {
+        const progEnd = new Date(program.startTime.getTime() + program.duration);
+        return {
+          id: program.id,
+          title: getProgramTitle(program),
+          startTime: program.startTime.toISOString(),
+          endTime: progEnd.toISOString(),
+          duration: program.duration,
+          catchupExpiry: program.catchupExpiry?.toISOString() ?? null,
+        };
+      });
   },
 
-  /**
-   * Check if catchup is available for a channel
-   */
   async isCatchupAvailable(channelNumber: number): Promise<boolean> {
-    const channel = await prisma.channel.findFirst({
-      where: { number: channelNumber },
-    });
-
-    if (!channel) {
-      return false;
-    }
-
-    return channel.catchupEnabled;
+    const context = await getCatchupContext(channelNumber);
+    return context?.enabled ?? false;
   },
+
+  getProgramTitle,
 };

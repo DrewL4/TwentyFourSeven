@@ -1,29 +1,42 @@
-# Dependencies
+# Dependencies (root + workspace; avoids ~800MB context upload)
 node_modules
+**/node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# Production builds
-dist
-.next
-out
+# Production / build artifacts (built inside Docker)
+**/.next
+**/out
+**/dist
+.turbo
+
+# Prisma: engines are generated in the builder (linux target)
+apps/server/prisma/generated
+
+# Local databases and runtime data
+**/*.db
+**/*.db-journal
+**/*.sqlite
+**/*.sqlite3
+apps/server/database
 
 # Environment variables
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+apps/**/.env
+apps/**/.env.*
+!apps/**/.env.example
 
-# IDE files
+# IDE
 .vscode
 .idea
 *.swp
 *.swo
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
@@ -31,7 +44,7 @@ Thumbs.db
 .git
 .gitignore
 
-# Docker
+# Docker (not needed in build context)
 Dockerfile*
 docker-compose*
 .dockerignore
@@ -44,23 +57,24 @@ docs
 # Testing
 coverage
 .nyc_output
+**/*.test.ts
+**/*.test.tsx
 
 # Logs
 logs
-*.log
+**/*.log
 
-# Runtime data
+# Runtime / temp
 pids
 *.pid
 *.seed
 *.pid.lock
+tmp
+temp
 
-# Cache directories
+# Tool caches
 .cache
 .parcel-cache
 .eslintcache
 .stylelintcache
-
-# Temporary folders
-tmp
-temp
+**/.tsbuildinfo

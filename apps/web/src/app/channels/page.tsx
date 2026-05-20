@@ -1,6 +1,6 @@
 "use client"
 import React from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,17 +40,27 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { useRouter } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, X, ChevronDown, ChevronRight, Filter, User, Calendar, Tag, Rewind } from "lucide-react";
 import { toast } from "sonner";
+import { useDebounce } from "use-debounce";
 import { Autocomplete } from "@/components/ui/combobox"
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 // Dialog components not available; using inline panel instead
 import { Separator } from "@/components/ui/separator";
+import { ChannelSidebar } from "@/components/channels/ChannelSidebar";
+import { ChannelProgrammingList } from "@/components/channels/ChannelProgrammingList";
+import type { ChannelSummary, ChannelLineup, ChannelShowEpisode } from "@/types/channels";
+import { useChannelSelectionUrl } from "@/hooks/channels/use-channel-selection";
+import {
+  channelLineupQueryOptions,
+  invalidateChannelDetail,
+  prefetchChannelLineup,
+} from "@/utils/channel-query-helpers";
+import { buildLineupItems, type LineupItem } from "@/utils/channel-lineup";
 
 type Channel = {
   id: string;
@@ -190,8 +200,29 @@ function AddContentDialog({
   const [selectedEpisodes, setSelectedEpisodes] = useState<Record<string, Set<string>>>({}); // showId -> episode IDs
   const [selectedSeasons, setSelectedSeasons] = useState<Record<string, Set<number>>>({}); // showId -> season numbers
 
-  const showsQuery = useQuery(orpc.library.shows.queryOptions({ input: { limit: 10000 } }));
-  const moviesQuery = useQuery(orpc.library.movies.queryOptions({ input: { limit: 10000 } }));
+  const [debouncedSearch] = useDebounce(searchTerm, 300);
+
+  const showsQuery = useQuery({
+    ...orpc.library.shows.queryOptions({ input: { limit: 200, includeEpisodes: true } }),
+    enabled: isOpen && debouncedSearch.trim().length < 2,
+  });
+  const moviesQuery = useQuery({
+    ...orpc.library.movies.queryOptions({ input: { limit: 200 } }),
+    enabled: isOpen && debouncedSearch.trim().length < 2,
+  });
+  const librarySearchQuery = useQuery({
+    ...orpc.library.search.queryOptions({ input: { query: debouncedSearch, limit: 200 } }),
+    enabled: isOpen && debouncedSearch.trim().length >= 2,
+  });
+
+  const catalogShows =
+    debouncedSearch.trim().length >= 2
+      ? (librarySearchQuery.data?.shows ?? [])
+      : (showsQuery.data?.items ?? []);
+  const catalogMovies =
+    debouncedSearch.trim().length >= 2
+      ? (librarySearchQuery.data?.movies ?? [])
+      : (moviesQuery.data?.items ?? []);
 
   // Populate form fields with existing channel data when dialog opens
   useEffect(() => {
@@ -262,8 +293,8 @@ function AddContentDialog({
     // Get filtered content for smart filtering context
   const getFilteredContent = (excludeFilter?: 'ratings') => {
     const allContent = [
-      ...(showsQuery.data || []).map((show: any) => ({ ...show, type: 'show' })),
-      ...(moviesQuery.data || []).map((movie: any) => ({ ...movie, type: 'movie' }))
+      ...(catalogShows || []).map((show: any) => ({ ...show, type: 'show' })),
+      ...(catalogMovies || []).map((movie: any) => ({ ...movie, type: 'movie' }))
     ];
 
     return allContent.filter((item: any) => {
@@ -364,10 +395,10 @@ function AddContentDialog({
     return Array.from(optionsSet)
       .sort()
       .filter(option => !searchTerm || option.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [smartFilteringEnabled, genreFilter, actorFilter, directorFilter, studioFilter, yearFilter, yearRangeStart, yearRangeEnd, ratingFilter, actorSearch, directorSearch, genreSearch, studioSearch, showsQuery.data, moviesQuery.data, actorsQuery.data, directorsQuery.data, genresQuery.data, studiosQuery.data]);
+  }, [smartFilteringEnabled, genreFilter, actorFilter, directorFilter, studioFilter, yearFilter, yearRangeStart, yearRangeEnd, ratingFilter, actorSearch, directorSearch, genreSearch, studioSearch, catalogShows, catalogMovies, actorsQuery.data, directorsQuery.data, genresQuery.data, studiosQuery.data]);
 
   // Enhanced filter logic
-  const filteredShows = (showsQuery.data || []).filter((show: any) => {
+  const filteredShows = (catalogShows || []).filter((show: any) => {
     const matchesSearch = !searchTerm || 
       show.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       show.summary?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -409,7 +440,7 @@ function AddContentDialog({
            matchesActor && matchesDirector && matchesStudio && matchesRating && notAlreadyAdded;
   });
 
-  const filteredMovies = (moviesQuery.data || []).filter((movie: any) => {
+  const filteredMovies = (catalogMovies || []).filter((movie: any) => {
     const matchesSearch = !searchTerm || 
       movie.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       movie.summary?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -556,7 +587,7 @@ function AddContentDialog({
       // Find episodes in this season and remove them
       const show = filteredShows.find((s: any) => s.id === showId);
       if (show) {
-        const seasonEpisodes = show.episodes?.filter((ep: any) => ep.seasonNumber === seasonNumber) || [];
+        const seasonEpisodes = (show as any).episodes?.filter((ep: any) => ep.seasonNumber === seasonNumber) || [];
         seasonEpisodes.forEach((ep: any) => newEpisodes.delete(ep.id));
         
         setSelectedEpisodes(prev => ({
@@ -572,7 +603,7 @@ function AddContentDialog({
       
       const show = filteredShows.find((s: any) => s.id === showId);
       if (show) {
-        const seasonEpisodes = show.episodes?.filter((ep: any) => ep.seasonNumber === seasonNumber) || [];
+        const seasonEpisodes = (show as any).episodes?.filter((ep: any) => ep.seasonNumber === seasonNumber) || [];
         seasonEpisodes.forEach((ep: any) => newEpisodes.add(ep.id));
         
         setSelectedEpisodes(prev => ({
@@ -598,9 +629,9 @@ function AddContentDialog({
       // Check if this episode's season should be deselected
       const show = filteredShows.find((s: any) => s.id === showId);
       if (show) {
-        const episode = show.episodes?.find((ep: any) => ep.id === episodeId);
+        const episode = (show as any).episodes?.find((ep: any) => ep.id === episodeId);
         if (episode) {
-          const seasonEpisodes = show.episodes?.filter((ep: any) => ep.seasonNumber === episode.seasonNumber) || [];
+          const seasonEpisodes = (show as any).episodes?.filter((ep: any) => ep.seasonNumber === episode.seasonNumber) || [];
           const remainingSeasonEpisodes = seasonEpisodes.filter((ep: any) => 
             ep.id !== episodeId && newEpisodes.has(ep.id)
           );
@@ -624,9 +655,9 @@ function AddContentDialog({
       // Check if all episodes in this season are now selected
       const show = filteredShows.find((s: any) => s.id === showId);
       if (show) {
-        const episode = show.episodes?.find((ep: any) => ep.id === episodeId);
+        const episode = (show as any).episodes?.find((ep: any) => ep.id === episodeId);
         if (episode) {
-          const seasonEpisodes = show.episodes?.filter((ep: any) => ep.seasonNumber === episode.seasonNumber) || [];
+          const seasonEpisodes = (show as any).episodes?.filter((ep: any) => ep.seasonNumber === episode.seasonNumber) || [];
           const selectedSeasonEpisodes = seasonEpisodes.filter((ep: any) => 
             ep.id === episodeId || newEpisodes.has(ep.id)
           );
@@ -662,7 +693,7 @@ function AddContentDialog({
 
   const getShowSeasons = (show: any) => {
     const seasonMap = new Map();
-    (show.episodes || []).forEach((episode: any) => {
+    ((show as any).episodes || []).forEach((episode: any) => {
       if (!seasonMap.has(episode.seasonNumber)) {
         seasonMap.set(episode.seasonNumber, []);
       }
@@ -739,7 +770,7 @@ function AddContentDialog({
   const [selectedCollections, setSelectedCollections] = useState<Set<string>>(new Set());
   const [addingCollections, setAddingCollections] = useState(false);
   const queryClient = useQueryClient();
-  const collectionsQuery = useQuery(orpc.library.collections.queryOptions({ input: { limit: 10000 } }));
+  const collectionsQuery = useQuery(orpc.library.collections.queryOptions({ input: { limit: 200 } }));
   const filteredCollections = (collectionsQuery.data || []) as { name: string; count: number }[];
 
   const toggleCollectionSelection = (name: string) => {
@@ -773,10 +804,10 @@ function AddContentDialog({
       const collectionNames = Array.from(selectedCollections);
       const [allShows, allMovies] = await Promise.all([
         Promise.all(collectionNames.map(name =>
-          queryClient.fetchQuery(orpc.library.shows.queryOptions({ input: { collection: name, limit: 10000 } }))
+          queryClient.fetchQuery(orpc.library.shows.queryOptions({ input: { collection: name, limit: 200 } }))
         )),
         Promise.all(collectionNames.map(name =>
-          queryClient.fetchQuery(orpc.library.movies.queryOptions({ input: { collection: name, limit: 10000 } }))
+          queryClient.fetchQuery(orpc.library.movies.queryOptions({ input: { collection: name, limit: 200 } }))
         )),
       ]);
       // Flatten results
@@ -1228,7 +1259,7 @@ function AddContentDialog({
                            <h4 className="font-medium truncate">{show.title}</h4>
                            <div className="flex items-center gap-2">
                              <p className="text-sm text-muted-foreground">
-                               {show.year} • {seasons.length} seasons • {show.episodes?.length || 0} episodes
+                               {show.year} • {seasons.length} seasons • {(show as any).episodes?.length || 0} episodes
                              </p>
                              {(selectedShowSeasons.size > 0 || selectedShowEpisodes.size > 0) && (
                                <Badge variant="secondary" className="text-xs">
@@ -1612,8 +1643,7 @@ function AddContentDialog({
 
 function ChannelsPageContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const channelIdFromUrl = searchParams.get('channelId');
+  const { channelIdFromUrl, updateChannelInUrl } = useChannelSelectionUrl();
   
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(channelIdFromUrl);
@@ -1643,16 +1673,16 @@ function ChannelsPageContent() {
   const [blockShuffle, setBlockShuffle] = useState(false);
 
   const queryClient = useQueryClient();
-  const channelsQuery = useQuery(orpc.channels.list.queryOptions());
-  const showsQuery = useQuery(orpc.library.shows.queryOptions({ input: { limit: 10000 } }));
-  const moviesQuery = useQuery(orpc.library.movies.queryOptions({ input: { limit: 10000 } }));
+  const channelsQuery = useQuery(orpc.channels.listSummary.queryOptions());
 
-  // Function to update URL when channel selection changes
-  const updateChannelInUrl = (channelId: string) => {
-    const newSearchParams = new URLSearchParams(searchParams.toString());
-    newSearchParams.set('channelId', channelId);
-    router.replace(`/channels?${newSearchParams.toString()}`, { scroll: false });
-  };
+  const prefetchChannel = useCallback(
+    (channelId: string) => {
+      void prefetchChannelLineup(queryClient, channelId);
+    },
+    [queryClient],
+  );
+
+  // Function to update URL when channel selection changes — from useChannelSelectionUrl
 
   // Centralized function to invalidate guide queries after program generation
   const invalidateGuideQueries = async (delay: number = 800) => {
@@ -1685,23 +1715,33 @@ function ChannelsPageContent() {
     }
   }, [channelsQuery.data, channelIdFromUrl, selectedChannelId]);
 
-  // Get selected channel data
-  const selectedChannelQuery = useQuery({
-    ...orpc.channels.get.queryOptions({ 
-      input: { id: selectedChannelId! } 
-    }),
-    enabled: !!selectedChannelId 
+  // Get selected channel lineup (slim, single RPC)
+  const lineupQuery = useQuery({
+    ...channelLineupQueryOptions(selectedChannelId!),
+    enabled: !!selectedChannelId,
+    placeholderData: keepPreviousData,
   });
+
+  const selectedSummary = useMemo(
+    () =>
+      (channelsQuery.data as ChannelSummary[] | undefined)?.find(
+        (ch) => ch.id === selectedChannelId,
+      ),
+    [channelsQuery.data, selectedChannelId],
+  );
+
+  const lineup = lineupQuery.data as ChannelLineup | null | undefined;
+  const lineupItems = useMemo(() => buildLineupItems(lineup), [lineup]);
+  const lineupReady = lineup?.id === selectedChannelId;
 
   // Load programming rules when channel changes
   useEffect(() => {
-    if (selectedChannelId && selectedChannelQuery.data) {
-      // Load the actual channel settings from the database
-      setDefaultEpisodeOrder(selectedChannelQuery.data.defaultEpisodeOrder || "sequential");
-      setRespectEpisodeOrder(selectedChannelQuery.data.respectEpisodeOrder ?? true);
-      setBlockShuffle(selectedChannelQuery.data.blockShuffle || false);
+    if (selectedChannelId && lineupReady && lineup) {
+      setDefaultEpisodeOrder(lineup.defaultEpisodeOrder || "sequential");
+      setRespectEpisodeOrder(lineup.respectEpisodeOrder ?? true);
+      setBlockShuffle(lineup.blockShuffle || false);
     }
-  }, [selectedChannelId, selectedChannelQuery.data]);
+  }, [selectedChannelId, lineupReady, lineup]);
 
   // Get existing group titles for dropdown
   const existingGroups = useMemo(() => {
@@ -1717,31 +1757,10 @@ function ChannelsPageContent() {
     return Array.from(groups).sort();
   }, [channelsQuery.data]);
 
-  // Get channel program schedule (individual episodes/movies)
-  const channelProgramsQuery = useQuery({
-    ...orpc.guide.channel.queryOptions({
-      input: { channelId: selectedChannelId!, hours: 48 }
-    }),
-    enabled: !!selectedChannelId
-  });
-
-  // Fetch complete episode data for shows in the selected channel
-  // This ensures we have all episodes, not just the incomplete data from the channel query
-  const channelShowIds = selectedChannelQuery.data?.channelShows?.map((cs: any) => cs.showId) || [];
-  const completeShowsQuery = useQuery({
-    ...orpc.library.shows.queryOptions({ 
-      input: { 
-        limit: 10000 
-      } 
-    }),
-    queryKey: ['completeShows', channelShowIds],
-    enabled: channelShowIds.length > 0,
-  });
-
   const createChannelMutation = useMutation(orpc.channels.create.mutationOptions({
     onSuccess: (data) => {
       // Invalidate and refetch to get the real data from server
-      const queryKey = orpc.channels.list.queryOptions().queryKey;
+      const queryKey = orpc.channels.listSummary.queryOptions().queryKey;
       queryClient.invalidateQueries({ queryKey });
       
       // Clear the form and select the new channel
@@ -1760,15 +1779,20 @@ function ChannelsPageContent() {
 
   const updateChannelMutation = useMutation(orpc.channels.update.mutationOptions({
     onMutate: async (variables) => {
-      const channelsQueryKey = orpc.channels.list.queryOptions().queryKey;
+      const channelsQueryKey = orpc.channels.listSummary.queryOptions().queryKey;
+      const lineupQueryKey = orpc.channels.getLineup.queryOptions({
+        input: { id: variables.id },
+      }).queryKey;
       const selectedChannelQueryKey = orpc.channels.get.queryOptions({ 
         input: { id: variables.id } 
       }).queryKey;
       
       await queryClient.cancelQueries({ queryKey: channelsQueryKey });
+      await queryClient.cancelQueries({ queryKey: lineupQueryKey });
       await queryClient.cancelQueries({ queryKey: selectedChannelQueryKey });
       
       const previousChannels = queryClient.getQueryData(channelsQueryKey);
+      const previousLineup = queryClient.getQueryData(lineupQueryKey);
       const previousSelectedChannel = queryClient.getQueryData(selectedChannelQueryKey);
       
       // Optimistically update channels list
@@ -1781,11 +1805,15 @@ function ChannelsPageContent() {
       });
 
       // Optimistically update selected channel
+      queryClient.setQueryData(lineupQueryKey, (old: any) => {
+        return old ? { ...old, ...variables } : old;
+      });
+
       queryClient.setQueryData(selectedChannelQueryKey, (old: any) => {
         return old ? { ...old, ...variables } : old;
       });
       
-      return { previousChannels, previousSelectedChannel, channelsQueryKey, selectedChannelQueryKey };
+      return { previousChannels, previousLineup, previousSelectedChannel, channelsQueryKey, lineupQueryKey, selectedChannelQueryKey };
     },
     onError: (err, variables, context) => {
       toast.error("Failed to update channel");
@@ -1793,20 +1821,21 @@ function ChannelsPageContent() {
       if (context?.previousChannels && context?.channelsQueryKey) {
         queryClient.setQueryData(context.channelsQueryKey, context.previousChannels);
       }
+      if (context?.previousLineup && context?.lineupQueryKey) {
+        queryClient.setQueryData(context.lineupQueryKey, context.previousLineup);
+      }
       if (context?.previousSelectedChannel && context?.selectedChannelQueryKey) {
         queryClient.setQueryData(context.selectedChannelQueryKey, context.previousSelectedChannel);
       }
     },
     onSuccess: (data) => {
       // Invalidate and refetch to get the real data from server
-      const queryKey = orpc.channels.list.queryOptions().queryKey;
+      const queryKey = orpc.channels.listSummary.queryOptions().queryKey;
       queryClient.invalidateQueries({ queryKey });
       
       // Also invalidate the selected channel query
       if (selectedChannelId) {
-        queryClient.invalidateQueries({ 
-          queryKey: orpc.channels.get.queryOptions({ input: { id: selectedChannelId } }).queryKey 
-        });
+        void invalidateChannelDetail(queryClient, selectedChannelId);
       }
       
       // Clear the edit form
@@ -1819,7 +1848,7 @@ function ChannelsPageContent() {
   const deleteChannelMutation = useMutation(orpc.channels.delete.mutationOptions({
     onMutate: async (variables) => {
       // Cancel any outgoing refetches - use the same key pattern as orpc query
-      const queryKey = orpc.channels.list.queryOptions().queryKey;
+      const queryKey = orpc.channels.listSummary.queryOptions().queryKey;
       await queryClient.cancelQueries({ queryKey });
       
       // Snapshot the previous value
@@ -1839,7 +1868,7 @@ function ChannelsPageContent() {
       }
     },
     onSuccess: () => {
-      const queryKey = orpc.channels.list.queryOptions().queryKey;
+      const queryKey = orpc.channels.listSummary.queryOptions().queryKey;
       queryClient.invalidateQueries({ queryKey });
       if (selectedChannelId) {
         setSelectedChannelId(null);
@@ -1858,12 +1887,10 @@ function ChannelsPageContent() {
       
       // Invalidate queries to get fresh data from server
       // Use more specific invalidation to ensure guide updates
-      await queryClient.invalidateQueries({ queryKey: orpc.channels.list.queryOptions().queryKey });
+      await queryClient.invalidateQueries({ queryKey: orpc.channels.listSummary.queryOptions().queryKey });
       
       if (selectedChannelId) {
-        await queryClient.invalidateQueries({ 
-          queryKey: orpc.channels.get.queryOptions({ input: { id: selectedChannelId } }).queryKey 
-        });
+        await invalidateChannelDetail(queryClient, selectedChannelId);
       }
       
       // Invalidate all guide-related queries with a small delay to ensure backend program generation completes
@@ -1883,12 +1910,10 @@ function ChannelsPageContent() {
       
       // Invalidate queries to get fresh data from server
       // Use more specific invalidation to ensure guide updates
-      await queryClient.invalidateQueries({ queryKey: orpc.channels.list.queryOptions().queryKey });
+      await queryClient.invalidateQueries({ queryKey: orpc.channels.listSummary.queryOptions().queryKey });
       
       if (selectedChannelId) {
-        await queryClient.invalidateQueries({ 
-          queryKey: orpc.channels.get.queryOptions({ input: { id: selectedChannelId } }).queryKey 
-        });
+        await invalidateChannelDetail(queryClient, selectedChannelId);
       }
       
       // Invalidate all guide-related queries with a small delay to ensure backend program generation completes
@@ -1901,7 +1926,7 @@ function ChannelsPageContent() {
 
   const removeShowMutation = useMutation(orpc.channels.removeShow.mutationOptions({
     onMutate: async (variables) => {
-      const channelsQueryKey = orpc.channels.list.queryOptions().queryKey;
+      const channelsQueryKey = orpc.channels.listSummary.queryOptions().queryKey;
       const selectedChannelQueryKey = orpc.channels.get.queryOptions({ 
         input: { id: variables.channelId } 
       }).queryKey;
@@ -1948,11 +1973,9 @@ function ChannelsPageContent() {
     },
     onSuccess: async () => {
       toast.success("Show removed! Programming schedule updated.");
-      await queryClient.invalidateQueries({ queryKey: orpc.channels.list.queryOptions().queryKey });
+      await queryClient.invalidateQueries({ queryKey: orpc.channels.listSummary.queryOptions().queryKey });
       if (selectedChannelId) {
-        await queryClient.invalidateQueries({ 
-          queryKey: orpc.channels.get.queryOptions({ input: { id: selectedChannelId } }).queryKey 
-        });
+        await invalidateChannelDetail(queryClient, selectedChannelId);
         
         // The backend automatically regenerates programs, so invalidate guide with delay
         invalidateGuideQueries(800);
@@ -1962,7 +1985,7 @@ function ChannelsPageContent() {
 
   const removeMovieMutation = useMutation(orpc.channels.removeMovie.mutationOptions({
     onMutate: async (variables) => {
-      const channelsQueryKey = orpc.channels.list.queryOptions().queryKey;
+      const channelsQueryKey = orpc.channels.listSummary.queryOptions().queryKey;
       const selectedChannelQueryKey = orpc.channels.get.queryOptions({ 
         input: { id: variables.channelId } 
       }).queryKey;
@@ -2009,11 +2032,9 @@ function ChannelsPageContent() {
     },
     onSuccess: async () => {
       toast.success("Movie removed! Programming schedule updated.");
-      await queryClient.invalidateQueries({ queryKey: orpc.channels.list.queryOptions().queryKey });
+      await queryClient.invalidateQueries({ queryKey: orpc.channels.listSummary.queryOptions().queryKey });
       if (selectedChannelId) {
-        await queryClient.invalidateQueries({ 
-          queryKey: orpc.channels.get.queryOptions({ input: { id: selectedChannelId } }).queryKey 
-        });
+        await invalidateChannelDetail(queryClient, selectedChannelId);
         
         // The backend automatically regenerates programs, so invalidate guide with delay
         invalidateGuideQueries(800);
@@ -2050,8 +2071,7 @@ function ChannelsPageContent() {
 
   const handleAddShow = (showId: string, selections?: { seasons?: number[], episodes?: string[] }, keepUp?: boolean) => {
     if (!selectedChannelId) return;
-    const allContent = getChannelConfiguration();
-    const nextOrder = allContent.length;
+    const nextOrder = lineupItems.length;
     
     // For now, we'll add the entire show regardless of selections
     // TODO: Implement backend support for adding specific seasons/episodes
@@ -2065,8 +2085,7 @@ function ChannelsPageContent() {
 
   const handleAddMovie = (movieId: string) => {
     if (!selectedChannelId) return;
-    const allContent = getChannelConfiguration();
-    const nextOrder = allContent.length;
+    const nextOrder = lineupItems.length;
     
     addMovieMutation.mutate({
       channelId: selectedChannelId,
@@ -2113,7 +2132,7 @@ function ChannelsPageContent() {
   // Reorder content mutation
   const reorderContentMutation = useMutation(orpc.channels.reorderContent.mutationOptions({
     onMutate: async (variables) => {
-      const channelQueryKey = orpc.channels.get.queryOptions({ 
+      const channelQueryKey = orpc.channels.getLineup.queryOptions({ 
         input: { id: variables.channelId } 
       }).queryKey;
       
@@ -2155,9 +2174,7 @@ function ChannelsPageContent() {
       toast.success(`Reordered ${data.updated} items - programs regenerated!`);
       
       // Refetch to ensure we have the latest data
-      await queryClient.invalidateQueries({ 
-        queryKey: orpc.channels.get.queryOptions({ input: { id: selectedChannelId! } }).queryKey 
-      });
+      await invalidateChannelDetail(queryClient, selectedChannelId!);
              
        // The backend automatically regenerates programs, so invalidate guide with delay
        if (selectedChannelId) {
@@ -2169,7 +2186,7 @@ function ChannelsPageContent() {
   // Reorder episodes mutation
   const reorderEpisodesMutation = useMutation(orpc.channels.reorderEpisodes.mutationOptions({
     onMutate: async (variables) => {
-      const channelQueryKey = orpc.channels.get.queryOptions({ 
+      const channelQueryKey = orpc.channels.getLineup.queryOptions({ 
         input: { id: variables.channelId } 
       }).queryKey;
       
@@ -2189,9 +2206,7 @@ function ChannelsPageContent() {
       toast.success(`Reordered ${data.updated} episodes - programs regenerated!`);
       
       // Refetch to ensure we have the latest data
-      await queryClient.invalidateQueries({ 
-        queryKey: orpc.channels.get.queryOptions({ input: { id: selectedChannelId! } }).queryKey 
-      });
+      await invalidateChannelDetail(queryClient, selectedChannelId!);
              
        // The backend automatically regenerates programs, so invalidate guide with delay
        if (selectedChannelId) {
@@ -2215,7 +2230,7 @@ function ChannelsPageContent() {
 
   const shuffleAllContentMutation = useMutation(orpc.channels.shuffleAllContent.mutationOptions({
     onMutate: async (variables) => {
-      const channelQueryKey = orpc.channels.get.queryOptions({ 
+      const channelQueryKey = orpc.channels.getLineup.queryOptions({ 
         input: { id: variables.channelId } 
       }).queryKey;
       
@@ -2234,9 +2249,7 @@ function ChannelsPageContent() {
     onSuccess: async (data) => {
       toast.success(`Successfully shuffled ${data.shuffled} items! Programs regenerated.`);
       if (selectedChannelId) {
-        await queryClient.invalidateQueries({ 
-          queryKey: orpc.channels.get.queryOptions({ input: { id: selectedChannelId } }).queryKey 
-        });
+        await invalidateChannelDetail(queryClient, selectedChannelId);
         
         // The backend automatically regenerates programs, so invalidate guide
         invalidateGuideQueries(800);
@@ -2286,7 +2299,7 @@ function ChannelsPageContent() {
   const handleSmartShuffle = (type: string) => {
     if (!selectedChannelId) return;
     
-    const programs = getAllPrograms();
+    const programs = lineupItems;
     if (programs.length === 0) return;
     
     let reorderedPrograms: any[] = [];
@@ -2313,11 +2326,8 @@ function ChannelsPageContent() {
         
       case 'shuffle-by-year':
         // Group by year, shuffle within groups, then sort groups by year
-        const yearGroups = programs.reduce((acc: any, program: any) => {
-          // For episodes, get year from the show, for movies get from movie
-          const year = program.type === 'episode' ? 
-            (program.year || program.showYear || 'Unknown') : 
-            (program.year || 'Unknown');
+        const yearGroups = programs.reduce((acc: Record<string, LineupItem[]>, program) => {
+          const year = String(program.year ?? "Unknown");
           if (!acc[year]) acc[year] = [];
           acc[year].push(program);
           return acc;
@@ -2339,30 +2349,15 @@ function ChannelsPageContent() {
         reorderedPrograms = sortedYearGroups.flat();
         break;
         
-      case 'shuffle-by-type':
-        // Group episodes and movies separately, shuffle within groups
-        const episodes = programs.filter(p => p.type === 'episode').sort(() => Math.random() - 0.5);
-        const movies = programs.filter(p => p.type === 'movie').sort(() => Math.random() - 0.5);
-        const shows = programs.filter(p => p.type === 'show').sort(() => Math.random() - 0.5);
-        
-        // Interleave types randomly
-        reorderedPrograms = [...episodes, ...movies, ...shows].sort(() => Math.random() - 0.5);
+      case 'shuffle-by-type': {
+        const showItems = programs.filter((p) => p.type === "show").sort(() => Math.random() - 0.5);
+        const movieItems = programs.filter((p) => p.type === "movie").sort(() => Math.random() - 0.5);
+        reorderedPrograms = [...showItems, ...movieItems].sort(() => Math.random() - 0.5);
         break;
-        
+      }
+
       case 'shuffle-by-show':
-        // Group episodes by show, shuffle episodes within each show, then shuffle shows
-        const showGroups = programs.reduce((acc: any, program: any) => {
-          const showKey = program.type === 'episode' ? program.title : `${program.type}-${program.title}`;
-          if (!acc[showKey]) acc[showKey] = [];
-          acc[showKey].push(program);
-          return acc;
-        }, {});
-        
-        const shuffledShowGroups = Object.values(showGroups).map((group: any) => 
-          group.sort(() => Math.random() - 0.5)
-        ).sort(() => Math.random() - 0.5);
-        
-        reorderedPrograms = shuffledShowGroups.flat();
+        reorderedPrograms = [...programs].sort(() => Math.random() - 0.5);
         break;
         
       case 'shuffle-by-duration':
@@ -2395,68 +2390,40 @@ function ChannelsPageContent() {
         break;
         
       case 'sort-episode-title-asc':
-        reorderedPrograms = [...programs].sort((a, b) => {
-          // For episodes, sort by episode title; for others, use main title
-          const titleA = a.type === 'episode' ? (a.episodeTitle || a.title) : a.title;
-          const titleB = b.type === 'episode' ? (b.episodeTitle || b.title) : b.title;
-          return titleA.localeCompare(titleB);
-        });
-        break;
-        
-      case 'sort-episode-title-desc':
-        reorderedPrograms = [...programs].sort((a, b) => {
-          const titleA = a.type === 'episode' ? (a.episodeTitle || a.title) : a.title;
-          const titleB = b.type === 'episode' ? (b.episodeTitle || b.title) : b.title;
-          return titleB.localeCompare(titleA);
-        });
-        break;
-        
       case 'sort-season-episode':
-        reorderedPrograms = [...programs].sort((a, b) => {
-          // Episodes first, then shows, then movies
-          if (a.type !== b.type) {
-            const typeOrder = { episode: 0, show: 1, movie: 2 };
-            return (typeOrder[a.type as keyof typeof typeOrder] || 3) - (typeOrder[b.type as keyof typeof typeOrder] || 3);
-          }
-          
-          // For episodes, sort by show title, then season, then episode
-          if (a.type === 'episode' && b.type === 'episode') {
-            const showCompare = a.title.localeCompare(b.title);
-            if (showCompare !== 0) return showCompare;
-            
-            const seasonCompare = (a.seasonNumber || 0) - (b.seasonNumber || 0);
-            if (seasonCompare !== 0) return seasonCompare;
-            
-            return (a.episodeNumber || 0) - (b.episodeNumber || 0);
-          }
-          
-          // For non-episodes, sort by title
-          return a.title.localeCompare(b.title);
-        });
+        reorderedPrograms = [...programs].sort((a, b) => a.title.localeCompare(b.title));
+        break;
+
+      case 'sort-episode-title-desc':
+        reorderedPrograms = [...programs].sort((a, b) => b.title.localeCompare(a.title));
         break;
         
       case 'sort-year-newest':
-        reorderedPrograms = [...programs].sort((a, b) => {
-          const yearA = a.type === 'episode' ? (a.year || a.showYear || 0) : (a.year || 0);
-          const yearB = b.type === 'episode' ? (b.year || b.showYear || 0) : (b.year || 0);
-          return yearB - yearA;
-        });
+        reorderedPrograms = [...programs].sort(
+          (a, b) => (b.year ?? 0) - (a.year ?? 0),
+        );
         break;
-        
+
       case 'sort-year-oldest':
+        reorderedPrograms = [...programs].sort(
+          (a, b) => (a.year ?? 0) - (b.year ?? 0),
+        );
+        break;
+
+      case 'sort-duration-longest':
         reorderedPrograms = [...programs].sort((a, b) => {
-          const yearA = a.type === 'episode' ? (a.year || a.showYear || 0) : (a.year || 0);
-          const yearB = b.type === 'episode' ? (b.year || b.showYear || 0) : (b.year || 0);
-          return yearA - yearB;
+          const durA = a.type === "movie" ? (a.duration ?? 0) : 0;
+          const durB = b.type === "movie" ? (b.duration ?? 0) : 0;
+          return durB - durA;
         });
         break;
-        
-      case 'sort-duration-longest':
-        reorderedPrograms = [...programs].sort((a, b) => (b.duration || 0) - (a.duration || 0));
-        break;
-        
+
       case 'sort-duration-shortest':
-        reorderedPrograms = [...programs].sort((a, b) => (a.duration || 0) - (b.duration || 0));
+        reorderedPrograms = [...programs].sort((a, b) => {
+          const durA = a.type === "movie" ? (a.duration ?? 0) : 0;
+          const durB = b.type === "movie" ? (b.duration ?? 0) : 0;
+          return durA - durB;
+        });
         break;
         
       case 'reverse':
@@ -2472,75 +2439,42 @@ function ChannelsPageContent() {
         return;
     }
     
-    // Convert episode-level reordering to the appropriate backend format
-    const episodes = reorderedPrograms
-      .filter(program => program.type === 'episode' && program.showId && program.episodeId)
-      .map((program, index) => ({
-        showId: program.showId,
-        episodeId: program.episodeId,
-        order: index
-      }));
-
-    const movies = reorderedPrograms
-      .filter(program => program.type === 'movie' && program.movieId)
-      .reduce((acc, program, index) => {
-        const key = `movie-${program.movieId}`;
-        if (!acc.has(key)) {
-          acc.set(key, {
-            id: program.movieId,
-            type: 'movie' as const,
-            order: index
-          });
-        }
-        return acc;
-      }, new Map());
-
-    // Save the new order immediately (skip for clear-auto-sort)
-    if (type !== 'clear-auto-sort') {
-      if (episodes.length > 0) {
-        // Use the new episode reordering API
-        reorderEpisodesMutation.mutate({
-          channelId: selectedChannelId,
-          episodes: episodes
-        });
-      } else if (movies.size > 0) {
-        // Fall back to content reordering for movies-only
-        reorderContentMutation.mutate({
-          channelId: selectedChannelId,
-          items: Array.from(movies.values())
-        });
-      }
+    if (type !== "clear-auto-sort") {
+      reorderContentMutation.mutate({
+        channelId: selectedChannelId,
+        items: (reorderedPrograms as LineupItem[]).map((item, index) => ({
+          id: item.type === "show" ? item.showId : item.movieId,
+          type: item.type,
+          order: index,
+        })),
+      });
     }
-    
-    // Save or clear sort method for automation
-    if (isSortOperation || isShuffleOperation) {
-      const filterData: any = {
-        id: selectedChannelId,
-        autoFilterEnabled: selectedChannelQuery.data?.autoFilterEnabled || false,
-        filterType: selectedChannelQuery.data?.filterType || 'both',
-        defaultEpisodeOrder: selectedChannelQuery.data?.defaultEpisodeOrder || 'sequential',
-        respectEpisodeOrder: selectedChannelQuery.data?.respectEpisodeOrder ?? true,
-        blockShuffle: selectedChannelQuery.data?.blockShuffle || false,
-        blockShuffleSize: selectedChannelQuery.data?.blockShuffleSize || 1
-      };
 
-      // Only include optional fields if they have values
-      if (selectedChannelQuery.data?.filterGenres) filterData.filterGenres = selectedChannelQuery.data.filterGenres;
-      if (selectedChannelQuery.data?.filterActors) filterData.filterActors = selectedChannelQuery.data.filterActors;
-      if (selectedChannelQuery.data?.filterDirectors) filterData.filterDirectors = selectedChannelQuery.data.filterDirectors;
-      if (selectedChannelQuery.data?.filterStudios) filterData.filterStudios = selectedChannelQuery.data.filterStudios;
-      if (selectedChannelQuery.data?.filterYearStart) filterData.filterYearStart = selectedChannelQuery.data.filterYearStart;
-      if (selectedChannelQuery.data?.filterYearEnd) filterData.filterYearEnd = selectedChannelQuery.data.filterYearEnd;
-      if (selectedChannelQuery.data?.filterRating) filterData.filterRating = selectedChannelQuery.data.filterRating;
-      
-      // Handle autoSortMethod: set it for sort operations, clear it for shuffle operations
+    if (isSortOperation || isShuffleOperation) {
+      let autoSortMethod: string | null | undefined;
       if (isSortOperation) {
-        filterData.autoSortMethod = type;
+        autoSortMethod = type;
       } else if (isShuffleOperation) {
-        filterData.autoSortMethod = null; // Explicitly clear it for shuffle operations
+        autoSortMethod = null;
       }
 
-      updateFiltersMutation.mutate(filterData);
+      updateFiltersMutation.mutate({
+        id: selectedChannelId,
+        autoFilterEnabled: lineup?.autoFilterEnabled || false,
+        filterType: lineup?.filterType || "both",
+        defaultEpisodeOrder: lineup?.defaultEpisodeOrder || "sequential",
+        respectEpisodeOrder: lineup?.respectEpisodeOrder ?? true,
+        blockShuffle: lineup?.blockShuffle || false,
+        blockShuffleSize: lineup?.blockShuffleSize || 1,
+        ...(lineup?.filterGenres ? { filterGenres: lineup.filterGenres } : {}),
+        ...(lineup?.filterActors ? { filterActors: lineup.filterActors } : {}),
+        ...(lineup?.filterDirectors ? { filterDirectors: lineup.filterDirectors } : {}),
+        ...(lineup?.filterStudios ? { filterStudios: lineup.filterStudios } : {}),
+        ...(lineup?.filterYearStart != null ? { filterYearStart: lineup.filterYearStart } : {}),
+        ...(lineup?.filterYearEnd != null ? { filterYearEnd: lineup.filterYearEnd } : {}),
+        ...(lineup?.filterRating ? { filterRating: lineup.filterRating } : {}),
+        ...(autoSortMethod !== undefined ? { autoSortMethod } : {}),
+      });
     }
     
     // Show toast feedback for smart actions
@@ -2614,212 +2548,39 @@ function ChannelsPageContent() {
     }
   };
 
-  const onDragEnd = (result: any) => {
-    if (!result.destination || !selectedChannelId) return;
-    
-    const sourceIndex = result.source.index;
-    const destinationIndex = result.destination.index;
-    
-    if (sourceIndex === destinationIndex) return;
-    
-    const programs = getAllPrograms();
-    const reorderedPrograms = Array.from(programs);
-    const [removed] = reorderedPrograms.splice(sourceIndex, 1);
-    reorderedPrograms.splice(destinationIndex, 0, removed);
-    
-    // Convert episode-level reordering to the appropriate backend format
-    const episodes = reorderedPrograms
-      .filter(program => program.type === 'episode' && program.showId && program.episodeId)
-      .map((program, index) => ({
-        showId: program.showId,
-        episodeId: program.episodeId,
-        order: index
-      }));
-
-    const movies = reorderedPrograms
-      .filter(program => program.type === 'movie' && program.movieId)
-      .reduce((acc, program, index) => {
-        const key = `movie-${program.movieId}`;
-        if (!acc.has(key)) {
-          acc.set(key, {
-            id: program.movieId,
-            type: 'movie' as const,
-            order: index
-          });
-        }
-        return acc;
-      }, new Map());
-
-    // Save the new order immediately
-    if (episodes.length > 0) {
-      // Use the new episode reordering API
-      reorderEpisodesMutation.mutate({
-        channelId: selectedChannelId,
-        episodes: episodes
-      });
-    } else if (movies.size > 0) {
-      // Fall back to content reordering for movies-only
+  const handleLineupDragEnd = useCallback(
+    (items: LineupItem[]) => {
+      if (!selectedChannelId) return;
       reorderContentMutation.mutate({
         channelId: selectedChannelId,
-        items: Array.from(movies.values())
+        items: items.map((item, index) => ({
+          id: item.type === "show" ? item.showId : item.movieId,
+          type: item.type,
+          order: index,
+        })),
       });
-    }
-  };
+    },
+    [selectedChannelId, reorderContentMutation],
+  );
 
-  // Get channel content for display (expanded episodes + movies like TwentyFourSeven)
-  const getChannelContent = () => {
-    if (!selectedChannelQuery.data) return [];
-    
-    const channelData = selectedChannelQuery.data as any;
-    const content: any[] = [];
-    
-    // Get the show IDs that are in this channel
-    const currentChannelShowIds = channelData.channelShows?.map((cs: any) => cs.showId) || [];
-    
-    // Get complete episode data from the separate query and filter to channel shows
-    const completeShows = (completeShowsQuery.data || []).filter((show: any) => 
-      currentChannelShowIds.includes(show.id)
-    );
-    const completeShowsMap = new Map(completeShows.map((show: any) => [show.id, show]));
-    
-    // Add all episodes from shows using complete episode data
-    (channelData.channelShows || []).forEach((cs: any) => {
-      const completeShow = completeShowsMap.get(cs.showId);
-      
-      if (completeShow?.episodes && completeShow.episodes.length > 0) {
-        // Use complete episode data instead of incomplete channel data
-        completeShow.episodes.forEach((episode: any) => {
-          content.push({
-            id: `${cs.id}-${episode.id}`,
-            type: 'episode' as const,
-            title: completeShow.title,
-            episodeTitle: episode.title,
-            seasonNumber: episode.seasonNumber,
-            episodeNumber: episode.episodeNumber,
-            poster: completeShow.poster,
-            duration: episode.duration,
-            order: cs.order,
-            showId: completeShow.id,
-            episodeId: episode.id,
-            channelShowId: cs.id
-          });
-        });
-      } else if (cs.show.episodes && cs.show.episodes.length > 0) {
-        // Fallback to channel data if complete data not available
-        cs.show.episodes.forEach((episode: any) => {
-          content.push({
-            id: `${cs.id}-${episode.id}`,
-            type: 'episode' as const,
-            title: cs.show.title,
-            episodeTitle: episode.title,
-            seasonNumber: episode.seasonNumber,
-            episodeNumber: episode.episodeNumber,
-            poster: cs.show.poster,
-            duration: episode.duration,
-            order: cs.order,
-            showId: cs.show.id,
-            episodeId: episode.id,
-            channelShowId: cs.id
-          });
-        });
-      } else {
-        // Show without episodes data - display as placeholder
-        content.push({
-          id: `${cs.id}-placeholder`,
-          type: 'show' as const,
-          title: cs.show.title,
-          episodeTitle: 'Episodes loading...',
-          seasonNumber: 0,
-          episodeNumber: 0,
-          poster: cs.show.poster,
-          duration: 0,
-          order: cs.order,
-          showId: cs.show.id,
-          channelShowId: cs.id
-        });
-      }
-    });
-    
-    // Add all movies
-    (channelData.channelMovies || []).forEach((cm: any) => {
-      content.push({
-        id: cm.id,
-        type: 'movie' as const,
-        title: cm.movie.title,
-        year: cm.movie.year,
-        poster: cm.movie.poster,
-        duration: cm.movie.duration,
-        order: cm.order,
-        movieId: cm.movie.id,
-        channelMovieId: cm.id
+  const handleEpisodeDragEnd = useCallback(
+    (showId: string, episodes: ChannelShowEpisode[]) => {
+      if (!selectedChannelId) return;
+      reorderEpisodesMutation.mutate({
+        channelId: selectedChannelId,
+        episodes: episodes.map((ep, index) => ({
+          showId,
+          episodeId: ep.id,
+          order: index,
+        })),
       });
-    });
-    
-    return content.sort((a, b) => a.order - b.order);
-  };
-
-  // Get all individual episodes and movies for reordering
-  const getAllPrograms = () => {
-    // Show individual episodes and movies so users can reorder them
-    return getChannelContent();
-  };
-
-  // Get channel configuration (shows/movies added to channel)
-  const getChannelConfiguration = () => {
-    if (!selectedChannelQuery.data) return [];
-    
-    const channelData = selectedChannelQuery.data as any;
-    
-    // Get complete episode data for accurate counts
-    const currentChannelShowIds = channelData.channelShows?.map((cs: any) => cs.showId) || [];
-    const completeShows = (completeShowsQuery.data || []).filter((show: any) => 
-      currentChannelShowIds.includes(show.id)
-    );
-    const completeShowsMap = new Map(completeShows.map((show: any) => [show.id, show]));
-    
-    const showsContent = (channelData.channelShows || []).map((cs: any, index: number) => {
-      const completeShow = completeShowsMap.get(cs.showId);
-      
-      const episodeCount = completeShow?.episodes?.length || 
-                          cs.show.episodes?.length || 
-                          cs.show._count?.episodes || 
-                          cs.show.episodeCount ||
-                          0;
-      
-      const totalDuration = completeShow?.episodes?.reduce((acc: number, ep: any) => acc + (ep.duration || 0), 0) || 
-                           cs.show.episodes?.reduce((acc: number, ep: any) => acc + (ep.duration || 0), 0) || 
-                           cs.show.duration || 
-                           0;
-      
-      return {
-        ...cs,
-        type: 'show' as const,
-        title: cs.show.title,
-        year: cs.show.year,
-        poster: cs.show.poster,
-        duration: totalDuration,
-        episodeCount,
-        order: cs.order ?? index
-      };
-    });
-
-    const moviesContent = (channelData.channelMovies || []).map((cm: any, index: number) => ({
-      ...cm,
-      type: 'movie' as const,
-      title: cm.movie.title,
-      year: cm.movie.year,
-      poster: cm.movie.poster,
-      duration: cm.movie.duration,
-      episodeCount: 0,
-      order: cm.order ?? (channelData.channelShows?.length || 0) + index
-    }));
-
-    return [...showsContent, ...moviesContent].sort((a, b) => a.order - b.order);
-  };
+    },
+    [selectedChannelId, reorderEpisodesMutation],
+  );
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="h-full flex flex-col max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 flex-shrink-0">
         <div>
@@ -2924,7 +2685,7 @@ function ChannelsPageContent() {
                         )}
                         <span className="truncate">{channel.name}</span>
                         <span className="text-xs text-muted-foreground ml-auto">
-                          {(channel.channelShows?.length || 0) + (channel.channelMovies?.length || 0)} items
+                          {(channel.channelShowCount ?? 0) + (channel.channelMovieCount ?? 0)} items
                         </span>
                       </div>
                     </SelectItem>
@@ -3261,138 +3022,37 @@ function ChannelsPageContent() {
         </Card>
       )}
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-4 gap-6" style={{ gridTemplateRows: '1fr' }}>
-        {/* Desktop Channels List - Left Side */}
-        <div className="hidden md:block lg:col-span-1 flex flex-col min-h-0">
-          <Card className="h-full flex flex-col">
-            <CardHeader className="flex-shrink-0 pb-4">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-lg flex-shrink-0">Channels</CardTitle>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      size="sm"
-                      onClick={() => {
-                        setNewChannel(prev => ({ ...prev, number: getNextChannelNumber() }));
-                        setShowCreateForm(true);
-                      }}
-                      className="touch-manipulation flex-shrink-0"
-                    >
-                      <Plus className="w-4 h-4 md:mr-2" />
-                      <span className="hidden md:inline">Add Channel</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Add Channel</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-hidden flex flex-col min-h-0 pb-6">
-              {channelsQuery.isLoading ? (
-                <div className="space-y-2 p-4">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="animate-pulse">
-                      <div className="h-12 bg-muted rounded"></div>
-                    </div>
-                  ))}
-                </div>
-              ) : channelsQuery.error ? (
-                <div className="p-4 text-center">
-                  <p className="text-destructive">Error loading channels</p>
-                </div>
-              ) : !channelsQuery.data || channelsQuery.data.length === 0 ? (
-                <div className="p-8 text-center">
-                  <Radio className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                  <h3 className="font-semibold mb-2">No channels yet</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Create your first channel to get started
-                  </p>
-                  <Button 
-                    size="sm"
-                    onClick={() => {
-                      setNewChannel(prev => ({ ...prev, number: 1 }));
-                      setShowCreateForm(true);
-                    }}
-                    className="touch-manipulation"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Channel
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex-1 overflow-y-auto space-y-1 p-2">
-                  {(channelsQuery.data as any[]).map((channel: any) => (
-                   <div
-                     key={channel.id}
-                     className={`group p-3 border-l-4 transition-colors touch-manipulation ${
-                       selectedChannelId === channel.id
-                         ? 'bg-accent border-l-primary'
-                         : 'hover:bg-muted border-l-transparent'
-                     }`}
-                   >
-                     <div className="flex items-center gap-3">
-                       <Badge variant="outline" className="text-xs px-2 py-1">
-                         {channel.number}
-                       </Badge>
-                       {channel.icon && (
-                         <img 
-                           src={channel.icon} 
-                           alt=""
-                           className="w-6 h-6 rounded object-cover"
-                           onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                         />
-                       )}
-                       <div 
-                         className="flex-1 min-w-0 cursor-pointer"
-                         onClick={() => {
-                           setSelectedChannelId(channel.id);
-                           updateChannelInUrl(channel.id);
-                         }}
-                       >
-                         <h4 className="font-medium text-sm truncate">{channel.name}</h4>
-                         <p className="text-xs text-muted-foreground">
-                           {(channel.channelShows?.length || 0) + (channel.channelMovies?.length || 0)} items
-                         </p>
-                       </div>
-                       <Tooltip>
-                         <TooltipTrigger asChild>
-                           <Button
-                             variant="ghost"
-                             size="sm"
-                             className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 hover:opacity-100 touch-manipulation"
-                             onClick={(e) => {
-                               e.stopPropagation();
-                               setEditChannel({
-                                 id: channel.id,
-                                 number: channel.number,
-                                 name: channel.name,
-                                 icon: channel.icon || "",
-                                 groupTitle: channel.groupTitle || "",
-                                 catchupEnabled: channel.catchupEnabled ?? true,
-                                 catchupWindowHours: channel.catchupWindowHours ?? 24,
-                               });
-                               setEditingChannelId(channel.id);
-                             }}
-                           >
-                             <Edit className="w-4 h-4" />
-                           </Button>
-                         </TooltipTrigger>
-                         <TooltipContent>
-                           <p>Edit Channel</p>
-                         </TooltipContent>
-                       </Tooltip>
-                     </div>
-                   </div>
-                 ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:items-start">
+        <ChannelSidebar
+          channels={(channelsQuery.data as ChannelSummary[]) ?? []}
+          selectedChannelId={selectedChannelId}
+          isLoading={channelsQuery.isLoading}
+          error={channelsQuery.error ?? null}
+          onSelect={(id) => {
+            setSelectedChannelId(id);
+            updateChannelInUrl(id);
+          }}
+          onEdit={(channel) => {
+            setEditChannel({
+              id: channel.id,
+              number: channel.number,
+              name: channel.name,
+              icon: channel.icon || "",
+              groupTitle: channel.groupTitle || "",
+              catchupEnabled: channel.catchupEnabled ?? true,
+              catchupWindowHours: channel.catchupWindowHours ?? 24,
+            });
+            setEditingChannelId(channel.id);
+          }}
+          onAddChannel={() => {
+            setNewChannel((prev) => ({ ...prev, number: getNextChannelNumber() }));
+            setShowCreateForm(true);
+          }}
+          onPrefetch={prefetchChannel}
+        />
 
         {/* Channel Content - Main Area */}
-        <div className="lg:col-span-2 flex flex-col min-h-0">
+        <div className="lg:col-span-2">
           {!selectedChannelId ? (
             <Card>
               <CardContent className="p-8 sm:p-12 text-center">
@@ -3403,7 +3063,7 @@ function ChannelsPageContent() {
                 </p>
               </CardContent>
             </Card>
-          ) : selectedChannelQuery.isLoading ? (
+          ) : channelsQuery.isLoading && !selectedSummary ? (
             <Card>
               <CardContent className="p-8">
                 <div className="animate-pulse space-y-4">
@@ -3416,7 +3076,7 @@ function ChannelsPageContent() {
                 </div>
               </CardContent>
             </Card>
-          ) : !selectedChannelQuery.data ? (
+          ) : !selectedSummary ? (
             <Card>
               <CardContent className="p-8 sm:p-12 text-center">
                 <h3 className="text-lg sm:text-xl font-semibold mb-2">Channel not found</h3>
@@ -3433,33 +3093,33 @@ function ChannelsPageContent() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-6 flex-1 flex flex-col min-h-0">
+            <div className="space-y-6">
               {/* Channel Header */}
               <Card className="flex-shrink-0">
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <Badge variant="outline" className="text-lg px-3 py-1">
-                        {selectedChannelQuery.data.number}
+                        {selectedSummary!.number}
                       </Badge>
                       <div className="flex items-center gap-3">
-                        {selectedChannelQuery.data.icon && (
+                        {selectedSummary!.icon && (
                           <img 
-                            src={selectedChannelQuery.data.icon} 
+                            src={selectedSummary!.icon!} 
                             alt=""
                             className="w-8 h-8 rounded object-cover"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           />
                         )}
                         <div>
-                          <CardTitle className="text-xl">{selectedChannelQuery.data.name}</CardTitle>
+                          <CardTitle className="text-xl">{selectedSummary!.name}</CardTitle>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                            {selectedChannelQuery.data.groupTitle && (
+                            {selectedSummary!.groupTitle && (
                               <Badge variant="secondary" className="text-xs">
-                                {selectedChannelQuery.data.groupTitle}
+                                {selectedSummary!.groupTitle}
                               </Badge>
                             )}
-                            {selectedChannelQuery.data.stealth && (
+                            {selectedSummary!.stealth && (
                               <Badge variant="outline" className="text-xs">
                                 <EyeOff className="w-3 h-3 mr-1" />
                                 Stealth
@@ -3473,7 +3133,7 @@ function ChannelsPageContent() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button variant="ghost" size="sm" asChild className="touch-manipulation">
-                            <Link href={`/player?channel=${selectedChannelQuery.data.number}`}>
+                            <Link href={`/player?channel=${selectedSummary!.number}`}>
                               <Play className="w-4 h-4 md:mr-1" />
                               <span className="hidden md:inline">Watch</span>
                             </Link>
@@ -3488,7 +3148,7 @@ function ChannelsPageContent() {
                           <Button 
                             variant="destructive" 
                             size="sm"
-                            onClick={() => deleteChannelMutation.mutate({ id: selectedChannelQuery.data!.id })}
+                            onClick={() => deleteChannelMutation.mutate({ id: selectedSummary!.id })}
                             disabled={deleteChannelMutation.isPending}
                             className="touch-manipulation"
                           >
@@ -3506,16 +3166,16 @@ function ChannelsPageContent() {
               </Card>
 
                             {/* Programming Content - TwentyFourSeven Style */}
-              <Tabs defaultValue="programming" className="flex-1 flex flex-col min-h-0">
-                <TabsList className="grid w-full grid-cols-3 flex-shrink-0 mb-6">
+              <Tabs defaultValue="programming" className="space-y-4">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="programming" className="touch-manipulation">Programming</TabsTrigger>
                   <TabsTrigger value="schedule" className="touch-manipulation">Schedule</TabsTrigger>
                   <TabsTrigger value="filler" className="touch-manipulation">Filler</TabsTrigger>
                 </TabsList>
 
                 {/* Programming Tab */}
-                <TabsContent value="programming" className="flex-1 flex flex-col min-h-0 mt-0">
-                  <Card className="h-full flex flex-col">
+                <TabsContent value="programming" className="mt-0">
+                  <Card>
                     <CardHeader className="flex-shrink-0">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <CardTitle className="flex items-center gap-2">
@@ -3556,8 +3216,14 @@ function ChannelsPageContent() {
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="flex-1 min-h-0 flex flex-col pb-0">
-                      {selectedChannelQuery.isLoading ? (
+                    <CardContent>
+                      {lineupQuery.isFetching && !lineupReady && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                          <RotateCcw className="w-4 h-4 animate-spin" />
+                          Loading channel…
+                        </div>
+                      )}
+                      {!lineupReady && lineupQuery.isLoading ? (
                         <div className="space-y-4">
                           <div className="animate-pulse space-y-3">
                             {[...Array(5)].map((_, i) => (
@@ -3565,7 +3231,7 @@ function ChannelsPageContent() {
                             ))}
                           </div>
                         </div>
-                      ) : getAllPrograms().length === 0 ? (
+                      ) : lineupReady && lineupItems.length === 0 ? (
                         <div className="text-center py-8 sm:py-12">
                           <Video className="w-12 h-12 sm:w-16 sm:h-16 text-muted-foreground mx-auto mb-4" />
                           <h3 className="text-lg sm:text-xl font-semibold mb-2">No content in channel</h3>
@@ -3582,346 +3248,53 @@ function ChannelsPageContent() {
                             </Button>
                           </div>
                         </div>
-                      ) : (
-                        <div className="flex-1 flex flex-col min-h-0 space-y-4">
-                          {/* Program Duration Summary */}
+                      ) : lineupReady && lineup ? (
+                        <div className="space-y-4">
                           <div className="bg-muted/30 p-4 rounded-lg flex-shrink-0">
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
                               <div>
                                 <p className="text-sm text-muted-foreground">Shows</p>
                                 <p className="text-xl sm:text-2xl font-bold">
-                                  {getAllPrograms().filter(item => item.type === 'show').length}
+                                  {lineup.channelShows?.length ?? 0}
                                 </p>
                               </div>
                               <div>
                                 <p className="text-sm text-muted-foreground">Movies</p>
                                 <p className="text-xl sm:text-2xl font-bold">
-                                  {getAllPrograms().filter(item => item.type === 'movie').length}
+                                  {lineup.channelMovies?.length ?? 0}
                                 </p>
                               </div>
                               <div>
                                 <p className="text-sm text-muted-foreground">Total Items</p>
-                                <p className="text-xl sm:text-2xl font-bold">{getAllPrograms().length}</p>
+                                <p className="text-xl sm:text-2xl font-bold">{lineupItems.length}</p>
                               </div>
                               <div>
                                 <p className="text-sm text-muted-foreground">Generated Programs</p>
                                 <p className="text-xl sm:text-2xl font-bold text-primary">
-                                  {channelProgramsQuery.data?.length || 0}
+                                  {selectedSummary?.programCount ?? 0}
                                 </p>
                               </div>
                             </div>
                           </div>
 
-                          {/* Mobile-Optimized Content List */}
-                          <div className="md:hidden space-y-2">
-                            {getAllPrograms().map((item: any, index) => (
-                              <div
-                                key={item.id}
-                                className="bg-background border rounded-lg p-4 space-y-3 touch-manipulation"
-                              >
-                                {/* Content Header */}
-                                <div className="flex items-start gap-3">
-                                  <Badge variant="outline" className="text-xs px-2 py-1 flex-shrink-0">
-                                    {index + 1}
-                                  </Badge>
-                                  
-                                  <img 
-                                    src={item.poster || "/placeholder.png"} 
-                                    alt={item.title}
-                                    className="w-12 h-16 object-cover rounded flex-shrink-0 border"
-                                  />
-                                  
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="min-w-0 flex-1">
-                                        <h4 className="font-medium text-sm leading-tight">{item.title}</h4>
-                                        {item.type === 'episode' && item.episodeTitle && (
-                                          <p className="text-xs text-muted-foreground mt-1 leading-tight">
-                                            {item.episodeTitle}
-                                          </p>
-                                        )}
-                                        <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                          {item.type === 'episode' ? (
-                                            <Badge variant="secondary" className="text-xs">
-                                              <Video className="w-3 h-3 mr-1" />
-                                              S{item.seasonNumber}E{item.episodeNumber}
-                                            </Badge>
-                                          ) : (
-                                            <Badge variant="secondary" className="text-xs">
-                                              <Film className="w-3 h-3 mr-1" />
-                                              {item.year && `${item.year}`}
-                                            </Badge>
-                                          )}
-                                          <span className="text-xs text-muted-foreground">
-                                            {item.duration > 0 ? (
-                                              `${Math.floor(item.duration / 3600000)}:${String(Math.floor((item.duration % 3600000) / 60000)).padStart(2, '0')}`
-                                            ) : (
-                                              '--:--'
-                                            )}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                {/* Mobile Actions */}
-                                <div className="flex items-center justify-between pt-2 border-t">
-                                  <div className="flex items-center gap-2">
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button 
-                                          variant="outline" 
-                                          size="sm"
-                                          className="h-8 px-3 touch-manipulation"
-                                          disabled={index === 0}
-                                          onClick={() => {
-                                            // Move up logic for mobile
-                                            const newOrder = [...getAllPrograms()];
-                                            const temp = newOrder[index];
-                                            newOrder[index] = newOrder[index - 1];
-                                            newOrder[index - 1] = temp;
-                                            // Handle reorder mutation here
-                                          }}
-                                        >
-                                          ↑
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>Move Up</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button 
-                                          variant="outline" 
-                                          size="sm"
-                                          className="h-8 px-3 touch-manipulation"
-                                          disabled={index === getAllPrograms().length - 1}
-                                          onClick={() => {
-                                            // Move down logic for mobile
-                                            const newOrder = [...getAllPrograms()];
-                                            const temp = newOrder[index];
-                                            newOrder[index] = newOrder[index + 1];
-                                            newOrder[index + 1] = temp;
-                                            // Handle reorder mutation here
-                                          }}
-                                        >
-                                          ↓
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>Move Down</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </div>
-                                  
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button 
-                                        variant="destructive" 
-                                        size="sm"
-                                        className="h-8 px-3 touch-manipulation"
-                                        onClick={() => {
-                                          if (item.type === 'movie' && item.channelMovieId) {
-                                            handleRemoveMovie(item.movieId);
-                                          } else if ((item.type === 'episode' || item.type === 'show') && item.channelShowId) {
-                                            handleRemoveShow(item.showId);
-                                          }
-                                        }}
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Remove</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Desktop Drag-and-Drop List */}
-                          <div className="hidden md:block flex-1 min-h-0">
-                            <DragDropContext onDragEnd={onDragEnd}>
-                              <Droppable droppableId="programs">
-                                {(provided) => (
-                                  <div
-                                    {...provided.droppableProps}
-                                    ref={provided.innerRef}
-                                    className="space-y-1 h-full overflow-y-auto px-6 pb-6"
-                                  >
-                                    {getAllPrograms().map((item: any, index) => (
-                                      <Draggable key={item.id} draggableId={item.id} index={index}>
-                                        {(provided, snapshot) => (
-                                          <div
-                                            ref={provided.innerRef}
-                                            {...provided.draggableProps}
-                                            className={`bg-background border rounded-lg overflow-hidden transition-all ${
-                                              snapshot.isDragging 
-                                                ? 'shadow-lg ring-2 ring-primary/20 rotate-1' 
-                                                : 'hover:shadow-sm'
-                                            }`}
-                                          >
-                                            <div className="flex items-center p-2">
-                                              {/* Drag Handle */}
-                                              <div 
-                                                {...provided.dragHandleProps}
-                                                className="w-6 flex justify-center mr-2 cursor-grab active:cursor-grabbing"
-                                                title="Drag to reorder"
-                                              >
-                                                <Move className="w-3 h-3 text-muted-foreground" />
-                                              </div>
-
-                                              {/* Order Number */}
-                                              <div className="w-6 text-center mr-2">
-                                                <Badge variant="outline" className="text-xs w-5 h-5 p-0 flex items-center justify-center">
-                                                  {index + 1}
-                                                </Badge>
-                                              </div>
-
-                                              {/* Content Type Icon */}
-                                              <div className="w-6 flex justify-center mr-2">
-                                                {item.type === 'episode' ? (
-                                                  <Video className="w-3 h-3 text-blue-500" />
-                                                ) : item.type === 'movie' ? (
-                                                  <Film className="w-3 h-3 text-orange-500" />
-                                                ) : (
-                                                  <Video className="w-3 h-3 text-green-500" />
-                                                )}
-                                              </div>
-
-                                              {/* Poster */}
-                                              <img 
-                                                src={item.poster || "/placeholder.png"} 
-                                                alt={item.title}
-                                                className="w-8 h-10 object-cover rounded mr-3 border flex-shrink-0"
-                                              />
-
-                                              {/* Content Info */}
-                                              <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                  <h4 className="font-medium truncate text-sm">{item.title}</h4>
-                                                  {item.type === 'episode' && (
-                                                    <Badge variant="secondary" className="text-xs px-1 py-0 h-4 flex-shrink-0">
-                                                      S{item.seasonNumber}E{item.episodeNumber}
-                                                    </Badge>
-                                                  )}
-                                                  {item.type === 'movie' && item.year && (
-                                                    <Badge variant="secondary" className="text-xs px-1 py-0 h-4 flex-shrink-0">
-                                                      {item.year}
-                                                    </Badge>
-                                                  )}
-                                                </div>
-                                                
-                                                {item.type === 'episode' && item.episodeTitle && (
-                                                  <p className="text-xs text-muted-foreground truncate">
-                                                    {item.episodeTitle}
-                                                  </p>
-                                                )}
-                                              </div>
-
-                                              {/* Duration */}
-                                              <div className="text-right text-xs mr-3 flex-shrink-0">
-                                                <div className="font-mono font-medium">
-                                                  {item.duration > 0 ? (
-                                                    `${Math.floor(item.duration / 3600000)}:${String(Math.floor((item.duration % 3600000) / 60000)).padStart(2, '0')}`
-                                                  ) : (
-                                                    '--:--'
-                                                  )}
-                                                </div>
-                                              </div>
-
-                                              {/* Actions */}
-                                              <div className="flex items-center gap-1 flex-shrink-0">
-                                                {(item.type === 'movie' && item.channelMovieId) && (
-                                                  <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                      <Button 
-                                                        variant="ghost" 
-                                                        size="sm"
-                                                        className="h-6 w-6 p-0"
-                                                        onClick={() => handleRemoveMovie(item.movieId)}
-                                                      >
-                                                        <Trash2 className="w-3 h-3 text-destructive" />
-                                                      </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                      <p>Remove Movie from Channel</p>
-                                                    </TooltipContent>
-                                                  </Tooltip>
-                                                )}
-                                                {(item.type === 'episode' && item.channelShowId) && (
-                                                  <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                      <Button 
-                                                        variant="ghost" 
-                                                        size="sm"
-                                                        className="h-6 w-6 p-0"
-                                                        onClick={() => handleRemoveShow(item.showId)}
-                                                      >
-                                                        <Trash2 className="w-3 h-3 text-destructive" />
-                                                      </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                      <p>Remove Show from Channel</p>
-                                                    </TooltipContent>
-                                                  </Tooltip>
-                                                )}
-                                                {(item.type === 'show' && item.channelShowId) && (
-                                                  <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                      <Button 
-                                                        variant="ghost" 
-                                                        size="sm"
-                                                        className="h-6 w-6 p-0"
-                                                        onClick={() => handleRemoveShow(item.showId)}
-                                                      >
-                                                        <Trash2 className="w-3 h-3 text-destructive" />
-                                                      </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                      <p>Remove Show from Channel</p>
-                                                    </TooltipContent>
-                                                  </Tooltip>
-                                                )}
-                                                <Tooltip>
-                                                  <TooltipTrigger asChild>
-                                                    <Button 
-                                                      variant="ghost" 
-                                                      size="sm"
-                                                      className="h-6 w-6 p-0"
-                                                      disabled
-                                                    >
-                                                      <Settings className="w-3 h-3" />
-                                                    </Button>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent>
-                                                    <p>View Details</p>
-                                                  </TooltipContent>
-                                                </Tooltip>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
-                                      </Draggable>
-                                    ))}
-                                    {provided.placeholder}
-                                  </div>
-                                )}
-                              </Droppable>
-                            </DragDropContext>
-                          </div>
+                          <ChannelProgrammingList
+                            channelId={selectedChannelId!}
+                            lineup={lineup}
+                            onLineupDragEnd={handleLineupDragEnd}
+                            onEpisodeDragEnd={handleEpisodeDragEnd}
+                            onRemoveShow={handleRemoveShow}
+                            onRemoveMovie={handleRemoveMovie}
+                            isReorderPending={reorderContentMutation.isPending || reorderEpisodesMutation.isPending}
+                          />
                         </div>
-                      )}
+                      ) : null}
                     </CardContent>
                   </Card>
                 </TabsContent>
 
                 {/* Schedule Tab */}
-                <TabsContent value="schedule" className="flex-1 flex flex-col min-h-0">
-                  <Card className="h-full flex flex-col">
+                <TabsContent value="schedule">
+                  <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Clock className="w-5 h-5" />
@@ -3952,8 +3325,8 @@ function ChannelsPageContent() {
                 </TabsContent>
 
                 {/* Filler Tab */}
-                <TabsContent value="filler" className="flex-1 flex flex-col min-h-0">
-                  <Card className="h-full flex flex-col">
+                <TabsContent value="filler">
+                  <Card>
                     <CardHeader>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <CardTitle className="flex items-center gap-2">
@@ -4001,9 +3374,9 @@ function ChannelsPageContent() {
         </div>
 
         {/* Sidebar - Programming Tools */}
-        {selectedChannelId && selectedChannelQuery.data && (
-          <div className="lg:col-span-1 min-h-0 overflow-y-auto">
-            <div className="space-y-4 sticky top-0 pb-4">
+        {selectedChannelId && selectedSummary && (
+          <div className="lg:col-span-1">
+            <div className="space-y-4 lg:sticky lg:top-0 pb-4">
             {/* Mobile Collapsible Quick Actions */}
             <div className="md:hidden">
               <Card>
@@ -4025,7 +3398,7 @@ function ChannelsPageContent() {
                     className="w-full touch-manipulation" 
                     variant="outline"
                     onClick={() => handleSmartShuffle('shuffle-all')}
-                    disabled={reorderContentMutation.isPending || getAllPrograms().length === 0}
+                    disabled={reorderContentMutation.isPending || lineupItems.length === 0}
                   >
                     <Shuffle className="w-4 h-4 mr-2" />
                     {reorderContentMutation.isPending ? "Shuffling..." : "Quick Shuffle"}
@@ -4052,7 +3425,7 @@ function ChannelsPageContent() {
                           handleSmartShuffle(value);
                         }
                       }}
-                      disabled={regenerateScheduleMutation.isPending || reorderContentMutation.isPending || getAllPrograms().length === 0}
+                      disabled={regenerateScheduleMutation.isPending || reorderContentMutation.isPending || lineupItems.length === 0}
                     >
                       <SelectTrigger className="w-full touch-manipulation">
                         <SelectValue placeholder={
@@ -4078,7 +3451,7 @@ function ChannelsPageContent() {
                         </SelectItem>
                         
                         {/* Current Auto-Sort Status */}
-                        {selectedChannelQuery.data?.autoSortMethod && (
+                        {lineup?.autoSortMethod && (
                           <>
                             <div className="border-t my-1"></div>
                             <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -4087,7 +3460,7 @@ function ChannelsPageContent() {
                             <SelectItem value="clear-auto-sort">
                               <div className="flex items-center gap-2">
                                 <X className="w-4 h-4" />
-                                <span>Clear Auto-Sort ({getAutoSortDisplayName(selectedChannelQuery.data.autoSortMethod)})</span>
+                                <span>Clear Auto-Sort ({getAutoSortDisplayName(lineup!.autoSortMethod)})</span>
                               </div>
                             </SelectItem>
                             <div className="border-t my-1"></div>
@@ -4271,9 +3644,9 @@ function ChannelsPageContent() {
           isOpen={showAddDialog}
           onClose={() => setShowAddDialog(false)}
           channelId={selectedChannelId}
-          existingShows={selectedChannelQuery.data ? (selectedChannelQuery.data as any).channelShows || [] : []}
-          existingMovies={selectedChannelQuery.data ? (selectedChannelQuery.data as any).channelMovies || [] : []}
-          existingChannelData={selectedChannelQuery.data}
+          existingShows={lineup?.channelShows || []}
+          existingMovies={lineup?.channelMovies || []}
+          existingChannelData={lineup ?? undefined}
           onAddShows={handleAddShow}
           onAddMovies={handleAddMovie}
           onSaveAutomation={handleSaveAutomation}
@@ -4342,7 +3715,7 @@ function BulkCreateFromCollections() {
 
   const [groupTitle, setGroupTitle] = useState("");
   const collectionsQuery = useQuery(orpc.library.collections.queryOptions({ input: { search, limit: 200, offset: 0 } }));
-  const channelsForMerge = useQuery(orpc.channels.list.queryOptions());
+  const channelsForMerge = useQuery(orpc.channels.listSummary.queryOptions());
   const [previewPlan, setPreviewPlan] = useState<any[] | null>(null);
   const [conflicts, setConflicts] = useState<any[] | null>(null);
   const [showResolve, setShowResolve] = useState(false);

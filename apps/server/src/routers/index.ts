@@ -3,6 +3,9 @@ import { protectedProcedure, publicProcedure } from "../lib/orpc";
 import { prisma } from "../lib/prisma";
 import { requireAdminAsync } from "../lib/admin-auth";
 import { viewingHistoryService } from "../lib/viewing-history-service";
+import { buildChannelsListSummary, getChannelLineup, getChannelShowEpisodes } from "../lib/channel-queries";
+import { guideRouter } from "./guide-router";
+import { libraryRouter } from "./library-router";
 
 export const appRouter = {
   healthCheck: publicProcedure.handler(() => {
@@ -18,34 +21,11 @@ export const appRouter = {
   // Channel Management
   channels: {
     list: publicProcedure.handler(async () => {
-      return await prisma.channel.findMany({
-        include: {
-          programs: {
-            include: {
-              episode: {
-                include: { show: true }
-              },
-              movie: true
-            }
-          },
-          channelShows: {
-            include: { 
-              show: {
-                include: {
-                  episodes: true,
-                  _count: {
-                    select: { episodes: true }
-                  }
-                }
-              }
-            }
-          },
-          channelMovies: {
-            include: { movie: true }
-          }
-        },
-        orderBy: { number: 'asc' }
-      });
+      return buildChannelsListSummary();
+    }),
+
+    listSummary: publicProcedure.handler(async () => {
+      return buildChannelsListSummary();
     }),
 
     createFromCollections: protectedProcedure
@@ -199,36 +179,77 @@ export const appRouter = {
       }),
 
     get: publicProcedure
-      .input(z.object({ id: z.string() }))
+      .input(
+        z.object({
+          id: z.string(),
+          includePrograms: z.boolean().optional().default(false),
+          programHoursAhead: z.number().min(1).max(168).optional().default(48),
+          includeChannelShows: z.boolean().optional().default(true),
+          includeChannelMovies: z.boolean().optional().default(true),
+        }),
+      )
       .handler(async ({ input }) => {
-        return await prisma.channel.findUnique({
+        const now = new Date();
+        const programEnd = new Date(
+          now.getTime() + input.programHoursAhead * 60 * 60 * 1000,
+        );
+
+        return prisma.channel.findUnique({
           where: { id: input.id },
           include: {
-            programs: {
-              include: {
-                episode: {
-                  include: { show: true }
-                },
-                movie: true
-              }
-            },
-            channelShows: {
-              include: { 
-                show: {
-                  include: {
-                    episodes: true,
-                    _count: {
-                      select: { episodes: true }
-                    }
-                  }
+            ...(input.includePrograms
+              ? {
+                  programs: {
+                    where: {
+                      startTime: { gte: now, lte: programEnd },
+                    },
+                    include: {
+                      episode: { include: { show: true } },
+                      movie: true,
+                    },
+                    orderBy: { startTime: "asc" },
+                  },
                 }
-              }
-            },
-            channelMovies: {
-              include: { movie: true }
-            }
-          }
+              : {}),
+            ...(input.includeChannelShows
+              ? {
+                  channelShows: {
+                    include: {
+                      show: {
+                        include: {
+                          _count: { select: { episodes: true } },
+                        },
+                      },
+                    },
+                  },
+                }
+              : {}),
+            ...(input.includeChannelMovies
+              ? {
+                  channelMovies: {
+                    include: { movie: true },
+                  },
+                }
+              : {}),
+          },
         });
+      }),
+
+    getLineup: publicProcedure
+      .input(z.object({ id: z.string() }))
+      .handler(async ({ input }) => {
+        return getChannelLineup(input.id);
+      }),
+
+    getShowEpisodes: publicProcedure
+      .input(
+        z.object({
+          channelId: z.string(),
+          showId: z.string(),
+        }),
+      )
+      .handler(async ({ input }) => {
+        return getChannelShowEpisodes(input.channelId, input.showId);
       }),
 
     create: protectedProcedure
@@ -1082,6 +1103,27 @@ export const appRouter = {
       });
     }),
 
+    listForLibrary: protectedProcedure.handler(async () => {
+      return await prisma.mediaServer.findMany({
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          active: true,
+          libraries: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              _count: {
+                select: { shows: true, movies: true },
+              },
+            },
+          },
+        },
+      });
+    }),
+
     create: protectedProcedure
       .input(z.object({
         name: z.string(),
@@ -1214,7 +1256,8 @@ export const appRouter = {
         uri: z.string().url(),
         accessToken: z.string(),
         arGuide: z.boolean().optional().default(false),
-        arChannels: z.boolean().optional().default(false)
+        arChannels: z.boolean().optional().default(false),
+        skipInitialLibrarySync: z.boolean().optional().default(false),
       }))
       .handler(async ({ input }) => {
         const { PlexService } = await import('../lib/plex-service');
@@ -1248,8 +1291,18 @@ export const appRouter = {
         createdAt: number;
       }>> => {
         const { PlexAPI } = await import('../lib/plex');
+        const {
+          isPlexLibrarySyncable,
+          normalizePlexLibraryKey,
+        } = await import('../lib/plex-service');
         const plex = new PlexAPI({ uri: input.url });
-        return await plex.getLibraries(input.url, input.token);
+        const libraries = await plex.getLibraries(input.url, input.token);
+        return libraries
+          .filter((lib) => isPlexLibrarySyncable(lib.type))
+          .map((lib) => ({
+            ...lib,
+            key: normalizePlexLibraryKey(lib.key),
+          }));
       }),
 
     syncLibrariesFast: protectedProcedure
@@ -1270,189 +1323,7 @@ export const appRouter = {
       })
   },
 
-  // Library Management
-  library: {
-    debug: publicProcedure.handler(async () => {
-      const servers = await prisma.mediaServer.findMany({
-        include: {
-          libraries: {
-            include: {
-              shows: true,
-              movies: true
-            }
-          }
-        }
-      });
-      
-      const allLibraries = await prisma.mediaLibrary.findMany({
-        include: {
-          shows: true,
-          movies: true,
-          server: true
-        }
-      });
-      
-      return {
-        servers,
-        libraries: allLibraries,
-        counts: {
-          servers: servers.length,
-          libraries: allLibraries.length,
-          shows: await prisma.mediaShow.count(),
-          movies: await prisma.mediaMovie.count()
-        }
-      };
-    }),
-
-    shows: publicProcedure
-      .input(z.object({
-        libraryId: z.string().optional(),
-        search: z.string().optional(),
-        collection: z.string().optional(),
-        limit: z.number().default(50),
-        offset: z.number().default(0)
-      }))
-      .handler(async ({ input }) => {
-        const where: any = {};
-        if (input.libraryId) where.libraryId = input.libraryId;
-        if (input.search) {
-          where.title = { contains: input.search, mode: 'insensitive' };
-        }
-        if (input.collection) {
-          where.collections = { contains: `"${input.collection}"` };
-        }
-
-        return await prisma.mediaShow.findMany({
-          where,
-          include: {
-            library: true,
-            episodes: {
-              orderBy: [
-                { seasonNumber: 'asc' },
-                { episodeNumber: 'asc' }
-              ]
-            }
-          },
-          take: input.limit,
-          skip: input.offset,
-          orderBy: { title: 'asc' }
-        });
-      }),
-
-    movies: publicProcedure
-      .input(z.object({
-        libraryId: z.string().optional(),
-        search: z.string().optional(),
-        collection: z.string().optional(),
-        limit: z.number().default(50),
-        offset: z.number().default(0)
-      }))
-      .handler(async ({ input }) => {
-        const where: any = {};
-        if (input.libraryId) where.libraryId = input.libraryId;
-        if (input.search) {
-          where.title = { contains: input.search, mode: 'insensitive' };
-        }
-        if (input.collection) {
-          where.collections = { contains: `"${input.collection}"` };
-        }
-
-        return await prisma.mediaMovie.findMany({
-          where,
-          include: {
-            library: true
-          },
-          take: input.limit,
-          skip: input.offset,
-          orderBy: { title: 'asc' }
-        });
-      }),
-
-    episodes: publicProcedure
-      .input(z.object({
-        showId: z.string(),
-        season: z.number().optional()
-      }))
-      .handler(async ({ input }) => {
-        const where: any = { showId: input.showId };
-        if (input.season) where.seasonNumber = input.season;
-
-        return await prisma.mediaEpisode.findMany({
-          where,
-          include: { show: true },
-          orderBy: [
-            { seasonNumber: 'asc' },
-            { episodeNumber: 'asc' }
-          ]
-        });
-      }),
-
-    // NEW: Collections endpoint
-    collections: publicProcedure
-      .input(z.object({
-        search: z.string().optional(),
-        limit: z.number().default(50),
-        offset: z.number().default(0)
-      }))
-      .handler(async ({ input }: { input: { search?: string; limit: number; offset: number } }) => {
-        const { search = undefined, limit, offset } = input;
-
-        // Fetch collections from both movies and shows
-        const [movieCollections, showCollections] = await Promise.all([
-          prisma.mediaMovie.findMany({
-            where: {
-              collections: { not: null }
-            },
-            select: { collections: true }
-          }),
-          prisma.mediaShow.findMany({
-            where: {
-              collections: { not: null }
-            },
-            select: { collections: true }
-          })
-        ]);
-
-        // Helper to add collections to the map with counts
-        const collectionMap: Map<string, number> = new Map();
-        const addCollections = (raw: { collections: string | null }[]) => {
-          raw.forEach(item => {
-            if (!item.collections) return;
-            try {
-              const cols = JSON.parse(item.collections) as unknown;
-              if (Array.isArray(cols)) {
-                cols.forEach(col => {
-                  if (typeof col === 'string' && col.trim()) {
-                    const key = col.trim();
-                    collectionMap.set(key, (collectionMap.get(key) || 0) + 1);
-                  }
-                });
-              }
-            } catch (_) {
-              // Ignore invalid JSON
-            }
-          });
-        };
-
-        addCollections(movieCollections);
-        addCollections(showCollections);
-
-        type CollectionStat = { name: string; count: number };
-
-        let result: CollectionStat[] = Array.from(collectionMap.entries()).map(([name, count]) => ({ name, count }));
-        // Apply search filter
-        if (search) {
-          const term = search.toLowerCase();
-          result = result.filter(c => c.name.toLowerCase().includes(term));
-        }
-
-        // Sort alphabetically
-        result.sort((a, b) => a.name.localeCompare(b.name));
-
-        // Pagination using offset & limit
-        return result.slice(offset, offset + limit);
-      })
-  },
+  library: libraryRouter,
 
   // Catchup / Timeshift
   catchup: {
@@ -1467,21 +1338,32 @@ export const appRouter = {
       .input(z.object({
         channelNumber: z.number(),
         time: z.string(), // ISO-8601
+        programId: z.string().optional(),
       }))
       .handler(async ({ input }) => {
         const { CatchupService } = await import('../lib/catchup-service');
-        const requestedTime = new Date(input.time);
-        const info = await CatchupService.getCatchupStreamInfo(input.channelNumber, requestedTime);
-        if (!info) {
+        const requestedTime = input.time ? new Date(input.time) : undefined;
+        const resolved = await CatchupService.resolveCatchupRequest(
+          input.channelNumber,
+          {
+            requestedTime,
+            programId: input.programId,
+          },
+        );
+        if (!resolved) {
           throw new Error('No catchup stream available for the requested time');
         }
+        const { program, seekOffsetMs, remainingMs } = resolved;
         return {
-          programId: info.program.id,
-          programTitle: info.program.title,
-          seekOffset: Math.floor(info.seekOffsetMs / 1000),
-          remainingMs: info.remainingMs,
-          programStartTime: info.program.startTime,
-          programDuration: info.remainingMs,
+          programId: program.id,
+          programTitle: CatchupService.getProgramTitle(program),
+          seekOffset: Math.floor(seekOffsetMs / 1000),
+          remainingMs,
+          programStartTime: program.startTime.toISOString(),
+          programEndTime: new Date(
+            program.startTime.getTime() + program.duration,
+          ).toISOString(),
+          catchupExpiry: program.catchupExpiry?.toISOString() ?? null,
         };
       }),
 
@@ -1494,68 +1376,7 @@ export const appRouter = {
       }),
   },
 
-  // Programming/Guide
-  guide: {
-    current: publicProcedure.handler(async () => {
-      // Get guide days setting
-      const settings = await prisma.settings.findUnique({
-        where: { id: "singleton" }
-      });
-      const guideDays = settings?.guideDays || 3; // Default to 3 days
-      
-      const now = new Date();
-      const endTime = new Date(now.getTime() + guideDays * 24 * 60 * 60 * 1000); // Use guideDays setting
-      // Look back up to 48 hours for catchup-eligible programs
-      const lookbackMs = 48 * 60 * 60 * 1000;
-
-      return await prisma.program.findMany({
-        where: {
-          startTime: { lte: endTime },
-          AND: {
-            startTime: { gte: new Date(now.getTime() - lookbackMs) }
-          }
-        },
-        include: {
-          channel: true,
-          episode: {
-            include: { show: true }
-          },
-          movie: true
-        },
-        orderBy: [
-          { channel: { number: 'asc' } },
-          { startTime: 'asc' }
-        ]
-      });
-    }),
-
-    channel: publicProcedure
-      .input(z.object({
-        channelId: z.string(),
-        hours: z.number().default(12)
-      }))
-      .handler(async ({ input }) => {
-        const now = new Date();
-        const endTime = new Date(now.getTime() + input.hours * 60 * 60 * 1000);
-
-        return await prisma.program.findMany({
-          where: {
-            channelId: input.channelId,
-            startTime: { 
-              gte: now,
-              lte: endTime 
-            }
-          },
-          include: {
-            episode: {
-              include: { show: true }
-            },
-            movie: true
-          },
-          orderBy: { startTime: 'asc' }
-        });
-      })
-  },
+  guide: guideRouter,
 
   // Programming Management
   programming: {
@@ -1658,7 +1479,7 @@ export const appRouter = {
       .input(z.object({
         port: z.number().optional(),
         ffmpegPath: z.string().optional(), // Temporary for compatibility
-        concurrentStreams: z.number().optional(),
+        concurrentStreams: z.number().min(0).max(99).optional(),
         hdhrActive: z.boolean().optional(),
         hdhrDeviceId: z.string().optional(),
         hdhrFriendlyName: z.string().optional(),

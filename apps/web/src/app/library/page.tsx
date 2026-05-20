@@ -2,80 +2,276 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { HEAVY_QUERY_OPTIONS, LIBRARY_LIST_OPTIONS } from "@/utils/query-options";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { OptimizedPoster } from "@/components/ui/optimized-poster";
-import { Library, Plus, Folder, File, Video, Search, Film, Tv, Music } from "lucide-react";
-import { useState } from "react";
+import {
+  LibraryMediaCard,
+  LIBRARY_MEDIA_GRID_CLASS,
+} from "@/components/library/LibraryMediaCard";
+import { LibraryActiveFilters } from "@/components/library/LibraryActiveFilters";
+import {
+  LibraryStatsRow,
+  type CollectionSummaryItem,
+  type LibrarySummaryItem,
+  type ServerSummaryItem,
+} from "@/components/library/LibraryStatsRow";
+import type { LibraryContentView } from "@/types/library-filters";
+import { Library, Plus, Video, Search, Loader2 } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { useDebounce } from "use-debounce";
+
+const PAGE_SIZE = 50;
+const SEARCH_MIN_LENGTH = 2;
+
+type LibraryListShow = {
+  id: string;
+  title: string;
+  year: number | null;
+  poster: string | null;
+  library: { id: string; name: string };
+  _count?: { episodes: number };
+  episodes?: unknown[];
+};
+
+type LibraryListMovie = {
+  id: string;
+  title: string;
+  year: number | null;
+  poster: string | null;
+  library: { id: string; name: string };
+};
+
+type LibraryServerRow = {
+  id: string;
+  name: string;
+  type: string;
+  active: boolean;
+  libraries: {
+    id: string;
+    name: string;
+    type: string;
+    _count: { shows: number; movies: number };
+  }[];
+};
+
+function getEpisodeCount(show: LibraryListShow): number {
+  return show._count?.episodes ?? show.episodes?.length ?? 0;
+}
+
+function ContentGridSkeleton({ titleWidth }: { titleWidth: string }) {
+  return (
+    <div>
+      <div className={`h-7 bg-muted rounded ${titleWidth} mb-3 animate-pulse`} />
+      <div className={LIBRARY_MEDIA_GRID_CLASS}>
+        {Array.from({ length: 18 }).map((_, i) => (
+          <div key={i} className="overflow-hidden rounded-md border border-border/50">
+            <div className="aspect-[2/3] bg-muted animate-pulse" />
+            <div className="px-2 py-1.5 space-y-1">
+              <div className="h-3 bg-muted rounded animate-pulse" />
+              <div className="h-2.5 bg-muted rounded w-2/3 animate-pulse" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch] = useDebounce(searchQuery, 300);
   const [selectedLibrary, setSelectedLibrary] = useState<string>("");
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
+  const [contentView, setContentView] = useState<LibraryContentView>("all");
+  const [collectionsMenuOpen, setCollectionsMenuOpen] = useState(false);
+  const [showsLimit, setShowsLimit] = useState(PAGE_SIZE);
+  const [moviesLimit, setMoviesLimit] = useState(PAGE_SIZE);
+  const contentRef = useRef<HTMLDivElement>(null);
 
-  // Fetch servers with libraries
-  const serversQuery = useQuery(orpc.servers.list.queryOptions());
-  
-  // Debug query to see what's actually in the database
-  const debugQuery = useQuery(orpc.library.debug.queryOptions());
-  
-  // Fetch shows and movies
-  const showsQuery = useQuery(orpc.library.shows.queryOptions({
-    input: {
-      search: searchQuery || undefined,
-      libraryId: selectedLibrary || undefined,
-      limit: 20000 // Large limit to get all content
-    }
-  }));
-  
-  const moviesQuery = useQuery(orpc.library.movies.queryOptions({
-    input: {
-      search: searchQuery || undefined,
-      libraryId: selectedLibrary || undefined,
-      limit: 10000 // Large limit to get all content
-    }
-  }));
+  const isSearchMode = debouncedSearch.trim().length >= SEARCH_MIN_LENGTH;
+  const collectionFilter = selectedCollection ?? undefined;
 
-  // NEW: Fetch collections
-  const collectionsQuery = useQuery(orpc.library.collections.queryOptions({
-    input: {
-      search: searchQuery || undefined,
-      limit: 10000
-    }
-  }));
-
-  // Loading states
-  const isLoading = serversQuery.isLoading || showsQuery.isLoading || moviesQuery.isLoading || collectionsQuery.isLoading;
-  const hasError = serversQuery.error || showsQuery.error || moviesQuery.error || collectionsQuery.error;
-
-  // Calculate totals
-  const servers = serversQuery.data || [];
-  const allLibraries = servers.flatMap(server => server.libraries || []);
-  const totalShows = showsQuery.data?.length || 0;
-  const totalMovies = moviesQuery.data?.length || 0;
-  const totalVideos = totalShows + totalMovies;
-  const totalCollections = collectionsQuery.data?.length || 0;
-
-  const getLibraryIcon = (type: string) => {
-    switch (type) {
-      case 'MOVIE': return Film;
-      case 'SHOW': return Tv;
-      case 'MUSIC': return Music;
-      default: return Folder;
-    }
+  const filterInput = {
+    libraryId: selectedLibrary || undefined,
+    search: isSearchMode ? debouncedSearch.trim() : undefined,
+    collection: collectionFilter,
   };
 
-  const getLibraryColor = (type: string) => {
-    switch (type) {
-      case 'MOVIE': return 'bg-blue-600';
-      case 'SHOW': return 'bg-green-600';
-      case 'MUSIC': return 'bg-purple-600';
-      default: return 'bg-gray-600';
-    }
+  const scrollToContent = useCallback(() => {
+    contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const statsQuery = useQuery({
+    ...orpc.library.stats.queryOptions({ input: filterInput }),
+    ...LIBRARY_LIST_OPTIONS,
+  });
+
+  const serversQuery = useQuery({
+    ...orpc.servers.listForLibrary.queryOptions(),
+    ...LIBRARY_LIST_OPTIONS,
+  });
+
+  const showShowsSection = contentView === "all" || contentView === "shows";
+  const showMoviesSection = contentView === "all" || contentView === "movies";
+
+  const showsQuery = useQuery({
+    ...orpc.library.shows.queryOptions({
+      input: {
+        libraryId: selectedLibrary || undefined,
+        collection: collectionFilter,
+        limit: showsLimit,
+        offset: 0,
+      },
+    }),
+    ...HEAVY_QUERY_OPTIONS,
+    enabled: !isSearchMode && showShowsSection,
+  });
+
+  const moviesQuery = useQuery({
+    ...orpc.library.movies.queryOptions({
+      input: {
+        libraryId: selectedLibrary || undefined,
+        collection: collectionFilter,
+        limit: moviesLimit,
+        offset: 0,
+      },
+    }),
+    ...HEAVY_QUERY_OPTIONS,
+    enabled: !isSearchMode && showMoviesSection,
+  });
+
+  const searchQueryResult = useQuery({
+    ...orpc.library.search.queryOptions({
+      input: {
+        query: debouncedSearch.trim(),
+        libraryId: selectedLibrary || undefined,
+        collection: collectionFilter,
+        limit: 200,
+      },
+    }),
+    ...HEAVY_QUERY_OPTIONS,
+    enabled: isSearchMode,
+  });
+
+  const collectionsQuery = useQuery({
+    ...orpc.library.collections.queryOptions({
+      input: { limit: 200 },
+    }),
+    ...HEAVY_QUERY_OPTIONS,
+    enabled:
+      collectionsMenuOpen ||
+      selectedCollection !== null ||
+      (statsQuery.data?.collectionCount ?? 0) > 0,
+  });
+
+  const resetPagination = useCallback(() => {
+    setShowsLimit(PAGE_SIZE);
+    setMoviesLimit(PAGE_SIZE);
+  }, []);
+
+  const handleContentViewChange = useCallback(
+    (view: LibraryContentView) => {
+      setContentView(view);
+      setSelectedCollection(null);
+      resetPagination();
+      scrollToContent();
+    },
+    [resetPagination, scrollToContent],
+  );
+
+  const handleLibrarySelect = useCallback(
+    (libraryId: string) => {
+      setSelectedLibrary(libraryId);
+      resetPagination();
+      scrollToContent();
+    },
+    [resetPagination, scrollToContent],
+  );
+
+  const handleCollectionSelect = useCallback(
+    (collectionName: string | null) => {
+      setSelectedCollection(collectionName);
+      setContentView("all");
+      resetPagination();
+      scrollToContent();
+    },
+    [resetPagination, scrollToContent],
+  );
+
+  const clearAllFilters = useCallback(() => {
+    setSearchQuery("");
+    setSelectedLibrary("");
+    setSelectedCollection(null);
+    setContentView("all");
+    resetPagination();
+  }, [resetPagination]);
+
+  const servers = (serversQuery.data ?? []) as LibraryServerRow[];
+  const allLibraries = servers.flatMap((server) => server.libraries ?? []);
+
+  const stats = statsQuery.data ?? {
+    showCount: 0,
+    movieCount: 0,
+    episodeCount: 0,
+    libraryCount: 0,
+    serverCount: 0,
+    collectionCount: 0,
   };
 
-  // Show error state
+  const librarySummaries: LibrarySummaryItem[] = allLibraries.map((library) => ({
+    id: library.id,
+    name: library.name,
+    type: library.type,
+    showCount: library._count?.shows ?? 0,
+    movieCount: library._count?.movies ?? 0,
+  }));
+
+  const serverSummaries: ServerSummaryItem[] = servers
+    .filter((server) => server.type === "PLEX")
+    .map((server) => ({
+      name: server.name,
+      type: server.type,
+      active: server.active,
+      libraryCount: server.libraries?.length ?? 0,
+    }));
+
+  const collectionSummaries: CollectionSummaryItem[] =
+    (collectionsQuery.data as CollectionSummaryItem[] | undefined) ?? [];
+
+  const selectedLibraryName =
+    allLibraries.find((lib) => lib.id === selectedLibrary)?.name ?? "";
+
+  const browseShows = (showsQuery.data?.items ?? []) as LibraryListShow[];
+  const browseMovies = (moviesQuery.data?.items ?? []) as LibraryListMovie[];
+  const searchShows = (searchQueryResult.data?.shows ?? []) as LibraryListShow[];
+  const searchMovies = (searchQueryResult.data?.movies ?? []) as LibraryListMovie[];
+
+  const shows = isSearchMode
+    ? searchShows
+    : browseShows;
+  const movies = isSearchMode
+    ? searchMovies
+    : browseMovies;
+
+  const visibleShows = showShowsSection ? shows : [];
+  const visibleMovies = showMoviesSection ? movies : [];
+
+  const totalShows = isSearchMode ? shows.length : (showsQuery.data?.total ?? 0);
+  const totalMovies = isSearchMode ? movies.length : (moviesQuery.data?.total ?? 0);
+  const hasMoreShows = !isSearchMode && shows.length < totalShows;
+  const hasMoreMovies = !isSearchMode && movies.length < totalMovies;
+
+  const showsLoading = isSearchMode ? searchQueryResult.isLoading : showsQuery.isLoading;
+  const moviesLoading = isSearchMode ? searchQueryResult.isLoading : moviesQuery.isLoading;
+
+  const hasError =
+    statsQuery.error ||
+    serversQuery.error ||
+    (isSearchMode ? searchQueryResult.error : showsQuery.error || moviesQuery.error);
+
   if (hasError) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -99,11 +295,18 @@ export default function LibraryPage() {
             <p className="text-muted-foreground text-center mb-6 max-w-md">
               There was an error loading your media library. Please check your Plex server connection and try again.
             </p>
-            <Button onClick={() => {
-              serversQuery.refetch();
-              showsQuery.refetch();
-              moviesQuery.refetch();
-            }}>
+            <Button
+              onClick={() => {
+                statsQuery.refetch();
+                serversQuery.refetch();
+                if (isSearchMode) {
+                  searchQueryResult.refetch();
+                } else {
+                  showsQuery.refetch();
+                  moviesQuery.refetch();
+                }
+              }}
+            >
               Try Again
             </Button>
           </CardContent>
@@ -114,8 +317,7 @@ export default function LibraryPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
             <Library className="w-5 h-5 text-white" />
@@ -127,71 +329,23 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      {/* Library Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Video className="w-5 h-5" />
-              Total Content
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalVideos}</div>
-            <p className="text-sm text-muted-foreground mt-1">
-              {totalShows} shows, {totalMovies} movies
-            </p>
-          </CardContent>
-        </Card>
+      <LibraryStatsRow
+        stats={stats}
+        libraries={librarySummaries}
+        servers={serverSummaries}
+        collections={collectionSummaries}
+        collectionsLoading={collectionsQuery.isLoading}
+        contentView={contentView}
+        activeLibraryId={selectedLibrary}
+        activeCollection={selectedCollection}
+        isLoading={statsQuery.isLoading}
+        onContentViewChange={handleContentViewChange}
+        onLibrarySelect={handleLibrarySelect}
+        onCollectionSelect={handleCollectionSelect}
+        onCollectionsOpenChange={setCollectionsMenuOpen}
+      />
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Folder className="w-5 h-5" />
-              Libraries
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{allLibraries.length}</div>
-            <p className="text-sm text-muted-foreground mt-1">
-              Synced from {servers.filter(s => s.type === 'PLEX').length} Plex servers
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <File className="w-5 h-5" />
-              Servers
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{servers.filter(s => s.type === 'PLEX' && s.active).length}</div>
-            <p className="text-sm text-muted-foreground mt-1">
-              Active Plex connections
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Folder className="w-5 h-5" />
-              Collections
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCollections}</div>
-            <p className="text-sm text-muted-foreground mt-1">
-              Plex collections detected
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {allLibraries.length === 0 ? (
-        /* Empty State */
+      {allLibraries.length === 0 && !serversQuery.isLoading ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Library className="w-16 h-16 text-muted-foreground mb-4" />
@@ -209,21 +363,36 @@ export default function LibraryPage() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {/* Search and Filter */}
+          <LibraryActiveFilters
+            contentView={contentView}
+            libraryName={selectedLibraryName}
+            collectionName={selectedCollection}
+            onClearContentView={() => handleContentViewChange("all")}
+            onClearLibrary={() => handleLibrarySelect("")}
+            onClearCollection={() => handleCollectionSelect(null)}
+            onClearAll={clearAllFilters}
+          />
+
           <div className="flex gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Search shows and movies..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  resetPagination();
+                }}
                 className="pl-10"
               />
             </div>
             <select
               value={selectedLibrary}
-              onChange={(e) => setSelectedLibrary(e.target.value)}
+              onChange={(e) => {
+                handleLibrarySelect(e.target.value);
+              }}
               className="px-3 py-2 border rounded-md bg-background"
+              disabled={serversQuery.isLoading}
             >
               <option value="">All Libraries</option>
               {allLibraries.map((library) => (
@@ -234,168 +403,164 @@ export default function LibraryPage() {
             </select>
           </div>
 
-          {/* Libraries Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {allLibraries.map((library) => {
-              const IconComponent = getLibraryIcon(library.type);
-              const colorClass = getLibraryColor(library.type);
-              
-              return (
-                <Card key={library.id}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-3">
-                      <div className={`w-8 h-8 ${colorClass} rounded-lg flex items-center justify-center`}>
-                        <IconComponent className="w-4 h-4 text-white" />
-                      </div>
-                      {library.name}
-                    </CardTitle>
-                    <CardDescription>
-                      <Badge variant="outline">{library.type}</Badge>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-sm text-muted-foreground">
-                      {library.shows?.length || 0} shows, {library.movies?.length || 0} movies
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+
+          <div ref={contentRef} className="space-y-8 scroll-mt-4">
+          {selectedCollection && (
+            <p className="text-sm text-muted-foreground">
+              Items in collection{" "}
+              <span className="font-medium text-foreground">{selectedCollection}</span>
+            </p>
+          )}
+
+          {showShowsSection && (showsLoading ? (
+            <ContentGridSkeleton titleWidth="w-32" />
+          ) : (
+            visibleShows.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold">TV Shows</h2>
+                  <span className="text-sm text-muted-foreground">
+                    {isSearchMode
+                      ? `${visibleShows.length} result${visibleShows.length === 1 ? "" : "s"}`
+                      : `Showing ${visibleShows.length} of ${totalShows}`}
+                  </span>
+                </div>
+                <div className={LIBRARY_MEDIA_GRID_CLASS}>
+                  {visibleShows.map((show, index) => {
+                    const yearPart = show.year ? `${show.year}` : "";
+                    const episodePart = `${getEpisodeCount(show)} ep`;
+                    const subtitle = [yearPart, episodePart].filter(Boolean).join(" · ");
+
+                    return (
+                      <LibraryMediaCard
+                        key={show.id}
+                        id={show.id}
+                        title={show.title}
+                        poster={show.poster}
+                        type="show"
+                        subtitle={subtitle || show.library?.name}
+                        priority={index < 8}
+                      />
+                    );
+                  })}
+                </div>
+                {hasMoreShows && (
+                  <div className="mt-4 flex justify-center">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowsLimit((l) => l + PAGE_SIZE)}
+                      disabled={showsQuery.isFetching}
+                    >
+                      {showsQuery.isFetching ? "Loading…" : "Load more"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )
+          ))}
+
+          {showMoviesSection && (moviesLoading ? (
+            <ContentGridSkeleton titleWidth="w-24" />
+          ) : (
+            visibleMovies.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold">Movies</h2>
+                  <span className="text-sm text-muted-foreground">
+                    {isSearchMode
+                      ? `${visibleMovies.length} result${visibleMovies.length === 1 ? "" : "s"}`
+                      : `Showing ${visibleMovies.length} of ${totalMovies}`}
+                  </span>
+                </div>
+                <div className={LIBRARY_MEDIA_GRID_CLASS}>
+                  {visibleMovies.map((movie, index) => (
+                    <LibraryMediaCard
+                      key={movie.id}
+                      id={movie.id}
+                      title={movie.title}
+                      poster={movie.poster}
+                      type="movie"
+                      subtitle={movie.year ? String(movie.year) : movie.library?.name}
+                      priority={index < 8}
+                    />
+                  ))}
+                </div>
+                {hasMoreMovies && (
+                  <div className="mt-4 flex justify-center">
+                    <Button
+                      variant="outline"
+                      onClick={() => setMoviesLimit((l) => l + PAGE_SIZE)}
+                      disabled={moviesQuery.isFetching}
+                    >
+                      {moviesQuery.isFetching ? "Loading…" : "Load more"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )
+          ))}
+
+          {stats.collectionCount > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold mb-3">Collections</h2>
+              {collectionsQuery.isLoading && collectionSummaries.length === 0 ? (
+                <div className="flex items-center gap-2 text-muted-foreground py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Loading collections…</span>
+                </div>
+              ) : collectionSummaries.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {collectionSummaries.map((col) => (
+                    <button
+                      key={col.name}
+                      type="button"
+                      onClick={() => handleCollectionSelect(col.name)}
+                      className="inline-flex"
+                    >
+                      <Badge
+                        variant={selectedCollection === col.name ? "default" : "outline"}
+                        className="px-3 py-1 text-sm cursor-pointer hover:bg-accent"
+                      >
+                        {col.name}{" "}
+                        <span className="ml-1 opacity-80">({col.count})</span>
+                      </Badge>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Click the collections icon above to browse collections.
+                </p>
+              )}
+            </div>
+          )}
           </div>
 
-          {/* Content Lists */}
-          {isLoading ? (
-            <div className="space-y-8">
-              {/* Shows Loading Skeleton */}
-              <div>
-                <div className="h-8 bg-gray-200 rounded w-32 mb-4 animate-pulse"></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                  {Array.from({ length: 12 }).map((_, i) => (
-                    <Card key={i} className="overflow-hidden">
-                      <CardContent className="p-4">
-                        <div className="aspect-[2/3] bg-gray-200 rounded-md mb-3 animate-pulse"></div>
-                        <div className="h-5 bg-gray-200 rounded mb-2 animate-pulse"></div>
-                        <div className="h-4 bg-gray-200 rounded w-3/4 mb-2 animate-pulse"></div>
-                        <div className="h-6 bg-gray-200 rounded w-16 animate-pulse"></div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Movies Loading Skeleton */}
-              <div>
-                <div className="h-8 bg-gray-200 rounded w-24 mb-4 animate-pulse"></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                  {Array.from({ length: 12 }).map((_, i) => (
-                    <Card key={i} className="overflow-hidden">
-                      <CardContent className="p-4">
-                        <div className="aspect-[2/3] bg-gray-200 rounded-md mb-3 animate-pulse"></div>
-                        <div className="h-5 bg-gray-200 rounded mb-2 animate-pulse"></div>
-                        <div className="h-4 bg-gray-200 rounded w-1/2 mb-2 animate-pulse"></div>
-                        <div className="h-6 bg-gray-200 rounded w-16 animate-pulse"></div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              {(showsQuery.data && showsQuery.data.length > 0) && (
-                <div>
-                  <h2 className="text-2xl font-bold mb-4">TV Shows</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                    {showsQuery.data.map((show, index) => (
-                      <Card key={show.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300">
-                        <CardContent className="p-4">
-                          <OptimizedPoster
-                            src={show.poster}
-                            alt={`${show.title} poster`}
-                            title={show.title}
-                            type="show"
-                            priority={index < 4} // Prioritize first 4 images
-                            className="mb-3"
-                          />
-                          <h3 className="font-semibold line-clamp-1">{show.title}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {show.year} • {show.episodes?.length || 0} episodes
-                          </p>
-                          <Badge variant="outline" className="mt-2">{show.library?.name}</Badge>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {(moviesQuery.data && moviesQuery.data.length > 0) && (
-                <div>
-                  <h2 className="text-2xl font-bold mb-4">Movies</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                    {moviesQuery.data.map((movie, index) => (
-                      <Card key={movie.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300">
-                        <CardContent className="p-4">
-                          <OptimizedPoster
-                            src={movie.poster}
-                            alt={`${movie.title} poster`}
-                            title={movie.title}
-                            type="movie"
-                            priority={index < 4} // Prioritize first 4 images
-                            className="mb-3"
-                          />
-                          <h3 className="font-semibold line-clamp-1">{movie.title}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {movie.year}
-                          </p>
-                          <Badge variant="outline" className="mt-2">{movie.library?.name}</Badge>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {(collectionsQuery.data && collectionsQuery.data.length > 0) && (
-                <div>
-                  <h2 className="text-2xl font-bold mb-4">Collections</h2>
-                  <div className="flex flex-wrap gap-2">
-                    {(collectionsQuery.data as { name: string; count: number }[]).map((col) => (
-                      <Badge key={col.name} variant="outline" className="px-3 py-1 text-sm">
-                        {col.name} <span className="ml-1 text-muted-foreground">({col.count})</span>
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* No content message */}
-              {!isLoading && showsQuery.data?.length === 0 && moviesQuery.data?.length === 0 && allLibraries.length > 0 && (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-16">
-                    <Video className="w-16 h-16 text-muted-foreground mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">No Content Found</h3>
-                    <p className="text-muted-foreground text-center mb-6 max-w-md">
-                      {searchQuery || selectedLibrary ? 
-                        "No shows or movies match your current search criteria. Try adjusting your filters." :
-                        "Your libraries are connected but no content has been synced yet. Check your Plex server settings."
-                      }
-                    </p>
-                    {(searchQuery || selectedLibrary) && (
-                      <Button onClick={() => {
-                        setSearchQuery("");
-                        setSelectedLibrary("");
-                      }}>
-                        Clear Filters
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          )}
+          {!showsLoading &&
+            !moviesLoading &&
+            visibleShows.length === 0 &&
+            visibleMovies.length === 0 &&
+            allLibraries.length > 0 && (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-16">
+                  <Video className="w-16 h-16 text-muted-foreground mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">No Content Found</h3>
+                  <p className="text-muted-foreground text-center mb-6 max-w-md">
+                    {searchQuery || selectedLibrary || selectedCollection || contentView !== "all"
+                      ? "No shows or movies match your current filters. Try adjusting or clearing them."
+                      : "Your libraries are connected but no content has been synced yet. Check your Plex server settings."}
+                  </p>
+                  {(searchQuery ||
+                    selectedLibrary ||
+                    selectedCollection ||
+                    contentView !== "all") && (
+                    <Button onClick={clearAllFilters}>Clear Filters</Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
         </div>
       )}
     </div>
   );
-} 
+}

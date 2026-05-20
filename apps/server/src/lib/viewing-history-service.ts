@@ -46,6 +46,7 @@ export class ViewingHistoryService {
   private viewerNameCache: Map<string, string> = new Map();
   private cacheTimestamp: number = 0;
   private cacheTTL: number = 60000; // 1 minute
+  private static readonly VIEWER_NAME_CACHE_MAX = 2000;
 
   static getInstance(): ViewingHistoryService {
     if (!ViewingHistoryService.instance) {
@@ -199,6 +200,7 @@ export class ViewingHistoryService {
         viewers.forEach((viewer) => {
           this.viewerNameCache.set(viewer.ipAddress, viewer.name);
         });
+        this.trimViewerNameCache();
       } catch (error) {
         console.error('[ViewingHistory] Failed to refresh viewer name cache:', error);
       }
@@ -623,6 +625,65 @@ export class ViewingHistoryService {
   clearCache(): void {
     this.viewerNameCache.clear();
     this.cacheTimestamp = 0;
+  }
+
+  trimViewerNameCache(): void {
+    if (this.viewerNameCache.size <= ViewingHistoryService.VIEWER_NAME_CACHE_MAX) {
+      return;
+    }
+    const excess =
+      this.viewerNameCache.size - ViewingHistoryService.VIEWER_NAME_CACHE_MAX;
+    const keysToRemove = [...this.viewerNameCache.keys()].slice(0, excess);
+    for (const key of keysToRemove) {
+      this.viewerNameCache.delete(key);
+    }
+  }
+
+  evictViewerNameCache(): void {
+    const now = Date.now();
+    if (now - this.cacheTimestamp >= this.cacheTTL) {
+      this.viewerNameCache.clear();
+      this.cacheTimestamp = 0;
+    } else {
+      this.trimViewerNameCache();
+    }
+  }
+
+  /**
+   * Delete viewing history and sessions older than configured retention.
+   */
+  async cleanupOldViewingHistory(): Promise<{
+    historyDeleted: number;
+    sessionsDeleted: number;
+  }> {
+    const settings = await prisma.settings.findUnique({
+      where: { id: "singleton" },
+      select: { viewingHistoryRetentionDays: true },
+    });
+    const retentionDays = Math.max(
+      1,
+      settings?.viewingHistoryRetentionDays ?? 90,
+    );
+    const cutoff = new Date(
+      Date.now() - retentionDays * 24 * 60 * 60 * 1000,
+    );
+
+    const historyResult = await prisma.viewingHistory.deleteMany({
+      where: { startTime: { lt: cutoff } },
+    });
+
+    const sessionsResult = await prisma.viewingSession.deleteMany({
+      where: { sessionStart: { lt: cutoff } },
+    });
+
+    console.log(
+      `[ViewingHistory] Pruned ${historyResult.count} history rows and ${sessionsResult.count} sessions older than ${retentionDays} days`,
+    );
+
+    return {
+      historyDeleted: historyResult.count,
+      sessionsDeleted: sessionsResult.count,
+    };
   }
 }
 

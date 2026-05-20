@@ -20,7 +20,7 @@ type Channel = {
 
 export default function Home() {
   const healthCheck = useQuery(orpc.healthCheck.queryOptions());
-  const channelsQuery = useQuery(orpc.channels.list.queryOptions());
+  const channelsQuery = useQuery(orpc.channels.listSummary.queryOptions());
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
   const serversQuery = useQuery(orpc.servers.list.queryOptions());
   const serverUrl = getServerUrl();

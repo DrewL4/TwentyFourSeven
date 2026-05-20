@@ -172,12 +172,18 @@ export default function SettingsPage() {
                     id="concurrentStreams"
                     type="number"
                     value={settings.concurrentStreams}
-                    onChange={(e) => setSettings(prev => ({ ...prev, concurrentStreams: parseInt(e.target.value) || 1 }))}
-                    min="1"
-                    max="10"
+                    onChange={(e) => {
+                      const parsed = parseInt(e.target.value, 10);
+                      setSettings(prev => ({
+                        ...prev,
+                        concurrentStreams: Number.isNaN(parsed) ? 0 : Math.max(0, parsed),
+                      }));
+                    }}
+                    min="0"
+                    max="99"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Maximum number of simultaneous streams
+                    Use 0 for no limit (recommended). Otherwise caps how many different channels can transcode at once; multiple viewers on the same channel never count extra.
                   </p>
                 </div>
               </div>

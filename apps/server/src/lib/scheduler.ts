@@ -1,5 +1,6 @@
 import { WatchTowerService } from "./watchtower-service";
 import { programmingService } from "./programming-service";
+import { viewingHistoryService } from "./viewing-history-service";
 
 class SchedulerService {
   private static instance: SchedulerService;
@@ -77,7 +78,8 @@ class SchedulerService {
         
         // Also cleanup old programs to prevent database bloat
         await programmingService.cleanupOldPrograms();
-        
+        await viewingHistoryService.cleanupOldViewingHistory();
+
       } catch (error) {
         console.error("❌ Programming maintenance failed:", error);
       }

@@ -62,6 +62,8 @@ model MediaShow {
   updatedAt   DateTime @updatedAt
   
   @@unique([libraryId, ratingKey])
+  @@index([libraryId, title])
+  @@index([title])
   @@map("media_show")
 }
 
@@ -117,6 +119,8 @@ model MediaMovie {
   updatedAt   DateTime @updatedAt
   
   @@unique([libraryId, ratingKey])
+  @@index([libraryId, title])
+  @@index([title])
   @@map("media_movie")
 }
 
@@ -207,7 +211,9 @@ model Program {
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
+  @@index([channelId, startTime])
+  @@index([startTime])
   @@map("program")
 }
 
@@ -288,6 +294,7 @@ model Settings {
   
   // Guide settings
   guideDays Int @default(3) // Number of days of guide data to generate
+  viewingHistoryRetentionDays Int @default(90) // Prune viewing history older than this
   
   // Global Catchup / Timeshift settings
   catchupEnabled        Boolean @default(true)   // Global toggle for catchup functionality

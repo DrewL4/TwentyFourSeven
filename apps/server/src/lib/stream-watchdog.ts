@@ -1,5 +1,7 @@
 import { streamMonitorService } from './stream-monitor-service';
 import { streamHealthMonitor } from './stream-health-monitor';
+import { streamRecoveryService } from './stream-recovery-service';
+import { viewingHistoryService } from './viewing-history-service';
 
 export class StreamWatchdog {
   private static instance: StreamWatchdog;
@@ -69,6 +71,10 @@ export class StreamWatchdog {
       if (cleaned > 0) {
         console.log(`[StreamWatchdog] Cleaned up ${cleaned} stale sessions`);
       }
+
+      streamHealthMonitor.evictProgramInfoCache();
+      streamRecoveryService.evictStaleCircuitBreakers();
+      viewingHistoryService.evictViewerNameCache();
 
       // Perform health checks on all active sessions
       const healthResults = await streamHealthMonitor.performHealthChecks();

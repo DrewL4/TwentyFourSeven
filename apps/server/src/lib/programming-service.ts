@@ -1,8 +1,38 @@
 import { prisma } from './prisma';
+import { TimingService } from './timing-service';
+import { invalidateXmlTvCache } from './xmltv-static-cache';
+import { scheduleXmlTvWarm } from './xmltv-warm';
+
+async function invalidateXmlTvCacheSafe() {
+  try {
+    await invalidateXmlTvCache();
+    scheduleXmlTvWarm();
+  } catch {
+    // non-fatal
+  }
+}
 
 export class ProgrammingService {
   private generationLocks = new Set<string>();
   private static globalLock = new Map<string, Promise<void>>();
+
+  private catchupFieldsForProgram(
+    channel: { catchupEnabled: boolean; catchupWindowHours: number },
+    startTime: Date,
+    duration: number,
+  ) {
+    if (!channel.catchupEnabled) {
+      return { catchupAvailable: false, catchupExpiry: null as Date | null };
+    }
+    const programEnd = new Date(startTime.getTime() + duration);
+    return {
+      catchupAvailable: true,
+      catchupExpiry: TimingService.calculateCatchupExpiry(
+        programEnd,
+        channel.catchupWindowHours,
+      ),
+    };
+  }
   
   /**
    * Check if a program would overlap with existing programs on the same channel
@@ -315,6 +345,7 @@ export class ProgrammingService {
         channelId,
         startTime: gapStart,
         duration: selectedContent.duration,
+        ...this.catchupFieldsForProgram(channel, gapStart, selectedContent.duration),
         ...(selectedContent.type === 'episode' ? { episodeId: selectedContent.content.id } : { movieId: selectedContent.content.id })
       });
     }
@@ -598,10 +629,12 @@ export class ProgrammingService {
       const item = validatedContent[contentIndex % validatedContent.length];
       
       // Create program entry with exact timing
+      const programStart = new Date(currentTime.getTime());
       const program = {
         channelId,
-        startTime: new Date(currentTime.getTime()), // Ensure exact millisecond precision
+        startTime: programStart,
         duration: item.duration,
+        ...this.catchupFieldsForProgram(channel, programStart, item.duration),
         ...(item.type === 'episode' 
           ? { episodeId: item.content.id }
           : { movieId: item.content.id }
@@ -652,6 +685,7 @@ export class ProgrammingService {
     }
 
     console.log(`Generated ${programs.length} programs for channel ${channel.name} (looped content ${Math.ceil(programs.length / validatedContent.length)} times)`);
+    await invalidateXmlTvCacheSafe();
   }
 
   /**
@@ -674,6 +708,7 @@ export class ProgrammingService {
         console.error(`Error generating programs for channel ${channel.name}:`, error);
       }
     }
+    await invalidateXmlTvCacheSafe();
   }
 
   /**
@@ -838,6 +873,7 @@ export class ProgrammingService {
         // Continue with other channels instead of failing completely
       }
     }
+    await invalidateXmlTvCacheSafe();
   }
 
   // Enhanced helper to append programs with content validation
@@ -936,10 +972,12 @@ export class ProgrammingService {
     const programs = [];
     while (currentTime < endTime) {
       const item = finalContent[contentIndex % finalContent.length];
+      const programStart = new Date(currentTime.getTime());
       const program = {
         channelId,
-        startTime: new Date(currentTime.getTime()),
+        startTime: programStart,
         duration: item.duration,
+        ...this.catchupFieldsForProgram(channel, programStart, item.duration),
         ...(item.type === 'episode' ? { episodeId: item.content.id } : { movieId: item.content.id })
       };
       programs.push(program);
@@ -956,15 +994,22 @@ export class ProgrammingService {
    * Clean up old programs to prevent database bloat
    */
   async cleanupOldPrograms() {
-    const cutoff = new Date(Date.now() - (24 * 60 * 60 * 1000)); // 24 hours ago
-    
+    const settings = await prisma.settings.findUnique({
+      where: { id: "singleton" },
+      select: { catchupDefaultWindow: true },
+    });
+    const lookbackHours = Math.max(48, settings?.catchupDefaultWindow ?? 24);
+    const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000);
+
     const result = await prisma.program.deleteMany({
       where: {
-        startTime: { lt: cutoff }
-      }
+        startTime: { lt: cutoff },
+      },
     });
 
-    console.log(`Cleaned up ${result.count} old programs`);
+    console.log(
+      `Cleaned up ${result.count} old programs (cutoff ${lookbackHours}h lookback)`,
+    );
   }
 
   /**

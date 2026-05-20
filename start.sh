@@ -143,7 +143,6 @@ set -e
 
 # Set default environment variables if not provided
 export PORT=${PORT:-3000}
-export WEB_PORT=${WEB_PORT:-3001}
 export DATABASE_URL=${DATABASE_URL:-"file:/app/database/production.db"}
 export BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-"$(openssl rand -hex 32)"}
 
@@ -173,11 +172,11 @@ elif [ -n "$EXTERNAL_HTTP_PORT" ]; then
 else
     # Default local configuration
     export BETTER_AUTH_URL=${BETTER_AUTH_URL:-"http://localhost:${PORT}"}
-    export CORS_ORIGIN=${CORS_ORIGIN:-"http://localhost:${WEB_PORT}"}
+    export CORS_ORIGIN=${CORS_ORIGIN:-"http://localhost:${PORT}"}
     export NEXT_PUBLIC_SERVER_URL=${NEXT_PUBLIC_SERVER_URL:-"http://localhost:${PORT}"}
     
     if [ -z "$TRUSTED_ORIGINS" ]; then
-        export TRUSTED_ORIGINS="http://localhost:${PORT},http://localhost:${WEB_PORT}"
+        export TRUSTED_ORIGINS="http://localhost:${PORT}"
         echo "💡 TIP: For external access, set TRUSTED_ORIGINS environment variable."
     fi
 fi
@@ -185,7 +184,7 @@ fi
 echo "=== Configuration ==="
 echo "Database: ${DATABASE_URL}"
 echo "Server port: ${PORT}"
-echo "Web port: ${WEB_PORT}"
+echo "Web: static export via nginx (root /app/apps/web/out)"
 echo "Auth URL: ${BETTER_AUTH_URL}"
 echo "Trusted origins: ${TRUSTED_ORIGINS}"
 if [ -n "$EXTERNAL_HTTP_PORT" ]; then
@@ -221,19 +220,11 @@ FFMPEG_HWACCEL_METHOD=${FFMPEG_HWACCEL_METHOD:-none}
 FFMPEG_PATH=${FFMPEG_PATH}
 FFPROBE_PATH=${FFPROBE_PATH}
 HARDWARE_ACCEL_DEVICE=${HARDWARE_ACCEL_DEVICE}
+XMLTV_STATIC_PATH=/app/static/xmltv.cached.xml
 NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-}
 NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-}
 PUID=${PUID:-99}
 PGID=${PGID:-100}
-EOF
-
-# Web environment
-cat > /app/apps/web/.env << EOF
-NEXT_PUBLIC_SERVER_URL=${NEXT_PUBLIC_SERVER_URL}
-PORT=${WEB_PORT}
-NODE_ENV=production
-HARDWARE_ACCELERATION_AVAILABLE=${HARDWARE_ACCELERATION_AVAILABLE:-false}
-GPU_VENDOR=${GPU_VENDOR:-none}
 EOF
 
 echo "Environment files created successfully"
@@ -267,10 +258,6 @@ cleanup() {
         echo "Stopping server (PID: $SERVER_PID)"
         kill $SERVER_PID
     fi
-    if [ -n "$WEB_PID" ] && kill -0 $WEB_PID 2>/dev/null; then
-        echo "Stopping web application (PID: $WEB_PID)"
-        kill $WEB_PID
-    fi
     echo "=== Cleanup complete ==="
 }
 
@@ -289,13 +276,8 @@ SERVER_PID=$!
 echo "Server started with PID: $SERVER_PID"
 sleep 5
 
-echo "=== Starting web application on port 3001 ==="
-cd /app/apps/web
-PORT=3001 npm start &
-WEB_PID=$!
-echo "Web application started with PID: $WEB_PID"
-
 echo "=== All services started successfully! ==="
+echo "Static web UI served by nginx from /app/apps/web/out"
 
 # Show access information
 if [ -n "$EXTERNAL_HTTP_PORT" ]; then

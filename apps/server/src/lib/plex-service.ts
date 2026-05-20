@@ -38,6 +38,19 @@ interface PlexServerConfig {
   accessToken: string;
   arGuide?: boolean;
   arChannels?: boolean;
+  /** When true, do not import all Plex libraries until the user confirms a selection. */
+  skipInitialLibrarySync?: boolean;
+}
+
+/** Plex section types TwentyFourSeven can sync into channels (movie/show). */
+export const PLEX_SYNCABLE_LIBRARY_TYPES = new Set(['movie', 'show']);
+
+export function normalizePlexLibraryKey(key: string | number): string {
+  return String(key);
+}
+
+export function isPlexLibrarySyncable(type: string): boolean {
+  return PLEX_SYNCABLE_LIBRARY_TYPES.has(type.toLowerCase());
 }
 
 export class PlexService {
@@ -161,14 +174,15 @@ export class PlexService {
       }
     });
 
-    // Automatically sync libraries after adding the server
-    try {
-      if (connectionValid) {
-        await this.syncLibraries(newServer.id);
+    // Import all libraries only when not using the guided library-selection flow
+    if (!config.skipInitialLibrarySync) {
+      try {
+        if (connectionValid) {
+          await this.syncLibraries(newServer.id);
+        }
+      } catch (error) {
+        console.warn('Failed to auto-sync libraries after adding server:', error);
       }
-    } catch (error) {
-      console.warn('Failed to auto-sync libraries after adding server:', error);
-      // Don't fail the server creation if library sync fails
     }
 
     return newServer;
@@ -296,6 +310,16 @@ export class PlexService {
     }
 
     console.log(`Background content sync completed for server ${serverId}`);
+
+    try {
+      const { invalidateCollectionsCache, buildCollectionsFromDb, writeCollectionsCache } =
+        await import("./collections-cache");
+      await invalidateCollectionsCache();
+      const collections = await buildCollectionsFromDb();
+      await writeCollectionsCache(collections);
+    } catch (cacheError) {
+      console.error("Failed to refresh collections cache after Plex sync:", cacheError);
+    }
   }
 
   /**
@@ -662,7 +686,6 @@ export class PlexService {
    */
   static async updateLibrarySelection(serverId: string, selectedLibraryKeys: string[]): Promise<{ success: boolean; message: string; updatedCount?: number; removedCount?: number }> {
     try {
-      // Get the server
       const server = await prisma.mediaServer.findUnique({
         where: { id: serverId },
         include: { libraries: true }
@@ -672,14 +695,34 @@ export class PlexService {
         return { success: false, message: 'Server not found' };
       }
 
-      // Get current libraries
+      if (!server.token) {
+        return { success: false, message: 'Server has no access token' };
+      }
+
+      const normalizedSelected = [
+        ...new Set(selectedLibraryKeys.map((key) => normalizePlexLibraryKey(key))),
+      ];
+
+      const plex = new PlexAPI({ uri: server.url });
+      const allPlexLibraries = await plex.getLibraries(server.url, server.token);
+      const plexByKey = new Map<string, (typeof allPlexLibraries)[number]>();
+      for (const lib of allPlexLibraries) {
+        if (!isPlexLibrarySyncable(lib.type)) {
+          continue;
+        }
+        plexByKey.set(normalizePlexLibraryKey(lib.key), lib);
+      }
+
+      const selectedKeys = normalizedSelected.filter((key) => plexByKey.has(key));
+      const skippedUnsupported = normalizedSelected.length - selectedKeys.length;
+
       const currentLibraries = server.libraries;
-      const currentKeys = currentLibraries.map(lib => lib.key);
+      const currentKeys = currentLibraries.map((lib) => normalizePlexLibraryKey(lib.key));
 
-      // Find libraries to remove (in database but not selected)
-      const librariesToRemove = currentLibraries.filter(lib => !selectedLibraryKeys.includes(lib.key));
+      const librariesToRemove = currentLibraries.filter(
+        (lib) => !selectedKeys.includes(normalizePlexLibraryKey(lib.key)),
+      );
 
-      // Remove deselected libraries and their content
       let removedCount = 0;
       for (const library of librariesToRemove) {
         // Delete all related content first
@@ -708,47 +751,61 @@ export class PlexService {
         console.log(`Removed library: ${library.name}`);
       }
 
-      // Find new libraries to add (selected but not in database)
-      const newLibraryKeys = selectedLibraryKeys.filter(key => !currentKeys.includes(key));
-
-      // Add new libraries if any
-      let addedCount = 0;
-      if (newLibraryKeys.length > 0) {
-        // Get library info from Plex
-        const plex = new PlexAPI({ uri: server.url });
-        if (server.token) {
-          const allLibraries = await plex.getLibraries(server.url, server.token);
-          
-          for (const key of newLibraryKeys) {
-            const libraryInfo = allLibraries.find(lib => lib.key === key);
-            if (libraryInfo) {
-              const libraryType = this.mapPlexTypeToLibraryType(libraryInfo.type);
-              
-              await prisma.mediaLibrary.create({
-                data: {
-                  name: libraryInfo.title,
-                  key: libraryInfo.key,
-                  type: libraryType,
-                  serverId: server.id
-                }
-              });
-
-              addedCount++;
-              console.log(`Added library: ${libraryInfo.title}`);
-            }
-          }
+      let refreshedCount = 0;
+      for (const library of currentLibraries) {
+        const key = normalizePlexLibraryKey(library.key);
+        if (!selectedKeys.includes(key)) {
+          continue;
         }
+        const libraryInfo = plexByKey.get(key);
+        if (!libraryInfo) {
+          continue;
+        }
+        await prisma.mediaLibrary.update({
+          where: { id: library.id },
+          data: {
+            name: libraryInfo.title,
+            type: this.mapPlexTypeToLibraryType(libraryInfo.type),
+            updatedAt: new Date(),
+          },
+        });
+        refreshedCount++;
       }
 
-      // Start background sync for remaining/new libraries
-      if (selectedLibraryKeys.length > 0) {
-        // Use setImmediate to ensure database operations are fully complete before syncing
+      const newLibraryKeys = selectedKeys.filter((key) => !currentKeys.includes(key));
+
+      let addedCount = 0;
+      for (const key of newLibraryKeys) {
+        const libraryInfo = plexByKey.get(key);
+        if (!libraryInfo) {
+          continue;
+        }
+        const libraryType = this.mapPlexTypeToLibraryType(libraryInfo.type);
+        await prisma.mediaLibrary.create({
+          data: {
+            name: libraryInfo.title,
+            key: normalizePlexLibraryKey(libraryInfo.key),
+            type: libraryType,
+            serverId: server.id,
+          },
+        });
+        addedCount++;
+        console.log(`Added library: ${libraryInfo.title}`);
+      }
+
+      if (selectedKeys.length > 0) {
         setImmediate(() => {
-          this.syncLibraryContentInBackground(serverId);
+          this.syncLibraryContentInBackground(serverId).catch((error) => {
+            console.error('Background sync after library selection failed:', error);
+          });
         });
       }
 
-      const message = `Library selection updated. ${addedCount} libraries added, ${removedCount} libraries removed.${selectedLibraryKeys.length > 0 ? ' Content sync started in background.' : ''}`;
+      const skippedNote =
+        skippedUnsupported > 0
+          ? ` ${skippedUnsupported} non-movie/show librar${skippedUnsupported === 1 ? 'y was' : 'ies were'} skipped.`
+          : '';
+      const message = `Library selection updated. ${addedCount} added, ${removedCount} removed, ${refreshedCount} refreshed.${skippedNote}${selectedKeys.length > 0 ? ' Content sync started in background.' : ''}`;
       
       return { 
         success: true, 

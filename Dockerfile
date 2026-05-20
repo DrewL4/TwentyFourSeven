@@ -113,10 +113,9 @@ RUN --mount=type=cache,target=/root/.npm \
     npm cache clean --force
 
 # Copy built applications with proper ownership (abc user like Plex)
-COPY --from=builder --chown=abc:users /app/apps/web/.next ./apps/web/.next
+COPY --from=builder --chown=abc:users /app/apps/web/out ./apps/web/out
 COPY --from=builder --chown=abc:users /app/apps/server/.next ./apps/server/.next
 COPY --from=builder --chown=abc:users /app/apps/web/public ./apps/web/public
-COPY --from=builder --chown=abc:users /app/apps/web/package.json ./apps/web/package.json
 COPY --from=builder --chown=abc:users /app/apps/server/package.json ./apps/server/package.json
 
 # Copy prisma files
@@ -187,7 +186,7 @@ ENV PGID=100
 # USER abc
 
 # Expose ports
-EXPOSE 80 3000 3001
+EXPOSE 80 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
