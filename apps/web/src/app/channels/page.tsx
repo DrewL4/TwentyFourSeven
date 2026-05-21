@@ -1674,6 +1674,9 @@ function ChannelsPageContent() {
 
   const queryClient = useQueryClient();
   const channelsQuery = useQuery(orpc.channels.listSummary.queryOptions());
+  const franchisesQuery = useQuery(orpc.franchises.list.queryOptions());
+
+  const [franchisePreviewSlug, setFranchisePreviewSlug] = useState<string | null>(null);
 
   const prefetchChannel = useCallback(
     (channelId: string) => {
@@ -2129,6 +2132,67 @@ function ChannelsPageContent() {
     return maxNumber + 1;
   };
 
+  const franchisePreviewQuery = useQuery({
+    ...orpc.franchises.previewChannelSort.queryOptions({
+      input: {
+        channelId: selectedChannelId ?? '',
+        franchiseSlug: franchisePreviewSlug ?? '',
+      },
+    }),
+    enabled: !!selectedChannelId && !!franchisePreviewSlug,
+  });
+
+  const linkFranchiseMutation = useMutation(
+    orpc.franchises.applyToChannel.mutationOptions({
+      onSuccess: async (data) => {
+        if (selectedChannelId) {
+          await invalidateChannelDetail(queryClient, selectedChannelId);
+        }
+        setFranchisePreviewSlug(null);
+        toast.success(
+          `Channel linked to ${data.franchiseSlug}. Movie automation uses franchise TMDB ids; timeline sort: ${data.autoSortMethod}.`,
+          { duration: 6000 },
+        );
+      },
+      onError: () => toast.error('Failed to link franchise to channel'),
+    }),
+  );
+
+  const sortByFranchiseMutation = useMutation(
+    orpc.channels.sortByFranchise.mutationOptions({
+      onSuccess: async (data) => {
+        if (selectedChannelId) {
+          await invalidateChannelDetail(queryClient, selectedChannelId);
+        }
+        setFranchisePreviewSlug(null);
+        const unmatched = data.unmatchedMovieCount;
+        if (unmatched > 0) {
+          toast.success(
+            `Franchise order applied. ${data.matchedMovieCount} movies matched; ${unmatched} not in list (kept at end).`,
+            { duration: 6000 },
+          );
+        } else {
+          toast.success('Franchise timeline order applied and saved for automation.');
+        }
+        if (selectedChannelId) {
+          updateFiltersMutation.mutate({
+            id: selectedChannelId,
+            autoFilterEnabled: lineup?.autoFilterEnabled || false,
+            filterType: lineup?.filterType || 'both',
+            defaultEpisodeOrder: lineup?.defaultEpisodeOrder || 'sequential',
+            respectEpisodeOrder: lineup?.respectEpisodeOrder ?? true,
+            blockShuffle: lineup?.blockShuffle || false,
+            blockShuffleSize: lineup?.blockShuffleSize || 1,
+            autoSortMethod: data.autoSortMethod,
+          });
+        }
+      },
+      onError: () => {
+        toast.error('Failed to apply franchise timeline sort');
+      },
+    }),
+  );
+
   // Reorder content mutation
   const reorderContentMutation = useMutation(orpc.channels.reorderContent.mutationOptions({
     onMutate: async (variables) => {
@@ -2295,9 +2359,37 @@ function ChannelsPageContent() {
     }
   };
 
+  const handleFranchiseSortSelect = (slug: string) => {
+    if (!selectedChannelId) return;
+    setFranchisePreviewSlug(slug);
+  };
+
+  const applyFranchiseSort = () => {
+    if (!selectedChannelId || !franchisePreviewSlug) return;
+    sortByFranchiseMutation.mutate({
+      channelId: selectedChannelId,
+      franchiseSlug: franchisePreviewSlug,
+    });
+  };
+
+  const linkFranchiseToChannel = () => {
+    if (!selectedChannelId || !franchisePreviewSlug) return;
+    const franchise = franchisesQuery.data?.find((f) => f.slug === franchisePreviewSlug);
+    if (!franchise) return;
+    linkFranchiseMutation.mutate({
+      channelId: selectedChannelId,
+      franchiseId: franchise.id,
+    });
+  };
+
   // Smart shuffle/sort handlers
   const handleSmartShuffle = (type: string) => {
     if (!selectedChannelId) return;
+
+    if (type.startsWith('franchise-sort:')) {
+      handleFranchiseSortSelect(type.slice('franchise-sort:'.length));
+      return;
+    }
     
     const programs = lineupItems;
     if (programs.length === 0) return;
@@ -2511,10 +2603,20 @@ function ChannelsPageContent() {
       'sort-year-newest': 'Newest First',
       'sort-year-oldest': 'Oldest First',
       'sort-duration-longest': 'Longest First',
-      'sort-duration-shortest': 'Shortest First'
+      'sort-duration-shortest': 'Shortest First',
+      'timeline-mcu': 'MCU Chronological',
+      'timeline-star-wars': 'Star Wars Saga',
     };
+
+    if (displayNames[method]) return displayNames[method];
+
+    if (method.startsWith('timeline:')) {
+      const slug = method.slice('timeline:'.length);
+      const franchise = franchisesQuery.data?.find((f) => f.slug === slug);
+      return franchise ? `${franchise.name} (timeline)` : `Timeline: ${slug}`;
+    }
     
-    return displayNames[method] || null;
+    return null;
   };
 
   // Programming Rules handlers
@@ -3554,6 +3656,25 @@ function ChannelsPageContent() {
                             <span>Shortest First</span>
                           </div>
                         </SelectItem>
+
+                        {(franchisesQuery.data?.length ?? 0) > 0 && (
+                          <>
+                            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-2">
+                              Franchise timeline
+                            </div>
+                            {franchisesQuery.data?.map((franchise) => (
+                              <SelectItem
+                                key={franchise.id}
+                                value={`franchise-sort:${franchise.slug}`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Film className="w-4 h-4" />
+                                  <span>{franchise.name}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
                         
                         {/* Utility Options */}
                         <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-2">
@@ -3568,13 +3689,65 @@ function ChannelsPageContent() {
                       </SelectContent>
                     </Select>
                     
-                    {reorderContentMutation.isPending && (
+                    {(reorderContentMutation.isPending ||
+                      sortByFranchiseMutation.isPending ||
+                      linkFranchiseMutation.isPending) && (
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <RotateCcw className="w-3 h-3 animate-spin" />
                         <span>Saving...</span>
                       </div>
                     )}
                   </div>
+
+                  {franchisePreviewSlug && franchisePreviewQuery.data && (
+                    <div className="mt-3 rounded-md border border-border p-3 space-y-2 bg-muted/30">
+                      <p className="text-xs font-medium">
+                        Preview: {franchisePreviewQuery.data.franchise?.name ?? franchisePreviewSlug}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {franchisePreviewQuery.data.matched.length} matched ·{' '}
+                        {franchisePreviewQuery.data.unmatched.length} unmatched (movies stay at end). TV shows keep alphabetical order after movies.
+                      </p>
+                      {franchisePreviewQuery.data.unmatched.length > 0 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          Unmatched:{' '}
+                          {franchisePreviewQuery.data.unmatched
+                            .filter((u) => u.type === 'movie')
+                            .map((u) => u.title)
+                            .slice(0, 5)
+                            .join(', ')}
+                          {franchisePreviewQuery.data.unmatched.length > 5 ? '…' : ''}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={linkFranchiseToChannel}
+                          disabled={linkFranchiseMutation.isPending}
+                        >
+                          Link franchise &amp; auto-add
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={applyFranchiseSort}
+                          disabled={sortByFranchiseMutation.isPending}
+                        >
+                          Sort only
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs"
+                          onClick={() => setFranchisePreviewSlug(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

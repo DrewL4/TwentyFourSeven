@@ -8,9 +8,26 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings, Server, Radio, Video, Save, ExternalLink, Calendar, Download, Rewind } from "lucide-react";
-import { useState, useEffect } from "react";
+import {
+  Settings,
+  Server,
+  Radio,
+  Video,
+  Save,
+  ExternalLink,
+  Calendar,
+  Download,
+  Rewind,
+  Film,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import FirstTimeSetup from "@/components/first-time-setup";
 import WatchTowerConnectionSetup from "@/components/watchtower-connection-setup";
 
@@ -29,15 +46,39 @@ export default function SettingsPage() {
   });
 
   const [showWatchTowerSetup, setShowWatchTowerSetup] = useState(false);
+  const [tmdbApiKeyInput, setTmdbApiKeyInput] = useState("");
+  const [tmdbKeyOpen, setTmdbKeyOpen] = useState(false);
+  const [showTmdbApiKey, setShowTmdbApiKey] = useState(false);
 
   const queryClient = useQueryClient();
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
 
+  const savedTmdbApiKey = settingsQuery.data?.tmdbApiKey?.trim() ?? "";
+  const hasSavedTmdbKey = savedTmdbApiKey.length > 0;
+  const isReplacingTmdbKey = tmdbApiKeyInput.length > 0;
+  const isTmdbKeyReadOnly = hasSavedTmdbKey && !showTmdbApiKey && !isReplacingTmdbKey;
+
+  const tmdbKeyDisplayValue = useMemo(() => {
+    if (isReplacingTmdbKey) return tmdbApiKeyInput;
+    if (!hasSavedTmdbKey) return "";
+    if (showTmdbApiKey) return savedTmdbApiKey;
+    return "•".repeat(savedTmdbApiKey.length);
+  }, [isReplacingTmdbKey, tmdbApiKeyInput, hasSavedTmdbKey, showTmdbApiKey, savedTmdbApiKey]);
+
   const updateSettingsMutation = useMutation(orpc.settings.update.mutationOptions({
-    onSuccess: () => {
-      // Invalidate and refetch the settings
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: orpc.settings.get.queryOptions().queryKey });
-    }
+      if (variables.tmdbApiKey !== undefined) {
+        setTmdbApiKeyInput("");
+        setShowTmdbApiKey(false);
+        toast.success("TMDB API key saved");
+      }
+    },
+    onError: (error: Error) => {
+      if (error.message?.toLowerCase().includes("tmdb")) {
+        toast.error(error.message);
+      }
+    },
   }));
 
   // Update local state when query data changes
@@ -312,6 +353,101 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          {/* Franchise timeline / TMDB */}
+          <Card className="gap-0 py-0 overflow-hidden shadow-sm">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
+              <div className="flex items-center gap-2 min-w-0">
+                <Film className="w-4 h-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-tight">Franchise timeline</p>
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    TMDB watch order for movie channels
+                  </p>
+                </div>
+              </div>
+              <Button asChild variant="outline" size="sm" className="shrink-0 h-9 touch-manipulation">
+                <Link href="/settings/franchises">
+                  Manage
+                  <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+                </Link>
+              </Button>
+            </div>
+            <details
+              className="group"
+              open={tmdbKeyOpen}
+              onToggle={(e) => setTmdbKeyOpen(e.currentTarget.open)}
+            >
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 min-h-11 text-sm font-medium touch-manipulation [&::-webkit-details-marker]:hidden">
+                {tmdbKeyOpen ? (
+                  <ChevronDown className="w-4 h-4 shrink-0" />
+                ) : (
+                  <ChevronRight className="w-4 h-4 shrink-0" />
+                )}
+                <span className="flex-1">TMDB API key</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {hasSavedTmdbKey ? "Configured" : "Recommended"}
+                </span>
+              </summary>
+              <div className="border-t px-4 pb-4 pt-3 space-y-3">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Powers collection search and daily franchise sync. You can also set{' '}
+                  <code className="text-[10px]">TMDB_API_KEY</code> in the server environment.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1 min-w-0">
+                    <Input
+                      id="tmdbApiKey"
+                      type={
+                        showTmdbApiKey && (isReplacingTmdbKey || hasSavedTmdbKey)
+                          ? "text"
+                          : "password"
+                      }
+                      autoComplete="off"
+                      className="pr-10 font-mono text-sm max-md:text-base"
+                      placeholder={hasSavedTmdbKey ? "" : "Paste TMDB v3 API key"}
+                      value={tmdbKeyDisplayValue}
+                      readOnly={isTmdbKeyReadOnly}
+                      onChange={(e) => setTmdbApiKeyInput(e.target.value)}
+                      onFocus={() => {
+                        if (isTmdbKeyReadOnly) setTmdbApiKeyInput("");
+                      }}
+                    />
+                    {hasSavedTmdbKey && (
+                      <button
+                        type="button"
+                        onClick={() => setShowTmdbApiKey((v) => !v)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground touch-manipulation"
+                        tabIndex={-1}
+                        aria-label={showTmdbApiKey ? "Hide API key" : "Show API key"}
+                      >
+                        {showTmdbApiKey ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "shrink-0 w-full sm:w-auto min-h-11 touch-manipulation",
+                    )}
+                    disabled={!tmdbApiKeyInput.trim() || updateSettingsMutation.isPending}
+                    onClick={() =>
+                      updateSettingsMutation.mutate({
+                        tmdbApiKey: tmdbApiKeyInput.trim(),
+                      })
+                    }
+                  >
+                    {hasSavedTmdbKey ? "Replace" : "Save"}
+                  </Button>
+                </div>
+              </div>
+            </details>
+          </Card>
+
           {/* Plex Integration */}
           <Card>
             <CardHeader>
@@ -324,7 +460,7 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
                   <p className="text-sm font-medium">Plex Server Management</p>
                   <p className="text-xs text-muted-foreground">

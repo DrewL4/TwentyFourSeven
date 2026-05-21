@@ -1,4 +1,5 @@
 import { PlexAPI } from './plex';
+import { parsePlexGuids } from './plex-guid';
 import { prisma } from './prisma';
 import type { MediaServer, MediaLibrary } from '../../prisma/generated/client';
 
@@ -361,8 +362,9 @@ export class PlexService {
       const batch = movies.slice(i, i + batchSize);
       
       // Process batch
-      const upsertPromises = batch.map(movie => 
-        prisma.mediaMovie.upsert({
+      const upsertPromises = batch.map(movie => {
+        const { tmdbId, imdbId } = parsePlexGuids(movie.Guid);
+        return prisma.mediaMovie.upsert({
           where: {
             libraryId_ratingKey: {
               libraryId: library.id,
@@ -384,7 +386,9 @@ export class PlexService {
             writers: JSON.stringify(movie.Writer?.map(w => w.tag) || []),
             actors: JSON.stringify(movie.Role?.map(r => r.tag) || []),
             countries: JSON.stringify(movie.Country?.map(c => c.tag) || []),
-            collections: JSON.stringify(((movie as any).Collection?.map((co:any) => co.tag)) || [])
+            collections: JSON.stringify(movie.Collection?.map((co) => co.tag) || []),
+            tmdbId,
+            imdbId,
           },
           create: {
             libraryId: library.id,
@@ -403,10 +407,12 @@ export class PlexService {
             writers: JSON.stringify(movie.Writer?.map(w => w.tag) || []),
             actors: JSON.stringify(movie.Role?.map(r => r.tag) || []),
             countries: JSON.stringify(movie.Country?.map(c => c.tag) || []),
-            collections: JSON.stringify(((movie as any).Collection?.map((co:any) => co.tag)) || [])
+            collections: JSON.stringify(movie.Collection?.map((co) => co.tag) || []),
+            tmdbId,
+            imdbId,
           }
-        })
-      );
+        });
+      });
 
       await Promise.all(upsertPromises);
       
@@ -416,7 +422,14 @@ export class PlexService {
       }
     }
 
-    // Trigger channel automation after movie sync
+    // Refresh franchise watch orders (picks up new MCU / collection titles) then run automation
+    try {
+      const { syncAllFranchises } = await import('./franchise-sync-service');
+      await syncAllFranchises();
+    } catch (error) {
+      console.error('Failed to sync franchise watch orders after movie sync:', error);
+    }
+
     try {
       const { channelAutomationService } = await import('./channel-automation-service');
       await channelAutomationService.processAutomatedChannels();

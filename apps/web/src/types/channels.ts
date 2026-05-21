@@ -62,6 +62,7 @@ export type ChannelLineup = {
   blockShuffle: boolean;
   blockShuffleSize: number;
   autoSortMethod: string | null;
+  franchiseId: string | null;
   autoFilterEnabled: boolean;
   filterGenres: string | null;
   filterActors: string | null;

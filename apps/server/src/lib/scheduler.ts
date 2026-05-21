@@ -7,6 +7,7 @@ class SchedulerService {
   private watchTowerInterval: ReturnType<typeof setInterval> | null = null;
   private programmingMaintenanceInterval: ReturnType<typeof setInterval> | null = null;
   private automationInterval: ReturnType<typeof setInterval> | null = null;
+  private franchiseSyncInterval: ReturnType<typeof setInterval> | null = null;
 
   public static getInstance(): SchedulerService {
     if (!SchedulerService.instance) {
@@ -124,6 +125,37 @@ class SchedulerService {
   }
 
   /**
+   * Refresh built-in franchise watch orders from remote timeline sources + TMDB collections.
+   */
+  async startFranchiseSync() {
+    if (this.franchiseSyncInterval) {
+      clearInterval(this.franchiseSyncInterval);
+    }
+
+    const run = async () => {
+      try {
+        const { syncAllFranchises } = await import('./franchise-sync-service');
+        await syncAllFranchises();
+      } catch (error) {
+        console.error('❌ Franchise sync failed:', error);
+      }
+    };
+
+    await run();
+
+    const { FRANCHISE_SYNC_INTERVAL_HOURS } = await import('./franchise-sync-config');
+    const intervalMs = FRANCHISE_SYNC_INTERVAL_HOURS * 60 * 60 * 1000;
+    this.franchiseSyncInterval = setInterval(run, intervalMs);
+  }
+
+  stopFranchiseSync() {
+    if (this.franchiseSyncInterval) {
+      clearInterval(this.franchiseSyncInterval);
+      this.franchiseSyncInterval = null;
+    }
+  }
+
+  /**
    * Stop programming maintenance
    */
   stopProgrammingMaintenance() {
@@ -172,6 +204,7 @@ class SchedulerService {
     this.stopWatchTowerSync();
     this.stopProgrammingMaintenance();
     this.stopChannelAutomationSweep();
+    this.stopFranchiseSync();
     this.stopStreamWatchdog();
   }
 }

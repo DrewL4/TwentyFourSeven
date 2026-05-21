@@ -109,11 +109,16 @@ model MediaMovie {
   countries   String? // JSON string of country names
   collections String? // JSON string of collection names from Plex
   
+  // External IDs from Plex Guid agents (for franchise matching)
+  tmdbId      Int?
+  imdbId      String?
+  
   libraryId   String
   library     MediaLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
   
   programs    Program[]
   channelMovies ChannelMovie[]
+  franchiseEntries FranchiseEntry[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -121,7 +126,52 @@ model MediaMovie {
   @@unique([libraryId, ratingKey])
   @@index([libraryId, title])
   @@index([title])
+  @@index([tmdbId])
   @@map("media_movie")
+}
+
+model Franchise {
+  id          String @id @default(cuid()) @map("_id")
+  slug        String @unique
+  name        String
+  description String?
+  source      FranchiseSource @default(CUSTOM)
+  sortMode    FranchiseSortMode @default(CHRONOLOGICAL)
+  
+  /** TMDB collection id — primary source for membership and release-order baseline */
+  tmdbCollectionId Int?
+  /** Optional remote chronological timeline JSON (marvelorder sheet format) */
+  timelineUrl String?
+  /** Optional TMDB id lookup file URL (marvelorder listings.json format) */
+  listingsUrl String?
+  lastSyncedAt DateTime?
+  
+  entries     FranchiseEntry[]
+  channels    Channel[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("franchise")
+}
+
+model FranchiseEntry {
+  id           String @id @default(cuid()) @map("_id")
+  franchiseId  String
+  franchise    Franchise @relation(fields: [franchiseId], references: [id], onDelete: Cascade)
+  position     Int
+  label        String?
+  
+  movieId      String?
+  movie        MediaMovie? @relation(fields: [movieId], references: [id], onDelete: SetNull)
+  tmdbId       Int?
+  titlePattern String?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([franchiseId, position])
+  @@map("franchise_entry")
 }
 
 model Channel {
@@ -176,6 +226,10 @@ model Channel {
   blockShuffleSize Int @default(1)
   autoSortMethod String? // "title-asc", "title-desc", "year-newest", "year-oldest", etc.
   
+  /** When set, automation matches library movies by franchise TMDB entries and applies timeline sort */
+  franchiseId String?
+  franchise   Franchise? @relation(fields: [franchiseId], references: [id], onDelete: SetNull)
+  
   // Franchise automation – automatically add sibling shows in same franchise
   franchiseAutomation Boolean @default(false)
   
@@ -186,6 +240,7 @@ model Channel {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
+  @@index([franchiseId])
   @@map("channel")
 }
 
@@ -308,6 +363,9 @@ model Settings {
   watchTowerAutoSync Boolean @default(false)
   watchTowerSyncInterval Int @default(24) // hours
   watchTowerLastSync DateTime?
+  
+  // Optional TMDB API key for franchise collection import
+  tmdbApiKey String @default("")
   
   ffmpegSettings FfmpegSettings?
   plexSettings PlexSettings?
@@ -444,4 +502,14 @@ enum LibraryType {
   MOVIE
   SHOW
   MUSIC
+}
+
+enum FranchiseSource {
+  BUILTIN
+  CUSTOM
+}
+
+enum FranchiseSortMode {
+  CHRONOLOGICAL
+  RELEASE
 } 

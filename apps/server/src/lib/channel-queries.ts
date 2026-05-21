@@ -63,6 +63,7 @@ const channelLineupScalars = {
   blockShuffle: true,
   blockShuffleSize: true,
   autoSortMethod: true,
+  franchiseId: true,
   autoFilterEnabled: true,
   filterGenres: true,
   filterActors: true,

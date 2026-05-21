@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { scoreTitleMatch } from './franchise-title-match';
 import type { Channel, MediaMovie, MediaShow } from '../../prisma/generated/client';
 
 export class ChannelAutomationService {
@@ -171,6 +172,30 @@ export class ChannelAutomationService {
    */
   private async getMatchingMovies(channel: any): Promise<MediaMovie[]> {
     const whereClause: any = {};
+
+    // Franchise filter — match library movies by TMDB ids in franchise entries
+    if (channel.franchiseId) {
+      const entries = await prisma.franchiseEntry.findMany({
+        where: { franchiseId: channel.franchiseId },
+        select: { tmdbId: true, titlePattern: true, label: true, movieId: true },
+      });
+      if (entries.length === 0) return [];
+
+      const tmdbIds = entries
+        .map((e) => e.tmdbId)
+        .filter((id): id is number => id != null);
+      const patterns = entries
+        .map((e) => e.titlePattern)
+        .filter((p): p is string => !!p?.trim());
+
+      const matchesFranchiseEntry = (movie: MediaMovie): boolean =>
+        entries.some((entry) => scoreTitleMatch(movie, entry) >= 800);
+
+      const movies = await prisma.mediaMovie.findMany();
+      return movies.filter(
+        (movie) => matchesFranchiseEntry(movie) && this.matchesFilters(movie, channel),
+      );
+    }
 
     // Collection filter - if specified, only get movies from specific collections
     if (channel.filterCollections) {
@@ -663,32 +688,47 @@ export class ChannelAutomationService {
             return a.title.localeCompare(b.title);
           });
           break;
-        case 'timeline-mcu': {
-          const { findUniverseIndex } = await import('./universe-timelines');
-          allContent.sort((a, b) => {
-            const ai = findUniverseIndex('mcu', a.title, a.year);
-            const bi = findUniverseIndex('mcu', b.title, b.year);
-            if (ai === -1 && bi === -1) return (a.year || 0) - (b.year || 0);
-            if (ai === -1) return 1;
-            if (bi === -1) return -1;
-            return ai - bi;
-          });
-          break;
-        }
-        case 'timeline-star-wars': {
-          const { findUniverseIndex } = await import('./universe-timelines');
-          allContent.sort((a, b) => {
-            const ai = findUniverseIndex('star-wars', a.title, a.year);
-            const bi = findUniverseIndex('star-wars', b.title, b.year);
-            if (ai === -1 && bi === -1) return (a.year || 0) - (b.year || 0);
-            if (ai === -1) return 1;
-            if (bi === -1) return -1;
-            return ai - bi;
-          });
-          break;
-        }
-        default:
+        default: {
+          const {
+            isFranchiseTimelineSortMethod,
+            parseFranchiseSlugFromSortMethod,
+            loadFranchiseEntries,
+            sortChannelContentByFranchise,
+          } = await import('./franchise-sort-service');
+
+          if (isFranchiseTimelineSortMethod(sortMethod)) {
+            const slug = parseFranchiseSlugFromSortMethod(sortMethod);
+            if (!slug) return;
+            const entries = await loadFranchiseEntries(slug);
+            if (entries.length === 0) return;
+
+            const sortInput = allContent.map((item) => {
+              const movie =
+                item.type === 'movie' && 'movie' in item
+                  ? (item as { movie: { id: string; tmdbId?: number | null } }).movie
+                  : undefined;
+              return {
+                id: item.id,
+                type: item.type as 'movie' | 'show',
+                title: item.title,
+                year: item.year,
+                duration: item.duration,
+                movieId: movie?.id,
+                tmdbId: movie?.tmdbId ?? null,
+              };
+            });
+            const sorted = sortChannelContentByFranchise(sortInput, entries);
+            const byId = new Map(allContent.map((item) => [item.id, item]));
+            allContent.length = 0;
+            for (const s of sorted) {
+              const orig = byId.get(s.id);
+              if (orig) allContent.push(orig);
+            }
+            break;
+          }
+
           return; // Unknown sort method
+        }
       }
 
       // Update order for all content

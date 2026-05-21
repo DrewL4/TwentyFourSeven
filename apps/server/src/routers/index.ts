@@ -6,6 +6,7 @@ import { viewingHistoryService } from "../lib/viewing-history-service";
 import { buildChannelsListSummary, getChannelLineup, getChannelShowEpisodes } from "../lib/channel-queries";
 import { guideRouter } from "./guide-router";
 import { libraryRouter } from "./library-router";
+import { franchisesRouter } from "./franchises-router";
 
 export const appRouter = {
   healthCheck: publicProcedure.handler(() => {
@@ -531,7 +532,8 @@ export const appRouter = {
         blockShuffle: z.boolean().optional(),
         blockShuffleSize: z.number().optional(),
         autoSortMethod: z.string().nullable().optional(),
-        franchiseAutomation: z.boolean().optional()
+        franchiseAutomation: z.boolean().optional(),
+        franchiseId: z.string().nullable().optional(),
       }))
       .handler(async ({ input }) => {
         const { id, ...filters } = input;
@@ -1085,7 +1087,29 @@ export const appRouter = {
           },
           data: settings
         });
-      })
+      }),
+
+    sortByFranchise: protectedProcedure
+      .input(z.object({
+        channelId: z.string(),
+        franchiseSlug: z.string(),
+      }))
+      .handler(async ({ input }) => {
+        const { syncFranchise } = await import('../lib/franchise-sync-service');
+        const { applyFranchiseSortToChannel } = await import('../lib/franchise-sort-service');
+        await syncFranchise(input.franchiseSlug);
+        const result = await applyFranchiseSortToChannel(
+          input.channelId,
+          input.franchiseSlug,
+        );
+        try {
+          const { programmingService } = await import('@/lib/programming-service');
+          await programmingService.generateProgramsForChannel(input.channelId, 24);
+        } catch {
+          // best-effort schedule regen
+        }
+        return result;
+      }),
   },
 
   // Media Server Management
@@ -1325,6 +1349,8 @@ export const appRouter = {
 
   library: libraryRouter,
 
+  franchises: franchisesRouter,
+
   // Catchup / Timeshift
   catchup: {
     getPrograms: publicProcedure
@@ -1487,12 +1513,32 @@ export const appRouter = {
         guideDays: z.number().optional(),
         catchupEnabled: z.boolean().optional(),
         catchupDefaultWindow: z.number().min(1).max(48).optional(),
+        tmdbApiKey: z.string().optional(),
       }))
       .handler(async ({ input }) => {
+        const data = { ...input };
+        if (input.tmdbApiKey !== undefined) {
+          const { normalizeTmdbApiKey, validateTmdbApiKey } = await import('../lib/tmdb-service');
+          const normalized = normalizeTmdbApiKey(input.tmdbApiKey);
+          if (!normalized && input.tmdbApiKey.trim()) {
+            throw new Error(
+              'Invalid TMDB API key. Paste only the 32-character v3 API Key from themoviedb.org/settings/api.',
+            );
+          }
+          if (normalized) {
+            const check = await validateTmdbApiKey(normalized);
+            if (!check.valid) {
+              throw new Error(check.message);
+            }
+            data.tmdbApiKey = normalized;
+          } else {
+            data.tmdbApiKey = '';
+          }
+        }
         return await prisma.settings.upsert({
           where: { id: "singleton" },
-          create: { id: "singleton", ...input },
-          update: input
+          create: { id: "singleton", ...data },
+          update: data
         });
       }),
 

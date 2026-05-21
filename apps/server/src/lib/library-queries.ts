@@ -47,6 +47,7 @@ export const libraryMovieListSelect = {
   title: true,
   year: true,
   poster: true,
+  tmdbId: true,
   library: { select: { id: true, name: true } },
 } satisfies Prisma.MediaMovieSelect;
 

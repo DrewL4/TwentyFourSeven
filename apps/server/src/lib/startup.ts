@@ -54,6 +54,9 @@ export class StartupService {
       // Initialize periodic channel automation sweep
       await this.initializeChannelAutomation();
 
+      // Sync built-in franchise watch orders (MCU, Star Wars) from remote + TMDB
+      await this.initializeFranchiseSync();
+
       // Initialize stream watchdog for monitoring and auto-recovery
       await this.initializeStreamWatchdog();
 
@@ -168,6 +171,14 @@ export class StartupService {
       await scheduler.startChannelAutomationSweep();
     } catch (error) {
       console.error('❌ Error initializing channel automation:', error);
+    }
+  }
+
+  private static async initializeFranchiseSync() {
+    try {
+      await scheduler.startFranchiseSync();
+    } catch (error) {
+      console.error('❌ Error initializing franchise sync:', error);
     }
   }
 

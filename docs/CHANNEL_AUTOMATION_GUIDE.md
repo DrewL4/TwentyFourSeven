@@ -19,7 +19,32 @@ This system auto-adds newly discovered Plex items to channels using collection-f
 1. Enable automation: set `autoFilterEnabled` true on the channel.
 2. Set `filterCollections` to a JSON array, e.g. `["Pixar","Marvel Cinematic Universe"]`.
 3. Optionally set other filters: `filterGenres`, `filterActors`, `filterDirectors`, `filterStudios`, `filterYearStart`, `filterYearEnd`, `filterRating`, `filterType`.
-4. Optionally set `autoSortMethod` (e.g., `title-asc`, `year-newest`, `timeline-mcu`).
+4. Optionally set `autoSortMethod` (e.g., `title-asc`, `year-newest`, `timeline:mcu-chronological`). Legacy values `timeline-mcu` and `timeline-star-wars` still work.
+5. For MCU-style channels, pair `filterCollections: ["Marvel Cinematic Universe"]` with franchise timeline sort from **Channels → Quick Actions → Franchise timeline**, or manage lists under **Settings → Franchise watch order**.
+
+## Franchise watch order (TMDB + channels)
+
+Franchises are **database-defined** (Settings → Franchise watch order). Nothing is hardcoded in the server.
+
+### Define what you want from TMDB
+
+1. Find the TMDB **collection id** (e.g. search [themoviedb.org](https://www.themoviedb.org) → collection page → id in the URL).
+2. In **Settings → Franchise watch order**, create or edit a franchise and set **TMDB collection ID**.
+3. Optionally set **Timeline URL** (chronological JSON, e.g. [marvelorder](https://github.com/ThatGuySam/marvelorder) `mcu-timeline-sheet.json`) and **Listings URL** for title→TMDB id lookup.
+4. Save a **TMDB API v3 key** in Settings (or `TMDB_API_KEY` in the server env).
+5. Click **Sync now** — entries are built from the timeline (if set), merged with collection `parts` by release date, and linked to Plex movies via `MediaMovie.tmdbId` (from Plex `Guid` on sync).
+
+Use **Preview collection** before import to confirm you have the right TMDB collection (many collections are a subset, e.g. “Avengers Collection” vs full MCU).
+
+### Tie a franchise to a channel
+
+1. On **Channels**, select the channel → **Quick Actions → Franchise timeline** → pick a franchise (preview).
+2. Click **Link franchise & auto-add** — sets `channel.franchiseId`, enables movie automation, matches movies by franchise entry `tmdbId`, and sets `autoSortMethod` to `timeline:<slug>`.
+3. Or only **Apply timeline order** if the channel already has the right movies and you just want reordering.
+
+New Plex movies that share a franchise entry `tmdbId` are added on the next automation run (webhook or 15‑minute sweep). Timeline channels re-sort when the franchise list changes after sync.
+
+Env: `TMDB_API_KEY`, `FRANCHISE_SYNC_INTERVAL_HOURS` (default 24).
 
 ## Best practices
 

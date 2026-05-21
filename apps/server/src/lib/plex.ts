@@ -59,11 +59,13 @@ interface PlexMedia {
   updatedAt?: number;
   studio?: string;
   contentRating?: string;
+  Guid?: Array<{ id?: string }>;
   Genre?: Array<{ tag: string }>;
   Director?: Array<{ tag: string }>;
   Writer?: Array<{ tag: string }>;
   Role?: Array<{ tag: string; role?: string }>;
   Country?: Array<{ tag: string }>;
+  Collection?: Array<{ tag: string }>;
 }
 
 interface PlexEpisode extends PlexMedia {
