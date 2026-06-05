@@ -260,25 +260,14 @@ export async function GET(request: NextRequest) {
         const show = program.episode.show;
         const episode = program.episode;
 
-        // Pre-compute values to reduce repeated operations
-        const title = escapeXml(show.title);
-        const subTitle = episode.title?.trim() ? escapeXml(episode.title) : null;
         const seasonStr = episode.seasonNumber.toString().padStart(2, '0');
         const episodeStr = episode.episodeNumber.toString().padStart(2, '0');
         const episodeNum = `S${seasonStr}E${episodeStr}`;
         const xmltvNsNum = `${episode.seasonNumber - 1}.${episode.episodeNumber - 1}.`;
 
-        // Build description lines more efficiently
-        const descLines = [`S${seasonStr} E${episodeStr}`];
-        let summary = '';
-        if (episode.summary?.trim()) {
-          summary = episode.summary;
-        } else if (show.summary?.trim()) {
-          summary = show.summary;
-        }
-        if (summary) {
-          descLines.push('', summary);
-        }
+        const episodeTitleRaw = episode.title?.trim() || show.title;
+        const title = escapeXml(`${episodeTitleRaw} - ${episodeNum}`);
+        const episodeDesc = episode.summary?.trim() || '';
 
         // Parse actors more efficiently
         let actorList: string[] = [];
@@ -292,15 +281,11 @@ export async function GET(request: NextRequest) {
             actorList = show.actors.split(',').map(a => a.trim()).filter(a => a);
           }
         }
-        if (actorList.length > 0) {
-          descLines.push('', `Cast: ${actorList.join(', ')}`);
-        }
 
         // Build all episode XML parts at once
         const episodeParts = [
           `    <title lang="en">${title}</title>`,
-          subTitle ? `    <sub-title lang="en">${subTitle}</sub-title>` : null,
-          `    <desc lang="en">${escapeXml(descLines.join('\n'))}</desc>`,
+          episodeDesc ? `    <desc lang="en">${escapeXml(episodeDesc)}</desc>` : null,
           `    <category lang="en">Series</category>`,
           `    <episode-num system="onscreen">${episodeNum}</episode-num>`,
           `    <episode-num system="xmltv_ns">${xmltvNsNum}</episode-num>`
