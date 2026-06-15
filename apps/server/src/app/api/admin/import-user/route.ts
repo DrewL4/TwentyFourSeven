@@ -54,6 +54,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    try {
+      const { emitUserUpdate } = await import('@/lib/socket-io');
+      emitUserUpdate(email, existingUser ? 'updated' : 'created');
+    } catch {
+      // Socket.io may not be initialized
+    }
+
     return NextResponse.json({ 
       success: true, 
       action: existingUser ? "updated" : "created",

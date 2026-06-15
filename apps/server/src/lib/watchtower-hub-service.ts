@@ -96,9 +96,12 @@ export class WatchTowerHubService {
         .digest('hex');
 
       const expectedSigWithPrefix = `sha256=${expectedSignature}`;
+      if (signature.length !== expectedSigWithPrefix.length) {
+        return false;
+      }
       return crypto.timingSafeEqual(
         Buffer.from(signature),
-        Buffer.from(expectedSigWithPrefix)
+        Buffer.from(expectedSigWithPrefix),
       );
     } catch (error) {
       console.error('Error verifying webhook signature:', error);
@@ -118,7 +121,9 @@ export class WatchTowerHubService {
         case 'user.deleted':
           await this.handleUserDeleted(event.data);
           break;
+        case 'service.created':
         case 'service.updated':
+        case 'service.deleted':
           await this.handleServiceUpdated(event.data);
           break;
         case 'donation.received':
@@ -374,6 +379,12 @@ export class WatchTowerHubService {
         });
 
       console.log(`Logged service update for service ${serviceData.service_id}`);
+      try {
+        const { emitUsersRefresh } = await import('@/lib/socket-io');
+        emitUsersRefresh();
+      } catch {
+        // Socket.io may not be initialized in dev-only Next routes
+      }
     } catch (error) {
       console.error('Error handling service update webhook:', error);
       throw error;
@@ -382,14 +393,33 @@ export class WatchTowerHubService {
 
   private async handleDonationReceived(donationData: any): Promise<void> {
     try {
-      // Find the user and update their access/permissions based on donation
+      await this.initialize();
+
+      if (donationData.user_id && this.watchTowerUrl && this.apiToken) {
+        const detailResponse = await fetch(
+          `${this.watchTowerUrl}/api/api/v1/users/${donationData.user_id}/`,
+          {
+            headers: {
+              Authorization: `Token ${this.apiToken}`,
+            },
+          },
+        );
+        if (detailResponse.ok) {
+          const body = await detailResponse.json();
+          const userData = body.user || body;
+          await this.handleUserUpdated(userData);
+          console.log(`Refreshed user access after donation for ${userData.email}`);
+          return;
+        }
+      }
+
       const user = await db.user.findFirst({
         where: {
           OR: [
             { watchTowerUserId: donationData.user_id?.toString() },
-            { email: donationData.username } // Fallback if username is email
-          ]
-        }
+            { email: donationData.username },
+          ],
+        },
       });
 
       if (!user) {
@@ -397,17 +427,24 @@ export class WatchTowerHubService {
         return;
       }
 
-              // Log the donation for admin review
-        await db.setting.create({
-          data: {
-            key: `watchtower_donation_${donationData.donation_id}`,
-            value: JSON.stringify({
-              ...donationData,
-              twentyFourSevenUserId: user.id,
-              processedAt: new Date().toISOString()
-            })
-          }
-        });
+      await db.setting.upsert({
+        where: { key: `watchtower_donation_${donationData.donation_id}` },
+        update: {
+          value: JSON.stringify({
+            ...donationData,
+            twentyFourSevenUserId: user.id,
+            processedAt: new Date().toISOString(),
+          }),
+        },
+        create: {
+          key: `watchtower_donation_${donationData.donation_id}`,
+          value: JSON.stringify({
+            ...donationData,
+            twentyFourSevenUserId: user.id,
+            processedAt: new Date().toISOString(),
+          }),
+        },
+      });
 
       console.log(`Logged donation for user ${user.email}: ${donationData.amount}`);
     } catch (error) {
@@ -489,6 +526,64 @@ export class WatchTowerHubService {
     }
 
     return true;
+  }
+
+  async checkConnection(): Promise<boolean> {
+    try {
+      if (!await this.isConfigured()) {
+        return false;
+      }
+
+      const response = await fetch(`${this.watchTowerUrl}/api/api/v1/users/`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${this.apiToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return response.ok;
+    } catch (error) {
+      console.error('WatchTower connection check failed:', error);
+      return false;
+    }
+  }
+
+  async syncUsers(): Promise<{ created: number; updated: number; skipped: number; total: number }> {
+    const users = await this.fetchUsers();
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const wtUser of users) {
+      try {
+        const existingUser = await db.user.findFirst({
+          where: {
+            OR: [
+              { email: wtUser.email },
+              { watchTowerUserId: wtUser.id?.toString() },
+            ],
+          },
+        });
+
+        await this.handleWebhookEvent({
+          event_type: existingUser ? 'user.updated' : 'user.created',
+          timestamp: new Date().toISOString(),
+          data: wtUser,
+        });
+
+        if (existingUser) {
+          updated += 1;
+        } else {
+          created += 1;
+        }
+      } catch (userError) {
+        console.error(`Error syncing user ${wtUser.email}:`, userError);
+        skipped += 1;
+      }
+    }
+
+    return { created, updated, skipped, total: users.length };
   }
 
   async fetchUsers(): Promise<WatchTowerUser[]> {

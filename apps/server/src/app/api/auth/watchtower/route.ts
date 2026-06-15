@@ -94,7 +94,25 @@ export async function POST(request: NextRequest) {
     }
 
     const watchTowerResponse = await userResponse.json();
-    const watchTowerUser = watchTowerResponse.user;
+    let watchTowerUser = watchTowerResponse.user;
+
+    // Authoritative pull: canonical user detail on every login
+    const wtUserId = watchTowerUser?.id || watchTowerUser?.user_id;
+    if (wtUserId && config.apiToken) {
+      const canonicalResponse = await fetch(
+        `${config.url}/api/api/v1/users/${wtUserId}/`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Token ${config.apiToken}`,
+          },
+        },
+      );
+      if (canonicalResponse.ok) {
+        const canonicalBody = await canonicalResponse.json();
+        watchTowerUser = canonicalBody.user || canonicalBody;
+      }
+    }
 
     // Check if user has movie service access
     // Based on WatchTower logic: admins and family users always have access

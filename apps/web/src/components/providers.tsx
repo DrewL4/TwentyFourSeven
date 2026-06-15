@@ -5,6 +5,8 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { queryClient } from "@/utils/orpc";
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
+import UserUpdatesProvider from "./user-updates-provider";
+import { SocketProvider } from "@/contexts/socket-context";
 
 
 export default function Providers({
@@ -20,7 +22,11 @@ export default function Providers({
       disableTransitionOnChange
     >
       <QueryClientProvider client={queryClient}>
-        {children}
+        <SocketProvider>
+          <UserUpdatesProvider>
+            {children}
+          </UserUpdatesProvider>
+        </SocketProvider>
         <ReactQueryDevtools 
           initialIsOpen={false}
           position="bottom"

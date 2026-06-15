@@ -6,6 +6,7 @@ export class StartupService {
   private static initialized = false;
   private static initializationPromise: Promise<void> | null = null;
   private static syncIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private static integrationStreamInterval: NodeJS.Timeout | null = null;
 
   static async initialize() {
     // If already initialized, return immediately
@@ -48,6 +49,9 @@ export class StartupService {
       // Initialize WatchTower sync scheduler
       await this.initializeWatchTowerSync();
 
+      // Optional Redis integration stream consumer (hub-managed)
+      await this.initializeIntegrationStreamConsumer();
+
       // Initialize programming maintenance to ensure channels never end
       await this.initializeProgrammingMaintenance();
 
@@ -74,6 +78,26 @@ export class StartupService {
       await scheduler.startWatchTowerSync();
     } catch (error) {
       console.error('❌ Error initializing WatchTower sync:', error);
+    }
+  }
+
+  private static async initializeIntegrationStreamConsumer() {
+    try {
+      const { consumeIntegrationStream } = await import('./integration-stream-consumer');
+      const tick = async () => {
+        try {
+          await consumeIntegrationStream();
+        } catch (error) {
+          console.debug('Integration stream tick skipped:', error);
+        }
+      };
+      await tick();
+      if (this.integrationStreamInterval) {
+        clearInterval(this.integrationStreamInterval);
+      }
+      this.integrationStreamInterval = setInterval(tick, 5000);
+    } catch (error) {
+      console.debug('Integration stream consumer not started:', error);
     }
   }
 
@@ -201,6 +225,11 @@ export class StartupService {
       clearInterval(interval);
     }
     this.syncIntervals.clear();
+
+    if (this.integrationStreamInterval) {
+      clearInterval(this.integrationStreamInterval);
+      this.integrationStreamInterval = null;
+    }
     
     // Cleanup all scheduled tasks
     scheduler.stopAll();

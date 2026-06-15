@@ -1,5 +1,6 @@
 import { authClient } from "@/lib/auth-client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { TFS_USER_UPDATES_EVENT } from "@/constants/userRealtime";
 
 /**
  * Hook to check if current user is admin
@@ -10,36 +11,41 @@ export function useAdmin() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [roleLoading, setRoleLoading] = useState(true);
 
-  // Fetch user role when session is available
-  useEffect(() => {
+  const fetchRole = useCallback(async () => {
     if (!session?.user?.id) {
       setRoleLoading(false);
       return;
     }
+    try {
+      const response = await fetch('/api/user/session', {
+        credentials: 'include',
+      });
 
-    // Fetch role from custom endpoint
-    const fetchRole = async () => {
-      try {
-        const response = await fetch('/api/user/session', {
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const role = data?.user?.role || null;
-          setUserRole(role);
-        } else {
-          setUserRole(null);
-        }
-      } catch (error) {
+      if (response.ok) {
+        const data = await response.json();
+        const role = data?.user?.role || null;
+        setUserRole(role);
+      } else {
         setUserRole(null);
-      } finally {
-        setRoleLoading(false);
       }
-    };
-
-    fetchRole();
+    } catch {
+      setUserRole(null);
+    } finally {
+      setRoleLoading(false);
+    }
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    void fetchRole();
+  }, [fetchRole]);
+
+  useEffect(() => {
+    const handler = () => {
+      void fetchRole();
+    };
+    window.addEventListener(TFS_USER_UPDATES_EVENT, handler);
+    return () => window.removeEventListener(TFS_USER_UPDATES_EVENT, handler);
+  }, [fetchRole]);
 
   const isAdmin = userRole === 'ADMIN';
 

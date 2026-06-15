@@ -19,3 +19,11 @@ export function emitUserUpdate(userEmail: string, action: 'created' | 'updated' 
   }
 }
 
+export function emitUsersRefresh() {
+  if (typeof global !== 'undefined' && global.io) {
+    global.io.to('users').emit('users:refresh', {
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+

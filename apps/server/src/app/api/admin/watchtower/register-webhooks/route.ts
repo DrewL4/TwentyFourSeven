@@ -39,19 +39,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get or generate webhook secret
-    let webhookSecret = await db.setting.findUnique({
-      where: { key: 'watchtower_webhook_secret' }
-    });
-
-    if (!webhookSecret) {
-      const crypto = require('crypto');
-      const secret = crypto.randomBytes(32).toString('hex');
-      webhookSecret = await db.setting.create({
-        data: { key: 'watchtower_webhook_secret', value: secret }
-      });
-    }
-
     // Determine webhook URL - prefer provided URL, then environment variable, then detect from request
     let webhookUrl = providedWebhookUrl;
     
@@ -80,25 +67,26 @@ export async function POST(request: NextRequest) {
     // Register webhook with WatchTower
     const webhookData = {
       app_name: 'twentyfourseven',
-      url: fullWebhookUrl,
+      endpoint_url: fullWebhookUrl,
       events: [
         'user.created',
-        'user.updated', 
+        'user.updated',
         'user.deleted',
+        'service.created',
         'service.updated',
-        'donation.received'
+        'service.deleted',
+        'donation.received',
       ],
-      secret: webhookSecret.value,
-      is_active: true
+      timeout_seconds: 30,
     };
 
     const response = await fetch(`${watchTowerUrl}/api/api/v1/webhooks/register/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiToken}`
+        'Authorization': `Token ${apiToken}`,
       },
-      body: JSON.stringify(webhookData)
+      body: JSON.stringify(webhookData),
     });
 
     if (!response.ok) {
@@ -114,12 +102,22 @@ export async function POST(request: NextRequest) {
     }
 
     const webhookResult = await response.json();
+    const secretKey = webhookResult.secret_key;
+    const webhookId = webhookResult.id || webhookResult.webhook_id;
+
+    if (secretKey) {
+      await db.setting.upsert({
+        where: { key: 'watchtower_webhook_secret' },
+        update: { value: secretKey },
+        create: { key: 'watchtower_webhook_secret', value: secretKey },
+      });
+    }
 
     // Save webhook registration details
     await db.setting.upsert({
       where: { key: 'watchtower_webhook_id' },
-      update: { value: webhookResult.webhook_id?.toString() || 'registered' },
-      create: { key: 'watchtower_webhook_id', value: webhookResult.webhook_id?.toString() || 'registered' }
+      update: { value: webhookId?.toString() || 'registered' },
+      create: { key: 'watchtower_webhook_id', value: webhookId?.toString() || 'registered' },
     });
 
     await db.setting.upsert({
@@ -140,7 +138,7 @@ export async function POST(request: NextRequest) {
       message: 'Webhook registered successfully with WatchTower',
       webhookUrl: fullWebhookUrl,
       events: webhookData.events,
-      webhookId: webhookResult.webhook_id,
+      webhookId,
       note: 'Make sure this URL is publicly accessible from WatchTower server'
     });
 

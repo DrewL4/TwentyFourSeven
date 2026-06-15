@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Download, Users as UsersIcon, Loader2, AlertCircle, CheckCircle, LogIn } from "lucide-react";
 import { toast } from "sonner";
-import { useSocket } from "@/hooks/use-socket";
+import { useSocketContext } from "@/contexts/socket-context";
+import { TFS_USER_UPDATES_EVENT } from "@/constants/userRealtime";
 
 interface User {
   _id: string;
@@ -44,7 +45,7 @@ export default function UsersPage() {
   const [isWatchTowerConfigured, setIsWatchTowerConfigured] = useState(false);
   
   // Connect to WebSocket for real-time updates
-  const { socket, isConnected } = useSocket();
+  const { isConnected } = useSocketContext();
 
   const fetchUsers = useCallback(async (showLoading = true) => {
     try {
@@ -76,29 +77,23 @@ export default function UsersPage() {
     loadWatchTowerSettings();
   }, [fetchUsers]);
 
-  // Listen for user update events from WebSocket
+  // Refresh roster from global user update events (socket handled in UserUpdatesProvider)
   useEffect(() => {
-    if (!socket) return;
-
-    const handleUserUpdate = (data: { email: string; action: string; timestamp: string }) => {
-      console.log('[Socket] Received user update:', data);
-      // Refresh users list when we receive an update
-      fetchUsers(false); // Silent refresh (no loading spinner)
-      
-      // Show appropriate toast message
-      if (data.action === 'deleted') {
-        toast.info(`User ${data.email} was deleted`);
-      } else {
-        toast.info(`User ${data.email} was ${data.action}`);
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ email?: string; action?: string }>).detail;
+      fetchUsers(false);
+      if (detail?.email && detail?.action) {
+        if (detail.action === "deleted") {
+          toast.info(`User ${detail.email} was deleted`);
+        } else {
+          toast.info(`User ${detail.email} was ${detail.action}`);
+        }
       }
     };
+    window.addEventListener(TFS_USER_UPDATES_EVENT, handler);
+    return () => window.removeEventListener(TFS_USER_UPDATES_EVENT, handler);
+  }, [fetchUsers]);
 
-    socket.on('user:update', handleUserUpdate);
-
-    return () => {
-      socket.off('user:update', handleUserUpdate);
-    };
-  }, [socket, fetchUsers]);
 
   const loadWatchTowerSettings = async () => {
     try {

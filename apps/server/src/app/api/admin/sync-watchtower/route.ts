@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { WatchTowerHubService } from '@/lib/watchtower-hub-service-simple';
+import { WatchTowerHubService } from '@/lib/watchtower-hub-service';
 
 export async function POST(request: NextRequest) {
   try {
