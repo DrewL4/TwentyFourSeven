@@ -1,5 +1,6 @@
 import { ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
+import { sharedLiveTranscodePool } from './shared-live-transcode';
 
 export interface ProgramInfo {
   ratingKey: string;
@@ -33,9 +34,9 @@ export class StreamMonitorService {
   private sessionTimeout: number;
 
   private constructor() {
-    // Default session timeout: 10 minutes (600000ms)
+    // Default idle timeout: 2 minutes — reclaim orphan FFmpeg after channel flips
     this.sessionTimeout = parseInt(
-      process.env.STREAM_SESSION_TIMEOUT || '600000',
+      process.env.STREAM_SESSION_TIMEOUT || '120000',
       10
     );
   }
@@ -86,8 +87,26 @@ export class StreamMonitorService {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.ffmpegPid = process?.pid ?? null;
-      session.ffmpegProcess = null;
-      session.lastActivity = new Date();
+      // Keep a weak handle for same-session kill paths; shared live hubs
+      // own the ChildProcess separately and kill via the pool.
+      session.ffmpegProcess = process;
+      // Do not refresh lastActivity — process swaps happen while encoder runs
+      // and must not reset the idle timer for orphan cleanup.
+    }
+  }
+
+  /** Propagate the same FFmpeg PID to every session in a shared live hub. */
+  setFfmpegPidForSessions(
+    sessionIds: string[],
+    process: ChildProcess | null,
+  ): void {
+    const pid = process?.pid ?? null;
+    for (const sessionId of sessionIds) {
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        session.ffmpegPid = pid;
+        session.ffmpegProcess = null;
+      }
     }
   }
 
@@ -110,18 +129,20 @@ export class StreamMonitorService {
   }
 
   /**
-   * Update output activity timestamp (called on data events)
+   * FFmpeg produced media output — for stall detection only.
+   * Do NOT refresh lastActivity here: encoder output would keep orphaned
+   * sessions forever after the client disconnects without an abort.
    */
   updateOutputActivity(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (session) {
       session.lastOutputTimestamp = new Date();
-      session.lastActivity = new Date();
     }
   }
 
   /**
-   * Update activity timestamp
+   * Client-side activity (connect, metadata, recovery ownership).
+   * Used by stale-session cleanup — must not be driven by FFmpeg I/O.
    */
   updateActivity(sessionId: string): void {
     const session = this.sessions.get(sessionId);
@@ -235,6 +256,12 @@ export class StreamMonitorService {
    * Remove a session
    */
   removeSession(sessionId: string): boolean {
+    // Shared live hubs own FFmpeg — release the viewer slot instead of
+    // killing by PID (which would drop every client on that channel).
+    if (sharedLiveTranscodePool.hasViewer(sessionId)) {
+      sharedLiveTranscodePool.releaseViewer(sessionId);
+      return this.sessions.delete(sessionId);
+    }
     const session = this.sessions.get(sessionId);
     if (session) {
       this.killFfmpegForSession(session);
@@ -248,14 +275,20 @@ export class StreamMonitorService {
   }
 
   /**
-   * Clean up stale sessions (lazy cleanup)
-   * Removes sessions older than timeout or inactive for extended period
+   * Clean up stale sessions (lazy cleanup).
+   * Uses lastActivity (client interest), NOT FFmpeg output timestamps —
+   * otherwise orphaned encoders that keep writing would never expire.
    */
   cleanupStaleSessions(): number {
     const now = Date.now();
     const staleThreshold = now - this.sessionTimeout;
     let cleaned = 0;
 
+    // Drop shared-live viewers whose HTTP stream already closed without abort.
+    for (const sessionId of sharedLiveTranscodePool.releaseDestroyedViewers()) {
+      this.sessions.delete(sessionId);
+      cleaned++;
+    }
     for (const [sessionId, session] of this.sessions.entries()) {
       const lastActivityTime = session.lastActivity.getTime();
 

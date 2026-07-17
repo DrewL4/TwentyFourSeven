@@ -10,6 +10,11 @@ const STREAM_KEY = 'wt:integration';
 const GROUP = 'twentyfourseven_integration';
 const CONSUMER = 'tfs_worker_1';
 
+/** ioredis xreadgroup shape: [streamName, [id, fieldPairs][]][] */
+type RedisStreamReadResult = Array<
+  [string, Array<[string, string[]]>]
+> | null;
+
 export async function consumeIntegrationStream(batchSize = 10): Promise<number> {
   const enabled = await db.setting.findUnique({
     where: { key: 'watchtower_redis_stream_enabled' },
@@ -32,7 +37,7 @@ export async function consumeIntegrationStream(batchSize = 10): Promise<number> 
       // group exists
     }
 
-    const result = await client.xreadgroup(
+    const result = (await client.xreadgroup(
       'GROUP',
       GROUP,
       CONSUMER,
@@ -43,7 +48,7 @@ export async function consumeIntegrationStream(batchSize = 10): Promise<number> 
       'STREAMS',
       STREAM_KEY,
       '>',
-    );
+    )) as RedisStreamReadResult;
 
     if (!result) {
       await client.quit();

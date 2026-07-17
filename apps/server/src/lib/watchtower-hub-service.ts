@@ -200,7 +200,7 @@ export class WatchTowerHubService {
       
       // Emit Socket.io event
       try {
-        const { emitUserUpdate } = await import('@/lib/socket-io');
+        const { emitUserUpdate } = await import('./socket-io');
         emitUserUpdate(userData.email, 'created');
       } catch (error) {
         // Socket.io might not be initialized, that's okay
@@ -271,7 +271,7 @@ export class WatchTowerHubService {
         console.log(`[Webhook] Deactivated user ${userData.email} - lost movie service access`);
         // Emit Socket.io event
         try {
-          const { emitUserUpdate } = await import('@/lib/socket-io');
+          const { emitUserUpdate } = await import('./socket-io');
           emitUserUpdate(userData.email, 'updated');
         } catch (error) {
           // Socket.io might not be initialized, that's okay
@@ -280,7 +280,7 @@ export class WatchTowerHubService {
         console.log(`[Webhook] Activated user ${userData.email} - gained movie service access${isExpired ? ' (was expired, now active)' : ''}`);
         // Emit Socket.io event
         try {
-          const { emitUserUpdate } = await import('@/lib/socket-io');
+          const { emitUserUpdate } = await import('./socket-io');
           emitUserUpdate(userData.email, 'updated');
         } catch (error) {
           // Socket.io might not be initialized, that's okay
@@ -289,7 +289,7 @@ export class WatchTowerHubService {
         console.log(`[Webhook] Updated user ${userData.email} expiration status: ${isExpired ? 'EXPIRED' : 'ACTIVE'}`);
         // Emit Socket.io event
         try {
-          const { emitUserUpdate } = await import('@/lib/socket-io');
+          const { emitUserUpdate } = await import('./socket-io');
           emitUserUpdate(userData.email, 'updated');
         } catch (error) {
           // Socket.io might not be initialized, that's okay
@@ -298,7 +298,7 @@ export class WatchTowerHubService {
         console.log(`[Webhook] Updated user ${userData.email} from WatchTower`);
         // Emit Socket.io event for any update
         try {
-          const { emitUserUpdate } = await import('@/lib/socket-io');
+          const { emitUserUpdate } = await import('./socket-io');
           emitUserUpdate(userData.email, 'updated');
         } catch (error) {
           // Socket.io might not be initialized, that's okay
@@ -347,7 +347,7 @@ export class WatchTowerHubService {
       
       // Emit Socket.io event
       try {
-        const { emitUserUpdate } = await import('@/lib/socket-io');
+        const { emitUserUpdate } = await import('./socket-io');
         emitUserUpdate(userData.email, 'deleted');
       } catch (error) {
         // Socket.io might not be initialized, that's okay
@@ -380,7 +380,7 @@ export class WatchTowerHubService {
 
       console.log(`Logged service update for service ${serviceData.service_id}`);
       try {
-        const { emitUsersRefresh } = await import('@/lib/socket-io');
+        const { emitUsersRefresh } = await import('./socket-io');
         emitUsersRefresh();
       } catch {
         // Socket.io may not be initialized in dev-only Next routes

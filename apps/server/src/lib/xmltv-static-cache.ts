@@ -1,6 +1,7 @@
-import { createWriteStream } from "fs";
+import { createReadStream, createWriteStream } from "fs";
 import { mkdir, readFile, rename, stat, writeFile } from "fs/promises";
 import path from "path";
+import { Readable } from "stream";
 import { finished } from "stream/promises";
 
 const DEFAULT_PATH = path.join(
@@ -23,6 +24,22 @@ export async function readXmlTvCacheIfFresh(
       return null;
     }
     return await readFile(filePath, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+/** Stream a fresh on-disk XMLTV cache without loading the full guide into heap. */
+export async function openXmlTvCacheStreamIfFresh(
+  maxAgeMs: number,
+): Promise<Readable | null> {
+  const filePath = getXmlTvCachePath();
+  try {
+    const info = await stat(filePath);
+    if (Date.now() - info.mtimeMs > maxAgeMs) {
+      return null;
+    }
+    return createReadStream(filePath, { encoding: "utf8" });
   } catch {
     return null;
   }

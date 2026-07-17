@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, ReactNode } from "react";
+import { createContext, useContext } from "react";
+import type { ReactNode } from "react";
 import type { Socket } from "socket.io-client";
 import { useSocket } from "@/hooks/use-socket";
 

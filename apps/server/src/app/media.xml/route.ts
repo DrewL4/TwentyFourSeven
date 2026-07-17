@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   getXmlTvCachePath,
-  readXmlTvCacheIfFresh,
+  openXmlTvCacheStreamIfFresh,
   writeXmlTvCacheStreaming,
 } from "@/lib/xmltv-static-cache";
-import { readFile } from "fs/promises";
-
+import { createReadStream } from "fs";
+import { Readable } from "stream";
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 /**
@@ -55,9 +55,9 @@ export async function GET(request: NextRequest) {
     const bypassCache = searchParams.get('bypass-cache') === 'true';
 
     if (!bypassCache) {
-      const cachedXml = await readXmlTvCacheIfFresh(CACHE_DURATION);
-      if (cachedXml) {
-        return new NextResponse(cachedXml, {
+      const cachedStream = await openXmlTvCacheStreamIfFresh(CACHE_DURATION);
+      if (cachedStream) {
+        return new NextResponse(Readable.toWeb(cachedStream) as any, {
           headers: {
             "Content-Type": "application/xml; charset=utf-8",
             "Content-Disposition": 'attachment; filename="xmltv.xml"',
@@ -477,8 +477,10 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    const xmltv = await readFile(getXmlTvCachePath(), 'utf8');
-    return new NextResponse(xmltv, {
+    const xmltvStream = createReadStream(getXmlTvCachePath(), {
+      encoding: "utf8",
+    });
+    return new NextResponse(Readable.toWeb(xmltvStream) as any, {
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',
         'Content-Disposition': 'attachment; filename="xmltv.xml"',

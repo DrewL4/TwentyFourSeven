@@ -224,7 +224,7 @@ export default function SettingsPage() {
                     max="99"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Use 0 for no limit (recommended). Otherwise caps how many different channels can transcode at once; multiple viewers on the same channel never count extra.
+                    Caps how many different channels can transcode at once (recommended 2–4 for low RAM). Use 0 only if you accept unlimited FFmpeg memory. Multiple viewers on the same live channel share one transcoder and do not count extra.
                   </p>
                 </div>
               </div>

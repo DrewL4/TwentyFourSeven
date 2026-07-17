@@ -1,5 +1,6 @@
 import { maintainBoundedMap } from "./bounded-cache";
 import { streamMonitorService } from './stream-monitor-service';
+import { sharedLiveTranscodePool } from './shared-live-transcode';
 import { streamRecoveryService } from './stream-recovery-service';
 
 export class StreamHealthMonitor {
@@ -247,7 +248,12 @@ export class StreamHealthMonitor {
           );
 
           // Trigger recovery if not already recovering
-          if (session.status !== 'recovering') {
+          // Shared live hubs: only the owner session should mark recovering
+          // (one FFmpeg serves all viewers on that channel/program).
+          const sharedNonOwner =
+            sharedLiveTranscodePool.hasViewer(session.sessionId) &&
+            !sharedLiveTranscodePool.isOwner(session.sessionId);
+          if (session.status !== 'recovering' && !sharedNonOwner) {
             const firstIssue = healthCheck.issues[0] || 'Unknown health issue';
             streamMonitorService.addError(session.sessionId, firstIssue);
 
