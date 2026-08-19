@@ -11,7 +11,7 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate --schema ./prisma/schema",
     "db:migrate": "prisma migrate dev",
-    "test": "node --import tsx --test src/lib/stream-limit.test.ts src/lib/shared-live-transcode.test.ts src/lib/orphan-session-cleanup.test.ts src/lib/channel-summary-shape.test.ts src/lib/library-summary-shape.test.ts src/lib/timing-service.catchup.test.ts src/lib/franchise-sort-service.test.ts src/lib/franchise-sync-service.test.ts src/lib/franchise-collection-order.test.ts src/lib/franchise-story-supplements.test.ts src/lib/plex-guid.test.ts"
+    "test": "node --import tsx --test src/lib/stream-limit.test.ts src/lib/shared-live-transcode.test.ts src/lib/resolve-live-program.test.ts src/lib/orphan-session-cleanup.test.ts src/lib/channel-summary-shape.test.ts src/lib/library-summary-shape.test.ts src/lib/timing-service.catchup.test.ts src/lib/franchise-sort-service.test.ts src/lib/franchise-sync-service.test.ts src/lib/franchise-collection-order.test.ts src/lib/franchise-story-supplements.test.ts src/lib/plex-guid.test.ts"
   },
   "dependencies": {
     "@orpc/client": "^1.4.1",

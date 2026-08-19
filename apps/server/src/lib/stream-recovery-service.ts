@@ -5,6 +5,7 @@ import { PassThrough } from 'stream';
 import { PlexAPI } from './plex';
 import { TimingService } from './timing-service';
 import { prisma } from './prisma';
+import { loadLiveProgramForChannel } from './resolve-live-program';
 
 export type ErrorType = 'transient' | 'program-related' | 'permanent';
 
@@ -226,63 +227,14 @@ export class StreamRecoveryService {
     seekSeconds: number;
   } | null> {
     try {
-      const now = new Date();
-      const channel = await prisma.channel.findUnique({
-        where: { number: channelNumber },
-        include: {
-          programs: {
-            where: { startTime: { lte: now } },
-            include: {
-              episode: { include: { show: { include: { library: { include: { server: true } } } } } },
-              movie: { include: { library: { include: { server: true } } } },
-            },
-            orderBy: { startTime: 'desc' },
-            take: 1,
-          },
-        },
-      });
-
-      if (!channel || channel.programs.length === 0) {
+      const live = await loadLiveProgramForChannel(channelNumber);
+      if (!live) {
         return null;
       }
-
-      const currentProgram = channel.programs[0];
-      const programEnd = new Date(currentProgram.startTime.getTime() + currentProgram.duration);
-
-      if (now > programEnd) {
-        return null; // Program has ended, need new program
-      }
-
-      const timing = TimingService.calculateSeekOffset(
-        currentProgram.startTime,
-        currentProgram.duration,
-        now
-      );
-      const programInfo = currentProgram.movie ?? currentProgram.episode;
-      const server = currentProgram.movie?.library.server ?? currentProgram.episode?.show.library.server;
-
-      if (!programInfo || !server || server.type !== 'PLEX' || !server.token) {
-        return null;
-      }
-
-      const plex = new PlexAPI({ uri: server.url });
-      const mediaParts = await plex.getMediaParts(
-        server.url,
-        server.token,
-        programInfo.ratingKey
-      );
-
-      if (!mediaParts?.partKey) {
-        return null;
-      }
-
-      const streamUrl = `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`;
-      const seekSeconds = timing.seekOffsetMs > 0 ? Math.floor(timing.seekOffsetMs / 1000) : 0;
-
       return {
-        programInfo: { ratingKey: programInfo.ratingKey },
-        streamUrl,
-        seekSeconds,
+        programInfo: live.programInfo,
+        streamUrl: live.streamUrl,
+        seekSeconds: live.seekSeconds,
       };
     } catch (error) {
       console.error(`[Recovery] Failed to refresh program info for channel ${channelNumber}:`, error);

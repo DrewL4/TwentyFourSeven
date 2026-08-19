@@ -11,8 +11,36 @@ describe("SharedLiveTranscodePool", () => {
     pool.resetForTests();
   });
 
-  it("shares one hub key per live channel+program", () => {
-    assert.equal(pool.getLiveShareKey(5, "rk1"), "5:rk1:live");
+  it("shares one hub key per live channel", () => {
+    assert.equal(pool.getLiveShareKey(5, "rk1"), "5:live");
+    assert.equal(pool.getLiveShareKey(5, "rk2"), "5:live");
+  });
+
+  it("lets a second viewer join while FFmpeg is not attached yet", async () => {
+    const ownerPass = new PassThrough();
+    const first = await pool.joinOrCreateLiveHub({
+      channelNumber: 9,
+      ratingKey: "ep1",
+      sessionId: "owner",
+      streamUrl: "http://example/a",
+      seekSeconds: 0,
+      passthrough: ownerPass,
+    });
+    assert.equal(first.shouldStartFfmpeg, true);
+
+    const joinerPass = new PassThrough();
+    const second = await pool.joinOrCreateLiveHub({
+      channelNumber: 9,
+      ratingKey: "ep1",
+      sessionId: "joiner",
+      streamUrl: "http://example/a",
+      seekSeconds: 0,
+      passthrough: joinerPass,
+    });
+    assert.equal(second.shouldStartFfmpeg, false);
+    assert.equal(second.hub, first.hub);
+    assert.equal(first.hub.viewers.size, 2);
+    pool.dissolveHub(first.hub, { killFfmpeg: false });
   });
 
   it("fans out viewers on the same hub and kills FFmpeg only on last leave", () => {

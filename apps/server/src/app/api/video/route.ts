@@ -14,50 +14,20 @@ import {
   sharedLiveTranscodePool,
   type SharedLiveHub,
 } from '@/lib/shared-live-transcode';
+import { loadLiveProgramForChannel } from '@/lib/resolve-live-program';
 
 // This is a requirement for using readable streams in a NextResponse.
 export const dynamic = 'force-dynamic';
 
 async function getProgramInfo(channelNumber: number) {
-  const now = new Date();
-  const channel = await prisma.channel.findUnique({
-    where: { number: channelNumber },
-    include: {
-      programs: {
-        where: { startTime: { lte: now } },
-        include: {
-          episode: { include: { show: { include: { library: { include: { server: true } } } } } },
-          movie: { include: { library: { include: { server: true } } } },
-        },
-        orderBy: { startTime: 'desc' },
-        take: 1,
-      },
-    },
-  });
-
-  if (!channel || channel.programs.length === 0) {
+  const live = await loadLiveProgramForChannel(channelNumber);
+  if (!live) {
     throw new Error('Channel or program not found');
   }
-
-  const currentProgram = channel.programs[0];
-  const programEnd = new Date(currentProgram.startTime.getTime() + currentProgram.duration);
-
-  if (now > programEnd) {
-    throw new Error('Program has ended');
-  }
-
-  const timing = TimingService.calculateSeekOffset(currentProgram.startTime, currentProgram.duration, now);
-  const programInfo = currentProgram.movie ?? currentProgram.episode;
-  const server = currentProgram.movie?.library.server ?? currentProgram.episode?.show.library.server;
-
-  if (!programInfo || !server || server.type !== 'PLEX' || !server.token) {
-    throw new Error('Program or server not configured for Plex streaming');
-  }
-
-  return { programInfo, server, timing };
+  return live;
 }
 
-async function buildFfmpegArgs(streamUrl: string, seekSeconds: number, options?: { forceSoftware?: boolean }): Promise<string[]> {
+async function buildFfmpegArgs(streamUrl: string, seekSeconds: number, options?: { forceSoftware?: boolean; discontinuity?: boolean }): Promise<string[]> {
     const ffmpegSettings = await prisma.ffmpegSettings.findUnique({
         where: { id: "singleton" },
     });
@@ -120,6 +90,10 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number, options?:
     
     // Input options
     args.push('-ss', `${seekSeconds}`);
+    args.push('-probesize', '32768');
+    args.push('-analyzeduration', '500000');
+    args.push('-fflags', '+genpts+discardcorrupt+nobuffer');
+    args.push('-flags', 'low_delay');
     if (ffmpegSettings?.inputOptions) {
         args.push(...ffmpegSettings.inputOptions.split(' '));
     }
@@ -204,6 +178,12 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number, options?:
     }
 
     args.push('-f', ffmpegSettings?.outputFormat || 'mpegts');
+    args.push('-flush_packets', '1');
+    args.push('-muxdelay', '0');
+    args.push('-muxpreload', '0');
+    if (options?.discontinuity) {
+        args.push('-mpegts_flags', '+resend_headers+initial_discontinuity');
+    }
     args.push('-'); // Output to stdout
 
     // Log the transcoding method being used
@@ -241,6 +221,9 @@ export async function GET(request: NextRequest) {
     let server: any;
     let timing: { seekOffsetMs: number; isActive: boolean; remainingMs: number };
     let catchupProgramTitle: string | undefined;
+    let liveProgramId: string | undefined;
+    let resolvedStreamUrl: string | undefined;
+    let resolvedSeekSeconds: number | undefined;
 
     if (isCatchup) {
       let requestedTime: Date | undefined;
@@ -298,6 +281,9 @@ export async function GET(request: NextRequest) {
       programInfo = liveInfo.programInfo;
       server = liveInfo.server;
       timing = liveInfo.timing;
+      liveProgramId = liveInfo.programId;
+      resolvedStreamUrl = liveInfo.streamUrl;
+      resolvedSeekSeconds = liveInfo.seekSeconds;
     }
 
     // ── From here, the rest of the pipeline is shared between live and catchup ──
@@ -306,15 +292,20 @@ export async function GET(request: NextRequest) {
       return new NextResponse('Plex server token is missing.', { status: 500 });
     }
 
-    const plex = new PlexAPI({ uri: server.url });
-    const mediaParts = await plex.getMediaParts(server.url, server.token, programInfo.ratingKey);
+    let streamUrl = resolvedStreamUrl;
+    if (!streamUrl) {
+      const plex = new PlexAPI({ uri: server.url });
+      const mediaParts = await plex.getMediaParts(server.url, server.token, programInfo.ratingKey);
 
-    if (!mediaParts?.partKey) {
-      return new NextResponse('Could not get media parts from Plex', { status: 500 });
+      if (!mediaParts?.partKey) {
+        return new NextResponse('Could not get media parts from Plex', { status: 500 });
+      }
+
+      streamUrl = `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`;
     }
-
-    const streamUrl = `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`;
-    const seekSeconds = timing.seekOffsetMs > 0 ? Math.floor(timing.seekOffsetMs / 1000) : 0;
+    let seekSeconds =
+      resolvedSeekSeconds ??
+      (timing.seekOffsetMs > 0 ? Math.floor(timing.seekOffsetMs / 1000) : 0);
 
     // Get client IP for session tracking
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] || 
@@ -525,6 +516,7 @@ export async function GET(request: NextRequest) {
     let currentFfmpeg: ChildProcess | null = null;
     let isAborted = false;
     let sessionFinalized = false;
+    let mpegtsDiscontinuity = false;
 
     const syncFfmpegToSessions = (child: ChildProcess | null) => {
       if (liveHub) {
@@ -583,7 +575,84 @@ export async function GET(request: NextRequest) {
       });
     };
 
-    const startFfmpeg = async (forceSoftware: boolean) => {
+    const finishCurrentLiveStream = (code: number | null) => {
+      if (isAborted) {
+        return;
+      }
+      const session = streamMonitorService.getSession(sessionId);
+      const historyStatus = code === 0 ? 'completed' : 'failed';
+      const errorMessage =
+        code === 0
+          ? 'Stream completed'
+          : session?.lastError || 'Stream ended unexpectedly';
+      const errorDetails = session
+        ? {
+            lastError: session.lastError,
+            errorHistory: session.errorHistory,
+            recoveryAttempts: session.recoveryAttempts,
+            status: session.status,
+          }
+        : undefined;
+
+      viewingHistoryService
+        .recordSessionEnd(
+          sessionId,
+          historyStatus,
+          errorMessage,
+          errorDetails,
+        )
+        .catch((error) => {
+          console.error('[Video] Failed to record session end:', error);
+        });
+      if (liveHub) {
+        sharedLiveTranscodePool.dissolveHub(liveHub, { killFfmpeg: false });
+        liveHub = null;
+      } else {
+        passthrough.end();
+      }
+      endStreamSession({ killFfmpeg: false });
+    };
+
+    const continueLiveToNextProgram = async (): Promise<boolean> => {
+      if (isAborted || !useSharedLive) {
+        return false;
+      }
+      const skipProgramId = liveProgramId;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (isAborted) {
+          return false;
+        }
+        const next = await loadLiveProgramForChannel(channelNumber, {
+          skipProgramId,
+        });
+        if (!next || next.programId === skipProgramId) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          continue;
+        }
+        liveProgramId = next.programId;
+        programInfo = next.programInfo;
+        streamUrl = next.streamUrl;
+        seekSeconds = next.seekSeconds;
+        streamMonitorService.updateSessionMetadata(sessionId, {
+          programInfo: next.programInfo,
+          streamUrl: next.streamUrl,
+          seekSeconds: next.seekSeconds,
+        });
+        if (liveHub) {
+          sharedLiveTranscodePool.updateHubProgram(liveHub, {
+            ratingKey: next.programInfo.ratingKey,
+            streamUrl: next.streamUrl,
+            seekSeconds: next.seekSeconds,
+          });
+        }
+        mpegtsDiscontinuity = true;
+        const child = await startFfmpeg(restartedToSoftware);
+        return child !== null;
+      }
+      return false;
+    };
+
+    async function startFfmpeg(forceSoftware: boolean) {
       if (isAborted) {
         return null;
       }
@@ -597,7 +666,10 @@ export async function GET(request: NextRequest) {
       const activeStreamUrl = currentSession.streamUrl || streamUrl;
       const activeSeekSeconds = currentSession.seekSeconds || seekSeconds;
 
-      const ffmpegArgs = await buildFfmpegArgs(activeStreamUrl, activeSeekSeconds, { forceSoftware });
+      const ffmpegArgs = await buildFfmpegArgs(activeStreamUrl, activeSeekSeconds, {
+        forceSoftware,
+        discontinuity: mpegtsDiscontinuity,
+      });
       
       const child = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
 
@@ -764,46 +836,28 @@ export async function GET(request: NextRequest) {
           return;
         }
 
-        // Normal end (client abort or final process finished)
-        if (!isAborted) {
-          const session = streamMonitorService.getSession(sessionId);
-          const historyStatus = code === 0 ? 'completed' : 'failed';
-          const errorMessage =
-            code === 0
-              ? 'Stream completed'
-              : session?.lastError || 'Stream ended unexpectedly';
-          const errorDetails = session
-            ? {
-                lastError: session.lastError,
-                errorHistory: session.errorHistory,
-                recoveryAttempts: session.recoveryAttempts,
-                status: session.status,
+        // Live 24/7: the current file ended. Keep the MPEG-TS connection and
+        // start the next episode instead of dropping the client.
+        if (!isAborted && useSharedLive) {
+          continueLiveToNextProgram()
+            .then((continued) => {
+              if (continued || isAborted) {
+                return;
               }
-            : undefined;
-
-          viewingHistoryService
-            .recordSessionEnd(
-              sessionId,
-              historyStatus,
-              errorMessage,
-              errorDetails,
-            )
-            .catch((error) => {
-              console.error('[Video] Failed to record session end:', error);
+              finishCurrentLiveStream(code);
+            })
+            .catch(() => {
+              finishCurrentLiveStream(code);
             });
+          return;
         }
-        if (liveHub) {
-          sharedLiveTranscodePool.dissolveHub(liveHub, { killFfmpeg: false });
-          liveHub = null;
-        } else {
-          passthrough.end();
-        }
-        endStreamSession({ killFfmpeg: false });
+
+        finishCurrentLiveStream(code);
       });
 
       currentFfmpeg = child;
       return child;
-    };
+    }
 
     // Start with hardware (if available)
     await startFfmpeg(false);

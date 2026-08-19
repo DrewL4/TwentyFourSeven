@@ -2,6 +2,11 @@ import { maintainBoundedMap } from "./bounded-cache";
 import { streamMonitorService } from './stream-monitor-service';
 import { sharedLiveTranscodePool } from './shared-live-transcode';
 import { streamRecoveryService } from './stream-recovery-service';
+import {
+  listScheduledProgramsForChannel,
+  pickScheduledProgram,
+} from './resolve-live-program';
+import { TimingService } from './timing-service';
 
 export class StreamHealthMonitor {
   private static instance: StreamHealthMonitor;
@@ -90,49 +95,26 @@ export class StreamHealthMonitor {
 
     this.evictProgramInfoCache(now);
 
-    // Fetch fresh program info
     try {
-      const { prisma } = await import('./prisma');
-      const { TimingService } = await import('./timing-service');
       const nowDate = new Date();
+      const picked = pickScheduledProgram(
+        await listScheduledProgramsForChannel(channelNumber, nowDate),
+        nowDate,
+      );
 
-      const channel = await prisma.channel.findUnique({
-        where: { number: channelNumber },
-        include: {
-          programs: {
-            where: { startTime: { lte: nowDate } },
-            include: {
-              episode: { include: { show: { include: { library: { include: { server: true } } } } } },
-              movie: { include: { library: { include: { server: true } } } },
-            },
-            orderBy: { startTime: 'desc' },
-            take: 1,
-          },
-        },
-      });
-
-      if (!channel || channel.programs.length === 0) {
+      if (!picked) {
         return null;
       }
 
-      const currentProgram = channel.programs[0];
-      const programEnd = new Date(
-        currentProgram.startTime.getTime() + currentProgram.duration
-      );
-
-      if (nowDate > programEnd) {
-        return null; // Program has ended
-      }
-
       const timing = TimingService.calculateSeekOffset(
-        currentProgram.startTime,
-        currentProgram.duration,
+        picked.startTime,
+        picked.duration,
         nowDate
       );
-      const programInfo = currentProgram.movie ?? currentProgram.episode;
+      const programInfo = picked.movie ?? picked.episode;
       const server =
-        currentProgram.movie?.library.server ??
-        currentProgram.episode?.show.library.server;
+        picked.movie?.library.server ??
+        picked.episode?.show.library.server;
 
       if (!programInfo || !server || server.type !== 'PLEX' || !server.token) {
         return null;

@@ -1,6 +1,5 @@
 import type { ChildProcess } from "child_process";
 import { PassThrough } from "stream";
-import { getTranscodeKey } from "./stream-limit";
 
 export type SharedLiveViewer = {
   sessionId: string;
@@ -43,8 +42,12 @@ export class SharedLiveTranscodePool {
     this.pendingCreates.clear();
   }
 
-  getLiveShareKey(channelNumber: number, ratingKey: string): string {
-    return `${getTranscodeKey(channelNumber, ratingKey)}:live`;
+  /**
+   * One live hub per channel (not per episode). Episode handoff keeps the
+   * same MPEG-TS HTTP response and late joiners attach mid-stream.
+   */
+  getLiveShareKey(channelNumber: number, _ratingKey?: string): string {
+    return `${channelNumber}:live`;
   }
 
   getHub(key: string): SharedLiveHub | undefined {
@@ -100,8 +103,11 @@ export class SharedLiveTranscodePool {
     const key = this.getLiveShareKey(options.channelNumber, options.ratingKey);
 
     const existing = this.hubs.get(key);
-    if (existing?.ffmpeg) {
+    if (existing) {
       this.addViewer(existing, options.sessionId, options.passthrough);
+      existing.ratingKey = options.ratingKey;
+      existing.streamUrl = options.streamUrl;
+      existing.seekSeconds = options.seekSeconds;
       return { hub: existing, shouldStartFfmpeg: false };
     }
 
@@ -209,6 +215,17 @@ export class SharedLiveTranscodePool {
 
   setRestartedToSoftware(hub: SharedLiveHub, value: boolean): void {
     hub.restartedToSoftware = value;
+  }
+
+  /** Update the program this hub is currently transcoding (episode handoff). */
+  updateHubProgram(
+    hub: SharedLiveHub,
+    options: { ratingKey: string; streamUrl: string; seekSeconds: number },
+  ): void {
+    hub.ratingKey = options.ratingKey;
+    hub.streamUrl = options.streamUrl;
+    hub.seekSeconds = options.seekSeconds;
+    hub.ffmpeg = null;
   }
 
   /**
