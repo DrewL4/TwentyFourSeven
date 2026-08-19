@@ -303,6 +303,9 @@ export async function GET(request: NextRequest) {
 
       streamUrl = `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`;
     }
+    if (!streamUrl) {
+      return new NextResponse('Could not get media parts from Plex', { status: 500 });
+    }
     let seekSeconds =
       resolvedSeekSeconds ??
       (timing.seekOffsetMs > 0 ? Math.floor(timing.seekOffsetMs / 1000) : 0);
