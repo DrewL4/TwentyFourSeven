@@ -667,6 +667,9 @@ export async function GET(request: NextRequest) {
 
       // Use session metadata for stream URL and seek
       const activeStreamUrl = currentSession.streamUrl || streamUrl;
+      if (!activeStreamUrl) {
+        return null;
+      }
       const activeSeekSeconds = currentSession.seekSeconds || seekSeconds;
 
       const ffmpegArgs = await buildFfmpegArgs(activeStreamUrl, activeSeekSeconds, {
