@@ -50,7 +50,14 @@ COPY . .
 
 # Generate Prisma client for the target platform (Linux)
 WORKDIR /app/apps/server
-RUN npx prisma generate --schema ./prisma/schema
+RUN apk add --no-cache ca-certificates \
+    && i=1 \
+    && until npx prisma generate --schema ./prisma/schema; do \
+         i=$((i + 1)); \
+         if [ "$i" -gt 6 ]; then exit 1; fi; \
+         echo "prisma generate failed, retry $i/6"; \
+         sleep 5; \
+       done
 WORKDIR /app
 
 # Set production environment and build optimizations
