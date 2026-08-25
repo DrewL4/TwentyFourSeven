@@ -248,7 +248,7 @@ export class StreamRecoveryService {
   async attemptRecovery(
     sessionId: string,
     error: string,
-    buildFfmpegArgs: (streamUrl: string, seekSeconds: number, options?: { forceSoftware?: boolean }) => Promise<string[]>
+    buildFfmpegArgs: (streamUrl: string, seekSeconds: number, options?: { forceSoftware?: boolean; discontinuity?: boolean }) => Promise<string[]>
   ): Promise<RecoveryResult> {
     const session = streamMonitorService.getSession(sessionId);
     if (!session) {
@@ -308,6 +308,8 @@ export class StreamRecoveryService {
       const seekSeconds = session.seekSeconds || 0;
       const ffmpegArgs = await buildFfmpegArgs(streamUrl, seekSeconds, {
         forceSoftware,
+        // Replacement encoder is a new MPEG-TS timeline — players need PAT/PMT.
+        discontinuity: true,
       });
 
       // Spawn new FFmpeg process

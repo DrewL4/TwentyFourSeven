@@ -35,6 +35,8 @@ describe("countActiveTranscodes", () => {
     ];
     assert.equal(countActiveTranscodes(sessions), 2);
     assert.equal(getTranscodeKey(1, "100"), "1:100");
+    assert.equal(getTranscodeKey(1, "100", true), "1:live");
+    assert.equal(getTranscodeKey(1, "ep-next", true), "1:live");
   });
 });
 
@@ -59,6 +61,22 @@ describe("shouldRejectNewTranscode", () => {
     assert.equal(
       shouldRejectNewTranscode(active, 2, "200", 0),
       false,
+    );
+  });
+
+  it("treats live episode handoff as the same transcode", () => {
+    const afterHandoff = [
+      { channelNumber: 1, programInfo: { ratingKey: "ep1" }, sharedLive: true },
+      { channelNumber: 1, programInfo: { ratingKey: "ep2" }, sharedLive: true },
+    ];
+    assert.equal(countActiveTranscodes(afterHandoff), 1);
+    assert.equal(
+      shouldRejectNewTranscode(afterHandoff, 1, "ep3", 1, true),
+      false,
+    );
+    assert.equal(
+      shouldRejectNewTranscode(afterHandoff, 2, "other", 1, true),
+      true,
     );
   });
 });

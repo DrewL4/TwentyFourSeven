@@ -26,6 +26,54 @@ describe("orphan session idle cleanup", () => {
 
     streamMonitorService.dropSession(sessionId);
   });
+
+  it("does not reclaim a live joiner whose HTTP passthrough is still open", async () => {
+    const pool = SharedLiveTranscodePool.getInstance();
+    pool.resetForTests();
+
+    const ownerPass = new PassThrough();
+    const joinerPass = new PassThrough();
+    const ownerId = streamMonitorService.createSession(
+      4,
+      { ratingKey: "ep1" },
+      undefined,
+      { sharedLive: true },
+    );
+    const joinerId = streamMonitorService.createSession(
+      4,
+      { ratingKey: "ep1" },
+      undefined,
+      { sharedLive: true },
+    );
+
+    await pool.joinOrCreateLiveHub({
+      channelNumber: 4,
+      ratingKey: "ep1",
+      sessionId: ownerId,
+      streamUrl: "http://example/a",
+      seekSeconds: 0,
+      passthrough: ownerPass,
+    });
+    await pool.joinOrCreateLiveHub({
+      channelNumber: 4,
+      ratingKey: "ep1",
+      sessionId: joinerId,
+      streamUrl: "http://example/a",
+      seekSeconds: 0,
+      passthrough: joinerPass,
+    });
+
+    const joiner = streamMonitorService.getSession(joinerId)!;
+    joiner.lastActivity = new Date(Date.now() - 180_000);
+
+    const cleaned = streamMonitorService.cleanupStaleSessions();
+    assert.equal(streamMonitorService.getSession(joinerId)?.sessionId, joinerId);
+    assert.ok(cleaned >= 0);
+
+    pool.dissolveHub(pool.getHubForSession(ownerId)!, { killFfmpeg: false });
+    streamMonitorService.dropSession(ownerId);
+    streamMonitorService.dropSession(joinerId);
+  });
 });
 
 describe("SharedLiveTranscodePool destroyed viewers", () => {

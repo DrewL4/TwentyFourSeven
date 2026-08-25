@@ -1,6 +1,24 @@
 import type { ChildProcess } from "child_process";
 import { PassThrough } from "stream";
 
+export const MPEG_TS_PACKET_SIZE = 188;
+
+/** Standard MPEG-TS null packet (PID 0x1FFF) — players ignore these. */
+export function createMpegTsNullPacket(): Buffer {
+  const packet = Buffer.alloc(MPEG_TS_PACKET_SIZE, 0xff);
+  packet[0] = 0x47;
+  packet[1] = 0x1f;
+  packet[2] = 0xff;
+  packet[3] = 0x10;
+  return packet;
+}
+
+/** One typical MPEG-TS burst (7 × 188 bytes) used to keep HTTP/TCP alive. */
+export function createMpegTsNullBurst(packetCount = 7): Buffer {
+  const packet = createMpegTsNullPacket();
+  return Buffer.concat(Array.from({ length: packetCount }, () => packet));
+}
+
 export type SharedLiveViewer = {
   sessionId: string;
   passthrough: PassThrough;
@@ -28,6 +46,8 @@ export class SharedLiveTranscodePool {
   private hubs: Map<string, SharedLiveHub> = new Map();
   /** In-flight hub creation so two first viewers cannot each spawn FFmpeg. */
   private pendingCreates: Map<string, Promise<SharedLiveHub>> = new Map();
+  /** Keepalive stuffing while FFmpeg is between episodes / GPU fallback. */
+  private stuffingTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
 
   static getInstance(): SharedLiveTranscodePool {
     if (!SharedLiveTranscodePool.instance) {
@@ -38,6 +58,10 @@ export class SharedLiveTranscodePool {
 
   /** Test helper — clears all hubs without killing processes. */
   resetForTests(): void {
+    for (const timer of this.stuffingTimers.values()) {
+      clearInterval(timer);
+    }
+    this.stuffingTimers.clear();
     this.hubs.clear();
     this.pendingCreates.clear();
   }
@@ -105,9 +129,8 @@ export class SharedLiveTranscodePool {
     const existing = this.hubs.get(key);
     if (existing) {
       this.addViewer(existing, options.sessionId, options.passthrough);
-      existing.ratingKey = options.ratingKey;
-      existing.streamUrl = options.streamUrl;
-      existing.seekSeconds = options.seekSeconds;
+      // Do not overwrite hub streamUrl/seekSeconds — late joiners attach
+      // mid-stream. Mutating those fields would poison recovery/handoff.
       return { hub: existing, shouldStartFfmpeg: false };
     }
 
@@ -193,6 +216,7 @@ export class SharedLiveTranscodePool {
    * Slow clients that back-pressure are dropped so they cannot stall the hub.
    */
   attachFfmpeg(hub: SharedLiveHub, child: ChildProcess): void {
+    this.stopHandoffStuffing(hub);
     hub.ffmpeg = child;
     this.clearPendingCreate(hub.key);
 
@@ -225,7 +249,17 @@ export class SharedLiveTranscodePool {
     hub.ratingKey = options.ratingKey;
     hub.streamUrl = options.streamUrl;
     hub.seekSeconds = options.seekSeconds;
+    this.beginEncoderGap(hub);
+  }
+
+  /**
+   * FFmpeg is gone but HTTP clients are still connected (episode handoff,
+   * GPU software fallback, recovery). Stuff null TS packets so players do
+   * not hit read-timeout / STATE_ENDED during the spawn gap.
+   */
+  beginEncoderGap(hub: SharedLiveHub): void {
     hub.ffmpeg = null;
+    this.startHandoffStuffing(hub);
   }
 
   /**
@@ -274,6 +308,7 @@ export class SharedLiveTranscodePool {
     hub.viewers.delete(sessionId);
 
     if (hub.viewers.size === 0) {
+      this.stopHandoffStuffing(hub);
       this.killHubFfmpeg(hub);
       this.hubs.delete(hub.key);
       return { wasInPool: true, killedFfmpeg: true, hubKey: hub.key };
@@ -290,6 +325,7 @@ export class SharedLiveTranscodePool {
   /** End all viewer streams and remove hub (FFmpeg already exiting). */
   dissolveHub(hub: SharedLiveHub, options?: { killFfmpeg?: boolean }): void {
     this.clearPendingCreate(hub.key);
+    this.stopHandoffStuffing(hub);
     if (options?.killFfmpeg !== false) {
       this.killHubFfmpeg(hub);
     }
@@ -304,6 +340,34 @@ export class SharedLiveTranscodePool {
     }
     hub.viewers.clear();
     this.hubs.delete(hub.key);
+  }
+
+  private startHandoffStuffing(hub: SharedLiveHub): void {
+    this.stopHandoffStuffing(hub);
+    const burst = createMpegTsNullBurst();
+    const timer = setInterval(() => {
+      for (const viewer of hub.viewers.values()) {
+        if (viewer.passthrough.destroyed || viewer.passthrough.writableEnded) {
+          continue;
+        }
+        try {
+          // Never destroy slow clients for stuffing — skip if back-pressured.
+          viewer.passthrough.write(burst);
+        } catch {
+          // ignore write errors from disconnected clients
+        }
+      }
+    }, 40);
+    this.stuffingTimers.set(hub.key, timer);
+  }
+
+  private stopHandoffStuffing(hub: SharedLiveHub): void {
+    const timer = this.stuffingTimers.get(hub.key);
+    if (!timer) {
+      return;
+    }
+    clearInterval(timer);
+    this.stuffingTimers.delete(hub.key);
   }
 
   private killHubFfmpeg(hub: SharedLiveHub): void {

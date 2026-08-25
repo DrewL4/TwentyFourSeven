@@ -1,13 +1,19 @@
 export interface TranscodeSessionRef {
   channelNumber: number;
   programInfo: { ratingKey: string };
+  /** Live 24/7 hub is one transcode per channel across episode handoffs. */
+  sharedLive?: boolean;
 }
 
 /** Stable identity for one channel+program transcode (shared by multiple viewers). */
 export function getTranscodeKey(
   channelNumber: number,
   ratingKey: string,
+  sharedLive = false,
 ): string {
+  if (sharedLive) {
+    return `${channelNumber}:live`;
+  }
   return `${channelNumber}:${ratingKey}`;
 }
 
@@ -15,7 +21,11 @@ export function getTranscodeKey(
 export function countActiveTranscodes(sessions: TranscodeSessionRef[]): number {
   const keys = new Set(
     sessions.map((session) =>
-      getTranscodeKey(session.channelNumber, session.programInfo.ratingKey),
+      getTranscodeKey(
+        session.channelNumber,
+        session.programInfo.ratingKey,
+        session.sharedLive === true,
+      ),
     ),
   );
   return keys.size;
@@ -48,15 +58,20 @@ export function shouldRejectNewTranscode(
   channelNumber: number,
   ratingKey: string,
   concurrentStreamsLimit: number,
+  sharedLive = false,
 ): boolean {
   if (isUnlimitedConcurrentStreams(concurrentStreamsLimit)) {
     return false;
   }
 
-  const incomingKey = getTranscodeKey(channelNumber, ratingKey);
+  const incomingKey = getTranscodeKey(channelNumber, ratingKey, sharedLive);
   const activeKeys = new Set(
     activeSessions.map((session) =>
-      getTranscodeKey(session.channelNumber, session.programInfo.ratingKey),
+      getTranscodeKey(
+        session.channelNumber,
+        session.programInfo.ratingKey,
+        session.sharedLive === true,
+      ),
     ),
   );
   if (activeKeys.has(incomingKey)) {

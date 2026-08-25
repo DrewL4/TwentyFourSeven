@@ -239,9 +239,9 @@ export class StreamHealthMonitor {
             const firstIssue = healthCheck.issues[0] || 'Unknown health issue';
             streamMonitorService.addError(session.sessionId, firstIssue);
 
-            // Attempt recovery (will check limits internally)
-            // Note: Actual recovery requires FFmpeg args builder, handled by watchdog
-            streamMonitorService.updateStatus(session.sessionId, 'recovering');
+            // Do not mark recovering here — that would block the video route's
+            // close/chain/recovery handlers. Watchdog only detects; the route
+            // owns spawning a replacement FFmpeg.
           }
         } else if (session.status === 'recovering') {
           // Session recovered successfully

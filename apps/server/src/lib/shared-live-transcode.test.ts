@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it, beforeEach } from "node:test";
 import { PassThrough } from "stream";
-import { SharedLiveTranscodePool } from "./shared-live-transcode";
+import {
+  SharedLiveTranscodePool,
+  createMpegTsNullPacket,
+} from "./shared-live-transcode";
 
 describe("SharedLiveTranscodePool", () => {
   let pool: SharedLiveTranscodePool;
@@ -9,6 +12,13 @@ describe("SharedLiveTranscodePool", () => {
   beforeEach(() => {
     pool = SharedLiveTranscodePool.getInstance();
     pool.resetForTests();
+  });
+
+  it("emits a valid MPEG-TS null packet", () => {
+    const packet = createMpegTsNullPacket();
+    assert.equal(packet.length, 188);
+    assert.equal(packet[0], 0x47);
+    assert.equal((packet[1] << 8 | packet[2]) & 0x1fff, 0x1fff);
   });
 
   it("shares one hub key per live channel", () => {
@@ -106,5 +116,56 @@ describe("SharedLiveTranscodePool", () => {
     assert.equal(Buffer.concat(received).toString(), "ts-packet");
     pool.releaseViewer("a");
     pool.releaseViewer("b");
+  });
+
+  it("does not overwrite hub streamUrl when a late joiner attaches", async () => {
+    const ownerPass = new PassThrough();
+    const first = await pool.joinOrCreateLiveHub({
+      channelNumber: 4,
+      ratingKey: "ep1",
+      sessionId: "owner",
+      streamUrl: "http://example/original",
+      seekSeconds: 42,
+      passthrough: ownerPass,
+    });
+
+    const joinerPass = new PassThrough();
+    await pool.joinOrCreateLiveHub({
+      channelNumber: 4,
+      ratingKey: "ep2",
+      sessionId: "joiner",
+      streamUrl: "http://example/joiner-poison",
+      seekSeconds: 0,
+      passthrough: joinerPass,
+    });
+
+    assert.equal(first.hub.streamUrl, "http://example/original");
+    assert.equal(first.hub.seekSeconds, 42);
+    assert.equal(first.hub.ratingKey, "ep1");
+    pool.dissolveHub(first.hub, { killFfmpeg: false });
+  });
+
+  it("stuffs MPEG-TS null packets during an encoder gap", async () => {
+    const pass = new PassThrough();
+    const hub = pool.createHub({
+      channelNumber: 8,
+      ratingKey: "800",
+      ownerSessionId: "owner",
+      streamUrl: "http://example/stream",
+      seekSeconds: 0,
+      passthrough: pass,
+    });
+
+    const received: Buffer[] = [];
+    pass.on("data", (chunk) => received.push(Buffer.from(chunk)));
+    pool.beginEncoderGap(hub);
+    await new Promise((r) => setTimeout(r, 80));
+    pool.dissolveHub(hub, { killFfmpeg: false });
+
+    const bytes = Buffer.concat(received);
+    assert.ok(bytes.length >= 188);
+    assert.equal(bytes[0], 0x47);
+    assert.equal(bytes[1], 0x1f);
+    assert.equal(bytes[2], 0xff);
   });
 });

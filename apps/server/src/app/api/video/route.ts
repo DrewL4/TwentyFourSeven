@@ -19,6 +19,16 @@ import { loadLiveProgramForChannel } from '@/lib/resolve-live-program';
 // This is a requirement for using readable streams in a NextResponse.
 export const dynamic = 'force-dynamic';
 
+const MPEGTS_RESPONSE_HEADERS = {
+  'Content-Type': 'video/mp2t',
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  Pragma: 'no-cache',
+  'X-Accel-Buffering': 'no',
+};
+
+const LIVE_HANDOFF_ATTEMPTS = 12;
+const LIVE_HANDOFF_RETRY_MS = 500;
+
 async function getProgramInfo(channelNumber: number) {
   const live = await loadLiveProgramForChannel(channelNumber);
   if (!live) {
@@ -39,14 +49,18 @@ async function buildFfmpegArgs(streamUrl: string, seekSeconds: number, options?:
     const enableTranscoding = ffmpegSettings?.enableTranscoding ?? true; // Default to enabled
 
     if (!enableTranscoding && !useEnvironmentFallback) {
-        return [
+        const args = [
             '-loglevel', 'error',
             '-ss', `${seekSeconds}`,
             '-i', streamUrl,
             '-c', 'copy',
             '-f', 'mpegts',
-            '-'
         ];
+        if (options?.discontinuity) {
+            args.push('-mpegts_flags', '+resend_headers+initial_discontinuity');
+        }
+        args.push('-');
+        return args;
     }
 
     const args: string[] = [];
@@ -214,6 +228,7 @@ export async function GET(request: NextRequest) {
   const isCatchup = request.nextUrl.searchParams.get('catchup') === 'true';
   const timeParam = request.nextUrl.searchParams.get('time');
   const utcParam = request.nextUrl.searchParams.get('utc');
+  const lutcParam = request.nextUrl.searchParams.get('lutc');
   const programIdParam = request.nextUrl.searchParams.get('programId');
 
   try {
@@ -232,8 +247,8 @@ export async function GET(request: NextRequest) {
         if (isNaN(requestedTime.getTime())) {
           return new NextResponse('Invalid time value', { status: 400 });
         }
-      } else if (utcParam) {
-        const utcSeconds = parseInt(utcParam, 10);
+      } else if (utcParam || lutcParam) {
+        const utcSeconds = parseInt((utcParam || lutcParam) as string, 10);
         if (isNaN(utcSeconds)) {
           return new NextResponse('Invalid utc value', { status: 400 });
         }
@@ -357,6 +372,7 @@ export async function GET(request: NextRequest) {
         channelNumber,
         programInfo.ratingKey,
         streamLimit,
+        !isCatchup,
       )
     ) {
       return NextResponse.json(
@@ -371,7 +387,8 @@ export async function GET(request: NextRequest) {
     const sessionId = streamMonitorService.createSession(
       channelNumber,
       { ratingKey: programInfo.ratingKey },
-      clientIp
+      clientIp,
+      { sharedLive: !isCatchup },
     );
 
     // Update session metadata
@@ -386,6 +403,7 @@ export async function GET(request: NextRequest) {
       try {
         const isBlocked = await viewingHistoryService.isIpBlocked(clientIp);
         if (isBlocked) {
+          streamMonitorService.dropSession(sessionId);
           return NextResponse.json(
             { error: 'Access denied: IP address is blocked' },
             { status: 403 }
@@ -475,9 +493,7 @@ export async function GET(request: NextRequest) {
 
         return new NextResponse(passthrough as any, {
           status: 200,
-          headers: {
-            'Content-Type': 'video/mp2t',
-          },
+          headers: MPEGTS_RESPONSE_HEADERS,
         });
       }
     }
@@ -493,8 +509,8 @@ export async function GET(request: NextRequest) {
       /No such device/i,
       /device not present/i,
       /resource temporarily unavailable/i,
-      /initializ/i,
-      /failed/i,
+      /CUDA_ERROR/i,
+      /nvenc error/i,
     ];
 
     // Enhanced error patterns for network/codec/file errors
@@ -520,6 +536,7 @@ export async function GET(request: NextRequest) {
     let isAborted = false;
     let sessionFinalized = false;
     let mpegtsDiscontinuity = false;
+    const ignoredClosePids = new Set<number>();
 
     const syncFfmpegToSessions = (child: ChildProcess | null) => {
       if (liveHub) {
@@ -533,7 +550,30 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    const wireRecoveredProcess = (child: ChildProcess) => {
+    const ignoreClose = (proc: ChildProcess) => {
+      if (proc.pid != null) {
+        ignoredClosePids.add(proc.pid);
+      }
+    };
+
+    const beginLiveEncoderGap = () => {
+      if (liveHub) {
+        sharedLiveTranscodePool.beginEncoderGap(liveHub);
+      }
+    };
+
+    const failOpenStream = () => {
+      streamMonitorService.updateStatus(sessionId, 'failed');
+      if (liveHub) {
+        sharedLiveTranscodePool.dissolveHub(liveHub, { killFfmpeg: false });
+        liveHub = null;
+      } else {
+        passthrough.end();
+      }
+      endStreamSession({ killFfmpeg: false });
+    };
+
+    function bindFfmpegLifecycle(child: ChildProcess) {
       if (liveHub) {
         sharedLiveTranscodePool.attachFfmpeg(liveHub, child);
         syncFfmpegToSessions(child);
@@ -544,15 +584,132 @@ export async function GET(request: NextRequest) {
         });
       } else {
         streamMonitorService.setFfmpegProcess(sessionId, child);
-        if (child.stdout) {
-          child.stdout.on('data', () => {
-            streamMonitorService.updateOutputActivity(sessionId);
-          });
-          child.stdout.pipe(passthrough, { end: false });
-        }
+        child.stdout?.on('data', () => {
+          streamMonitorService.updateOutputActivity(sessionId);
+        });
+        child.stdout?.pipe(passthrough, { end: false });
       }
+
+      child.stderr?.on('data', (data) => {
+        const text = data.toString();
+        const hasGpuError = gpuErrorPatterns.some((p) => p.test(text));
+        const hasNetworkError = networkErrorPatterns.some((p) => p.test(text));
+        const hasCodecError = codecErrorPatterns.some((p) => p.test(text));
+
+        if (!restartedToSoftware && hasGpuError) {
+          restartedToSoftware = true;
+          mpegtsDiscontinuity = true;
+          streamMonitorService.addError(sessionId, `GPU error: ${text.substring(0, 100)}`);
+          streamMonitorService.updateSessionMetadata(sessionId, { restartedToSoftware: true });
+          if (liveHub) {
+            sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
+          }
+          ignoreClose(child);
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // ignore
+          }
+          beginLiveEncoderGap();
+          startFfmpeg(true).catch((err) => {
+            streamMonitorService.addError(sessionId, `Software fallback failed: ${err.message}`);
+            failOpenStream();
+          });
+          return;
+        }
+
+        if (hasNetworkError || hasCodecError) {
+          const errorType = hasNetworkError ? 'Network error' : 'Codec error';
+          const errorMessage = `${errorType}: ${text.substring(0, 100)}`;
+          streamMonitorService.addError(sessionId, errorMessage);
+          ignoreClose(child);
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // ignore
+          }
+          beginLiveEncoderGap();
+          mpegtsDiscontinuity = true;
+          streamRecoveryService
+            .attemptRecovery(sessionId, errorMessage, buildFfmpegArgs)
+            .then((result) => {
+              if (result.success && result.process) {
+                bindFfmpegLifecycle(result.process);
+              } else {
+                failOpenStream();
+              }
+            })
+            .catch(() => {
+              failOpenStream();
+            });
+        }
+      });
+
+      child.on('error', (error) => {
+        streamMonitorService.addError(sessionId, `Process error: ${error.message}`);
+        if (isAborted) {
+          return;
+        }
+        ignoreClose(child);
+        beginLiveEncoderGap();
+        mpegtsDiscontinuity = true;
+        streamRecoveryService
+          .attemptRecovery(sessionId, error.message, buildFfmpegArgs)
+          .then((result) => {
+            if (result.success && result.process) {
+              bindFfmpegLifecycle(result.process);
+            } else {
+              failOpenStream();
+            }
+          });
+      });
+
+      child.on('close', (code) => {
+        if (child.pid != null && ignoredClosePids.delete(child.pid)) {
+          return;
+        }
+        if (!currentFfmpeg || currentFfmpeg.pid !== child.pid) {
+          return;
+        }
+
+        if (code !== 0 && !restartedToSoftware && !isAborted) {
+          restartedToSoftware = true;
+          mpegtsDiscontinuity = true;
+          streamMonitorService.addError(sessionId, `FFmpeg exited with code ${code}`);
+          streamMonitorService.updateSessionMetadata(sessionId, { restartedToSoftware: true });
+          if (liveHub) {
+            sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
+          }
+          beginLiveEncoderGap();
+          startFfmpeg(true).catch((err) => {
+            streamMonitorService.addError(sessionId, `Software fallback failed: ${err.message}`);
+            failOpenStream();
+          });
+          return;
+        }
+
+        // Live 24/7: the current file ended. Keep the MPEG-TS connection and
+        // start the next episode instead of dropping the client.
+        if (!isAborted && useSharedLive) {
+          beginLiveEncoderGap();
+          continueLiveToNextProgram()
+            .then((continued) => {
+              if (continued || isAborted) {
+                return;
+              }
+              finishCurrentLiveStream(code);
+            })
+            .catch(() => {
+              finishCurrentLiveStream(code);
+            });
+          return;
+        }
+
+        finishCurrentLiveStream(code);
+      });
+
       currentFfmpeg = child;
-    };
+    }
 
     const endStreamSession = (options?: { killFfmpeg?: boolean }) => {
       if (sessionFinalized) {
@@ -621,7 +778,7 @@ export async function GET(request: NextRequest) {
         return false;
       }
       const skipProgramId = liveProgramId;
-      for (let attempt = 0; attempt < 4; attempt++) {
+      for (let attempt = 0; attempt < LIVE_HANDOFF_ATTEMPTS; attempt++) {
         if (isAborted) {
           return false;
         }
@@ -629,24 +786,29 @@ export async function GET(request: NextRequest) {
           skipProgramId,
         });
         if (!next || next.programId === skipProgramId) {
-          await new Promise((resolve) => setTimeout(resolve, 400));
+          await new Promise((resolve) => setTimeout(resolve, LIVE_HANDOFF_RETRY_MS));
           continue;
         }
         liveProgramId = next.programId;
         programInfo = next.programInfo;
         streamUrl = next.streamUrl;
         seekSeconds = next.seekSeconds;
-        streamMonitorService.updateSessionMetadata(sessionId, {
+        const metadata = {
           programInfo: next.programInfo,
           streamUrl: next.streamUrl,
           seekSeconds: next.seekSeconds,
-        });
+        };
         if (liveHub) {
+          for (const viewerSessionId of liveHub.viewers.keys()) {
+            streamMonitorService.updateSessionMetadata(viewerSessionId, metadata);
+          }
           sharedLiveTranscodePool.updateHubProgram(liveHub, {
             ratingKey: next.programInfo.ratingKey,
             streamUrl: next.streamUrl,
             seekSeconds: next.seekSeconds,
           });
+        } else {
+          streamMonitorService.updateSessionMetadata(sessionId, metadata);
         }
         mpegtsDiscontinuity = true;
         const child = await startFfmpeg(restartedToSoftware);
@@ -665,7 +827,6 @@ export async function GET(request: NextRequest) {
         return null;
       }
 
-      // Use session metadata for stream URL and seek
       const activeStreamUrl = currentSession.streamUrl || streamUrl;
       if (!activeStreamUrl) {
         return null;
@@ -676,192 +837,12 @@ export async function GET(request: NextRequest) {
         forceSoftware,
         discontinuity: mpegtsDiscontinuity,
       });
-      
+
       const child = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-
-      if (liveHub) {
-        sharedLiveTranscodePool.attachFfmpeg(liveHub, child);
-        if (forceSoftware) {
-          sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
-        }
-        syncFfmpegToSessions(child);
-        child.stdout?.on('data', () => {
-          for (const viewerSessionId of liveHub!.viewers.keys()) {
-            streamMonitorService.updateOutputActivity(viewerSessionId);
-          }
-        });
-      } else {
-        streamMonitorService.setFfmpegProcess(sessionId, child);
-        child.stdout?.on('data', () => {
-          streamMonitorService.updateOutputActivity(sessionId);
-        });
-        child.stdout?.pipe(passthrough, { end: false });
+      if (liveHub && forceSoftware) {
+        sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
       }
-
-      child.stderr.on('data', (data) => {
-        const text = data.toString();
-        
-        
-        // Track encoder output for stall detection only — do not refresh
-        // lastActivity (that would prevent orphan session cleanup).
-        streamMonitorService.updateOutputActivity(sessionId);
-        if (liveHub) {
-          for (const viewerSessionId of liveHub.viewers.keys()) {
-            streamMonitorService.updateOutputActivity(viewerSessionId);
-          }
-        }
-
-        // Detect errors and classify them
-        const hasGpuError = gpuErrorPatterns.some((p) => p.test(text));
-        const hasNetworkError = networkErrorPatterns.some((p) => p.test(text));
-        const hasCodecError = codecErrorPatterns.some((p) => p.test(text));
-
-        // GPU error: try software fallback first (legacy behavior)
-        if (!restartedToSoftware && hasGpuError) {
-          restartedToSoftware = true;
-          
-          streamMonitorService.addError(sessionId, `GPU error: ${text.substring(0, 100)}`);
-          streamMonitorService.updateSessionMetadata(sessionId, { restartedToSoftware: true });
-          if (liveHub) {
-            sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
-          }
-          
-          try { 
-            child.kill('SIGKILL'); 
-          } catch {}
-          
-          // Start software fallback
-          startFfmpeg(true).catch((err) => {
-            
-            streamMonitorService.addError(sessionId, `Software fallback failed: ${err.message}`);
-            streamMonitorService.updateStatus(sessionId, 'failed');
-            if (liveHub) {
-              sharedLiveTranscodePool.dissolveHub(liveHub, { killFfmpeg: false });
-              liveHub = null;
-            } else {
-              passthrough.end();
-            }
-            endStreamSession({ killFfmpeg: false });
-          });
-          return;
-        }
-
-        // Network or codec errors: attempt recovery via recovery service
-        if (hasNetworkError || hasCodecError) {
-          const errorType = hasNetworkError ? 'Network error' : 'Codec error';
-          const errorMessage = `${errorType}: ${text.substring(0, 100)}`;
-          
-          streamMonitorService.addError(sessionId, errorMessage);
-          
-          // Attempt recovery (will check limits and circuit breaker internally)
-          streamRecoveryService.attemptRecovery(sessionId, errorMessage, buildFfmpegArgs)
-            .then((result) => {
-              if (result.success && result.process) {
-                wireRecoveredProcess(result.process);
-              } else {
-                // Recovery failed
-                
-                streamMonitorService.updateStatus(sessionId, 'failed');
-                if (liveHub) {
-                  sharedLiveTranscodePool.dissolveHub(liveHub, { killFfmpeg: false });
-                  liveHub = null;
-                } else {
-                  passthrough.end();
-                }
-                endStreamSession({ killFfmpeg: false });
-              }
-            })
-            .catch((err) => {
-              
-              streamMonitorService.updateStatus(sessionId, 'failed');
-              if (liveHub) {
-                sharedLiveTranscodePool.dissolveHub(liveHub, { killFfmpeg: false });
-                liveHub = null;
-              } else {
-                passthrough.end();
-              }
-              endStreamSession({ killFfmpeg: false });
-            });
-        }
-      });
-
-      child.on('error', (error) => {
-        
-        streamMonitorService.addError(sessionId, `Process error: ${error.message}`);
-        
-        // Attempt recovery for process errors
-        if (!isAborted) {
-          streamRecoveryService.attemptRecovery(sessionId, error.message, buildFfmpegArgs)
-            .then((result) => {
-              if (result.success && result.process) {
-                wireRecoveredProcess(result.process);
-              } else {
-                streamMonitorService.updateStatus(sessionId, 'failed');
-                if (liveHub) {
-                  sharedLiveTranscodePool.dissolveHub(liveHub, { killFfmpeg: false });
-                  liveHub = null;
-                } else {
-                  passthrough.end();
-                }
-                endStreamSession({ killFfmpeg: false });
-              }
-          });
-        }
-      });
-
-      child.on('close', (code) => {
-        
-        
-        // Ignore if this is an old process (we already restarted)
-        if (!currentFfmpeg || currentFfmpeg.pid !== child.pid) {
-          return;
-        }
-
-        // If process exited with error and haven't tried software fallback
-        if (code !== 0 && !restartedToSoftware && !isAborted) {
-          restartedToSoftware = true;
-          
-          streamMonitorService.addError(sessionId, `FFmpeg exited with code ${code}`);
-          streamMonitorService.updateSessionMetadata(sessionId, { restartedToSoftware: true });
-          if (liveHub) {
-            sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
-          }
-          
-          startFfmpeg(true).catch((err) => {
-            
-            streamMonitorService.addError(sessionId, `Software fallback failed: ${err.message}`);
-            streamMonitorService.updateStatus(sessionId, 'failed');
-            if (liveHub) {
-              sharedLiveTranscodePool.dissolveHub(liveHub, { killFfmpeg: false });
-              liveHub = null;
-            } else {
-              passthrough.end();
-            }
-            endStreamSession({ killFfmpeg: false });
-          });
-          return;
-        }
-
-        // Live 24/7: the current file ended. Keep the MPEG-TS connection and
-        // start the next episode instead of dropping the client.
-        if (!isAborted && useSharedLive) {
-          continueLiveToNextProgram()
-            .then((continued) => {
-              if (continued || isAborted) {
-                return;
-              }
-              finishCurrentLiveStream(code);
-            })
-            .catch(() => {
-              finishCurrentLiveStream(code);
-            });
-          return;
-        }
-
-        finishCurrentLiveStream(code);
-      });
-
-      currentFfmpeg = child;
+      bindFfmpegLifecycle(child);
       return child;
     }
 
@@ -915,9 +896,7 @@ export async function GET(request: NextRequest) {
     
     return new NextResponse(passthrough as any, {
       status: 200,
-      headers: {
-        'Content-Type': 'video/mp2t',
-      },
+      headers: MPEGTS_RESPONSE_HEADERS,
     });
 
   } catch (error: any) {

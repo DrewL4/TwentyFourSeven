@@ -26,6 +26,8 @@ export interface StreamSession {
   restartedToSoftware: boolean;
   streamUrl?: string;
   seekSeconds: number;
+  /** Live shared hub — capacity is per channel, not per episode. */
+  sharedLive: boolean;
 }
 
 export class StreamMonitorService {
@@ -54,7 +56,8 @@ export class StreamMonitorService {
   createSession(
     channelNumber: number,
     programInfo: ProgramInfo,
-    clientIp?: string
+    clientIp?: string,
+    options?: { sharedLive?: boolean },
   ): string {
     const sessionId = randomUUID();
     const now = new Date();
@@ -74,6 +77,7 @@ export class StreamMonitorService {
       errorHistory: [],
       restartedToSoftware: false,
       seekSeconds: 0,
+      sharedLive: options?.sharedLive === true,
     };
 
     this.sessions.set(sessionId, session);
@@ -294,6 +298,11 @@ export class StreamMonitorService {
 
       // Remove if stale (older than timeout)
       if (lastActivityTime < staleThreshold) {
+        // Joiners never get metadata/handoff activity pings. If their HTTP
+        // passthrough is still open they are watching — do not reclaim.
+        if (this.hasOpenLiveViewer(sessionId)) {
+          continue;
+        }
         this.removeSession(sessionId);
         cleaned++;
         continue;
@@ -310,6 +319,19 @@ export class StreamMonitorService {
     }
 
     return cleaned;
+  }
+
+  private hasOpenLiveViewer(sessionId: string): boolean {
+    const hub = sharedLiveTranscodePool.getHubForSession(sessionId);
+    const viewer = hub?.viewers.get(sessionId);
+    if (!viewer) {
+      return false;
+    }
+    return (
+      !viewer.passthrough.destroyed &&
+      !viewer.passthrough.writableEnded &&
+      !(viewer.passthrough as { closed?: boolean }).closed
+    );
   }
 
   /**
