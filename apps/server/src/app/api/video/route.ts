@@ -15,6 +15,12 @@ import {
   type SharedLiveHub,
 } from '@/lib/shared-live-transcode';
 import { loadLiveProgramForChannel } from '@/lib/resolve-live-program';
+import {
+  buildLiveFfmpegArgs,
+  initialEncodeMode,
+  nextLiveEncodeMode,
+  type LiveEncodeMode,
+} from '@/lib/ffmpeg-live-args';
 
 // This is a requirement for using readable streams in a NextResponse.
 export const dynamic = 'force-dynamic';
@@ -28,6 +34,23 @@ const MPEGTS_RESPONSE_HEADERS = {
 
 const LIVE_HANDOFF_ATTEMPTS = 12;
 const LIVE_HANDOFF_RETRY_MS = 500;
+const FFMPEG_SETTINGS_TTL_MS = 15_000;
+
+type CachedFfmpegSettings = Awaited<ReturnType<typeof prisma.ffmpegSettings.findUnique>>;
+
+let ffmpegSettingsCache: { expires: number; row: CachedFfmpegSettings } | null = null;
+
+async function loadFfmpegSettings(): Promise<CachedFfmpegSettings> {
+  const now = Date.now();
+  if (ffmpegSettingsCache && ffmpegSettingsCache.expires > now) {
+    return ffmpegSettingsCache.row;
+  }
+  const row = await prisma.ffmpegSettings.findUnique({
+    where: { id: 'singleton' },
+  });
+  ffmpegSettingsCache = { expires: now + FFMPEG_SETTINGS_TTL_MS, row };
+  return row;
+}
 
 async function getProgramInfo(channelNumber: number) {
   const live = await loadLiveProgramForChannel(channelNumber);
@@ -37,178 +60,38 @@ async function getProgramInfo(channelNumber: number) {
   return live;
 }
 
-async function buildFfmpegArgs(streamUrl: string, seekSeconds: number, options?: { forceSoftware?: boolean; discontinuity?: boolean }): Promise<string[]> {
-    const ffmpegSettings = await prisma.ffmpegSettings.findUnique({
-        where: { id: "singleton" },
-    });
-
-    const forceSoftware = options?.forceSoftware === true;
-
-    // Smart fallback: use environment detection if database settings not available
-    const useEnvironmentFallback = !ffmpegSettings;
-    const enableTranscoding = ffmpegSettings?.enableTranscoding ?? true; // Default to enabled
-
-    if (!enableTranscoding && !useEnvironmentFallback) {
-        const args = [
-            '-loglevel', 'error',
-            '-ss', `${seekSeconds}`,
-            '-i', streamUrl,
-            '-c', 'copy',
-            '-f', 'mpegts',
-        ];
-        if (options?.discontinuity) {
-            args.push('-mpegts_flags', '+resend_headers+initial_discontinuity');
-        }
-        args.push('-');
-        return args;
-    }
-
-    const args: string[] = [];
-
-    // Smart hardware acceleration detection
-    const enableHardwareAccel = !forceSoftware && (useEnvironmentFallback ? 
-        (process.env.FFMPEG_HWACCEL_METHOD && process.env.FFMPEG_HWACCEL_METHOD !== 'none' && process.env.FFMPEG_HWACCEL_METHOD !== 'cpu') : 
-        (ffmpegSettings?.enableHardwareAccel && ffmpegSettings?.hardwareAccelType !== 'none'));
-    
-    const hardwareAccelType = !forceSoftware ? (useEnvironmentFallback ? 
-        process.env.FFMPEG_HWACCEL_METHOD : 
-        ffmpegSettings?.hardwareAccelType) : 'none';
-
-    // Global options
-    if (ffmpegSettings?.globalOptions) {
-        args.push(...ffmpegSettings.globalOptions.split(' '));
-    }
-    args.push('-loglevel', ffmpegSettings?.logLevel || 'error');
-
-    // Hardware acceleration input options
-    if (enableHardwareAccel && hardwareAccelType !== 'none') {
-        switch (hardwareAccelType) {
-            case 'nvenc':
-                args.push('-hwaccel', 'cuda');
-                break;
-            case 'qsv':
-                args.push('-hwaccel', 'qsv');
-                break;
-            case 'vaapi':
-                args.push('-hwaccel', 'vaapi');
-                const hardwareDevice = ffmpegSettings?.hardwareDevice || process.env.HARDWARE_ACCEL_DEVICE;
-                if (hardwareDevice) {
-                    args.push('-vaapi_device', hardwareDevice);
-                }
-                break;
-            case 'videotoolbox':
-                args.push('-hwaccel', 'videotoolbox');
-                break;
-        }
-    }
-    
-    // Input options
-    args.push('-ss', `${seekSeconds}`);
-    args.push('-probesize', '32768');
-    args.push('-analyzeduration', '500000');
-    args.push('-fflags', '+genpts+discardcorrupt+nobuffer');
-    args.push('-flags', 'low_delay');
-    if (ffmpegSettings?.inputOptions) {
-        args.push(...ffmpegSettings.inputOptions.split(' '));
-    }
-    args.push('-i', streamUrl);
-
-    // Video codec selection with smart fallbacks
-    let videoCodec: string;
-    if (forceSoftware) {
-        videoCodec = 'libx264';
-    } else if (useEnvironmentFallback) {
-        // Environment-based codec selection
-        switch (hardwareAccelType) {
-            case 'nvenc': videoCodec = 'h264_nvenc'; break;
-            case 'qsv': videoCodec = 'h264_qsv'; break;
-            case 'vaapi': videoCodec = 'h264_vaapi'; break;
-            case 'videotoolbox': videoCodec = 'h264_videotoolbox'; break;
-            default: videoCodec = 'libx264'; // CPU fallback
-        }
-    } else {
-        // Database settings
-        videoCodec = ffmpegSettings?.videoCodec || 'libx264';
-    }
-        
-    args.push('-c:v', videoCodec);
-    
-    if (ffmpegSettings?.videoBitrate) {
-        args.push('-b:v', ffmpegSettings.videoBitrate);
-    } else if (useEnvironmentFallback && !forceSoftware) {
-        args.push('-b:v', '8000k'); // Default for hardware acceleration
-    }
-    
-    if (ffmpegSettings?.videoBufSize) {
-        args.push('-bufsize', ffmpegSettings.videoBufSize);
-    } else if (useEnvironmentFallback && !forceSoftware) {
-        args.push('-bufsize', '16000k'); // Default for hardware acceleration
-    }
-    
-    if (ffmpegSettings?.videoPreset) {
-        args.push('-preset', ffmpegSettings.videoPreset);
-    } else if (useEnvironmentFallback) {
-        // Environment-based preset selection
-        switch (hardwareAccelType) {
-            case 'nvenc': args.push('-preset', 'p4'); break; // NVENC preset
-            case 'qsv': args.push('-preset', 'fast'); break; // QSV preset
-            case 'vaapi': args.push('-preset', 'fast'); break; // VAAPI preset
-            default: args.push('-preset', 'fast'); break; // CPU preset
-        }
-    }
-    
-    if (ffmpegSettings?.videoCrf) {
-        args.push('-crf', `${ffmpegSettings.videoCrf}`);
-    }
-
-    // Video scaling/resolution
-    if (ffmpegSettings?.targetResolution && ffmpegSettings.targetResolution !== 'original') {
-        args.push('-vf', `scale=${ffmpegSettings.targetResolution}`);
-    }
-
-    // Audio options
-    args.push('-c:a', ffmpegSettings?.audioCodec || 'aac');
-    if (ffmpegSettings?.audioBitrate) {
-        args.push('-b:a', ffmpegSettings.audioBitrate);
-    }
-    if (ffmpegSettings?.audioChannels) {
-        args.push('-ac', `${ffmpegSettings.audioChannels}`);
-    }
-    if (ffmpegSettings?.audioSampleRate) {
-        args.push('-ar', `${ffmpegSettings.audioSampleRate}`);
-    }
-
-    // Other options
-    if (ffmpegSettings?.threads) {
-        args.push('-threads', `${ffmpegSettings.threads}`);
-    }
-    if (ffmpegSettings?.maxMuxingQueueSize) {
-        args.push('-max_muxing_queue_size', `${ffmpegSettings.maxMuxingQueueSize}`);
-    }
-
-    // Output options
-    if (ffmpegSettings?.outputOptions) {
-        args.push(...ffmpegSettings.outputOptions.split(' '));
-    }
-
-    args.push('-f', ffmpegSettings?.outputFormat || 'mpegts');
-    args.push('-flush_packets', '1');
-    args.push('-muxdelay', '0');
-    args.push('-muxpreload', '0');
-    if (options?.discontinuity) {
-        args.push('-mpegts_flags', '+resend_headers+initial_discontinuity');
-    }
-    args.push('-'); // Output to stdout
-
-    // Log the transcoding method being used
-    if (useEnvironmentFallback) {
-        
-    } else {
-        
-    }
-
-    return args;
+async function buildFfmpegArgs(
+  streamUrl: string,
+  seekSeconds: number,
+  options?: {
+    forceSoftware?: boolean;
+    discontinuity?: boolean;
+    mode?: LiveEncodeMode;
+    fallback?: boolean;
+    copy?: boolean;
+  },
+): Promise<string[]> {
+  const ffmpegSettings = await loadFfmpegSettings();
+  const mode: LiveEncodeMode = options?.forceSoftware
+    ? 'software'
+    : options?.mode ?? 'hardware';
+  return buildLiveFfmpegArgs(
+    streamUrl,
+    seekSeconds,
+    ffmpegSettings,
+    {
+      mode,
+      discontinuity: options?.discontinuity,
+      fallback: options?.forceSoftware === true || options?.fallback === true,
+      copy: options?.copy === true,
+    },
+    {
+      hwaccelMethod: process.env.FFMPEG_HWACCEL_METHOD,
+      hardwareDevice: process.env.HARDWARE_ACCEL_DEVICE,
+    },
+  );
 }
+
 
 export async function GET(request: NextRequest) {
   const channelParam = request.nextUrl.searchParams.get('channel');
@@ -226,6 +109,7 @@ export async function GET(request: NextRequest) {
   //   • `utc`   – Unix epoch seconds (IPTV player standard)
   //   • `lutc`  – "live" Unix epoch (current wall-clock when player made request)
   const isCatchup = request.nextUrl.searchParams.get('catchup') === 'true';
+  const useCopyRemux = request.nextUrl.searchParams.get('copy') === '1';
   const timeParam = request.nextUrl.searchParams.get('time');
   const utcParam = request.nextUrl.searchParams.get('utc');
   const lutcParam = request.nextUrl.searchParams.get('lutc');
@@ -236,9 +120,15 @@ export async function GET(request: NextRequest) {
     let server: any;
     let timing: { seekOffsetMs: number; isActive: boolean; remainingMs: number };
     let catchupProgramTitle: string | undefined;
+    let liveProgramTitle: string | undefined;
+    let channelName: string | undefined;
     let liveProgramId: string | undefined;
     let resolvedStreamUrl: string | undefined;
     let resolvedSeekSeconds: number | undefined;
+    const streamSettingsPromise = prisma.settings.findUnique({
+      where: { id: 'singleton' },
+      select: { concurrentStreams: true },
+    });
 
     if (isCatchup) {
       let requestedTime: Date | undefined;
@@ -299,6 +189,8 @@ export async function GET(request: NextRequest) {
       liveProgramId = liveInfo.programId;
       resolvedStreamUrl = liveInfo.streamUrl;
       resolvedSeekSeconds = liveInfo.seekSeconds;
+      liveProgramTitle = liveInfo.programTitle;
+      channelName = liveInfo.channelName;
     }
 
     // ── From here, the rest of the pipeline is shared between live and catchup ──
@@ -330,13 +222,17 @@ export async function GET(request: NextRequest) {
                      request.headers.get('x-real-ip') || 
                      undefined;
 
-    // Get channel info for viewing history
-    const channel = await prisma.channel.findUnique({
-      where: { number: channelNumber },
-      select: { name: true },
-    });
+    // Channel name and title come from the live resolver. Catchup and any
+    // miss still look them up for viewing history.
+    if (!channelName) {
+      const channel = await prisma.channel.findUnique({
+        where: { number: channelNumber },
+        select: { name: true },
+      });
+      channelName = channel?.name;
+    }
 
-    let programTitle: string | undefined = catchupProgramTitle;
+    let programTitle: string | undefined = catchupProgramTitle || liveProgramTitle;
     if (!programTitle) {
       const currentProgram = (await prisma.channel.findUnique({
         where: { number: channelNumber },
@@ -361,10 +257,7 @@ export async function GET(request: NextRequest) {
     }
 
     streamMonitorService.cleanupStaleSessions();
-    const streamSettings = await prisma.settings.findUnique({
-      where: { id: "singleton" },
-      select: { concurrentStreams: true },
-    });
+    const streamSettings = await streamSettingsPromise;
     const streamLimit = streamSettings?.concurrentStreams ?? 1;
     if (
       shouldRejectNewTranscode(
@@ -373,6 +266,7 @@ export async function GET(request: NextRequest) {
         programInfo.ratingKey,
         streamLimit,
         !isCatchup,
+        useCopyRemux,
       )
     ) {
       return NextResponse.json(
@@ -388,7 +282,7 @@ export async function GET(request: NextRequest) {
       channelNumber,
       { ratingKey: programInfo.ratingKey },
       clientIp,
-      { sharedLive: !isCatchup },
+      { sharedLive: !isCatchup, copyRemux: useCopyRemux },
     );
 
     // Update session metadata
@@ -419,7 +313,7 @@ export async function GET(request: NextRequest) {
         sessionId,
         clientIp,
         channelNumber,
-        channel?.name,
+        channelName,
         programTitle
       ).catch((error: any) => {
         if (error.message?.includes('blocked')) {
@@ -434,7 +328,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Shared passthrough for the lifetime of the HTTP response
-    const passthrough = new PassThrough({ highWaterMark: 1024 * 256 });
+    const passthrough = new PassThrough({ highWaterMark: 1024 * 64 });
     const useSharedLive = !isCatchup;
 
     let liveHub: SharedLiveHub | null = null;
@@ -448,6 +342,7 @@ export async function GET(request: NextRequest) {
         streamUrl,
         seekSeconds,
         passthrough,
+        copy: useCopyRemux,
       });
       liveHub = joined.hub;
       shouldStartFfmpeg = joined.shouldStartFfmpeg;
@@ -532,6 +427,9 @@ export async function GET(request: NextRequest) {
     ];
 
     let restartedToSoftware = false;
+    let encodeMode: LiveEncodeMode = 'hardware';
+    let preferredMode: LiveEncodeMode = 'hardware';
+    let encoderStepInFlight = false;
     let currentFfmpeg: ChildProcess | null = null;
     let isAborted = false;
     let sessionFinalized = false;
@@ -560,6 +458,69 @@ export async function GET(request: NextRequest) {
       if (liveHub) {
         sharedLiveTranscodePool.beginEncoderGap(liveHub);
       }
+    };
+
+    const markSoftwareEncode = () => {
+      restartedToSoftware = true;
+      streamMonitorService.updateSessionMetadata(sessionId, { restartedToSoftware: true });
+      if (liveHub) {
+        sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
+      }
+    };
+
+    /**
+     * hardware (GPU decode + GPU encode) → cpu-decode (GPU encode only)
+     * → software (cheap libx264). Skipping straight to libx264 burns CPU
+     * when NVENC itself is fine and only CUDA decode failed.
+     */
+    const stepDownEncoder = (reason: string) => {
+      if (useCopyRemux) {
+        streamMonitorService.addError(sessionId, reason);
+        failOpenStream();
+        return;
+      }
+      if (encoderStepInFlight || isAborted) {
+        return;
+      }
+      const next = nextLiveEncodeMode(encodeMode);
+      if (!next) {
+        streamMonitorService.addError(sessionId, reason);
+        failOpenStream();
+        return;
+      }
+      encoderStepInFlight = true;
+      encodeMode = next;
+      mpegtsDiscontinuity = true;
+      streamMonitorService.addError(sessionId, `${reason}; retrying ${next}`);
+      if (next === 'software') {
+        markSoftwareEncode();
+      }
+      beginLiveEncoderGap();
+      startFfmpeg(next).catch((err) => {
+        streamMonitorService.addError(sessionId, `Encoder fallback failed: ${err.message}`);
+        failOpenStream();
+      });
+    };
+
+    const fallBackToSoftware = (reason: string) => {
+      if (useCopyRemux) {
+        streamMonitorService.addError(sessionId, reason);
+        failOpenStream();
+        return;
+      }
+      if (encoderStepInFlight || isAborted || encodeMode === 'software') {
+        return;
+      }
+      encoderStepInFlight = true;
+      encodeMode = 'software';
+      mpegtsDiscontinuity = true;
+      markSoftwareEncode();
+      streamMonitorService.addError(sessionId, reason);
+      beginLiveEncoderGap();
+      startFfmpeg('software').catch((err) => {
+        streamMonitorService.addError(sessionId, `Encoder fallback failed: ${err.message}`);
+        failOpenStream();
+      });
     };
 
     const failOpenStream = () => {
@@ -596,25 +557,25 @@ export async function GET(request: NextRequest) {
         const hasNetworkError = networkErrorPatterns.some((p) => p.test(text));
         const hasCodecError = codecErrorPatterns.some((p) => p.test(text));
 
-        if (!restartedToSoftware && hasGpuError) {
-          restartedToSoftware = true;
-          mpegtsDiscontinuity = true;
-          streamMonitorService.addError(sessionId, `GPU error: ${text.substring(0, 100)}`);
-          streamMonitorService.updateSessionMetadata(sessionId, { restartedToSoftware: true });
-          if (liveHub) {
-            sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
-          }
+        if (/unknown encoder/i.test(text)) {
           ignoreClose(child);
           try {
             child.kill('SIGKILL');
           } catch {
             // ignore
           }
-          beginLiveEncoderGap();
-          startFfmpeg(true).catch((err) => {
-            streamMonitorService.addError(sessionId, `Software fallback failed: ${err.message}`);
-            failOpenStream();
-          });
+          fallBackToSoftware(`Encoder unavailable: ${text.substring(0, 100)}`);
+          return;
+        }
+
+        if (encodeMode !== 'software' && hasGpuError) {
+          ignoreClose(child);
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // ignore
+          }
+          stepDownEncoder(`GPU error: ${text.substring(0, 100)}`);
           return;
         }
 
@@ -627,6 +588,10 @@ export async function GET(request: NextRequest) {
             child.kill('SIGKILL');
           } catch {
             // ignore
+          }
+          if (useCopyRemux) {
+            failOpenStream();
+            return;
           }
           beginLiveEncoderGap();
           mpegtsDiscontinuity = true;
@@ -651,6 +616,10 @@ export async function GET(request: NextRequest) {
           return;
         }
         ignoreClose(child);
+        if (useCopyRemux) {
+          failOpenStream();
+          return;
+        }
         beginLiveEncoderGap();
         mpegtsDiscontinuity = true;
         streamRecoveryService
@@ -672,19 +641,14 @@ export async function GET(request: NextRequest) {
           return;
         }
 
-        if (code !== 0 && !restartedToSoftware && !isAborted) {
-          restartedToSoftware = true;
-          mpegtsDiscontinuity = true;
-          streamMonitorService.addError(sessionId, `FFmpeg exited with code ${code}`);
-          streamMonitorService.updateSessionMetadata(sessionId, { restartedToSoftware: true });
-          if (liveHub) {
-            sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
-          }
-          beginLiveEncoderGap();
-          startFfmpeg(true).catch((err) => {
-            streamMonitorService.addError(sessionId, `Software fallback failed: ${err.message}`);
-            failOpenStream();
-          });
+        if (code !== 0 && !isAborted && useCopyRemux) {
+          streamMonitorService.addError(sessionId, `FFmpeg remux exited with code ${code}`);
+          failOpenStream();
+          return;
+        }
+
+        if (code !== 0 && !isAborted && encodeMode !== 'software') {
+          stepDownEncoder(`FFmpeg exited with code ${code}`);
           return;
         }
 
@@ -811,13 +775,13 @@ export async function GET(request: NextRequest) {
           streamMonitorService.updateSessionMetadata(sessionId, metadata);
         }
         mpegtsDiscontinuity = true;
-        const child = await startFfmpeg(restartedToSoftware);
+        const child = await startFfmpeg(encodeMode);
         return child !== null;
       }
       return false;
     };
 
-    async function startFfmpeg(forceSoftware: boolean) {
+    async function startFfmpeg(mode: LiveEncodeMode) {
       if (isAborted) {
         return null;
       }
@@ -833,21 +797,32 @@ export async function GET(request: NextRequest) {
       }
       const activeSeekSeconds = currentSession.seekSeconds || seekSeconds;
 
+      encodeMode = mode;
+      encoderStepInFlight = false;
+      const fallingBack = !useCopyRemux && mode === 'software' && preferredMode !== 'software';
       const ffmpegArgs = await buildFfmpegArgs(activeStreamUrl, activeSeekSeconds, {
-        forceSoftware,
+        mode,
+        fallback: fallingBack,
         discontinuity: mpegtsDiscontinuity,
+        copy: useCopyRemux,
       });
 
       const child = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-      if (liveHub && forceSoftware) {
+      if (liveHub && fallingBack) {
         sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
       }
       bindFfmpegLifecycle(child);
       return child;
     }
 
-    // Start with hardware (if available)
-    await startFfmpeg(false);
+    const ffmpegSettingsForMode = await loadFfmpegSettings();
+    preferredMode = useCopyRemux
+      ? 'software'
+      : !ffmpegSettingsForMode || ffmpegSettingsForMode.enableTranscoding === false
+        ? 'software'
+        : initialEncodeMode(ffmpegSettingsForMode.videoCodec);
+    encodeMode = preferredMode;
+    await startFfmpeg(encodeMode);
 
     // Handle client abort / stream close (IPTV clients often drop without a
     // clean abort — passthrough close must still reclaim FFmpeg).

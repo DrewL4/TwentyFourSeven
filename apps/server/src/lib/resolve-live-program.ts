@@ -39,6 +39,7 @@ export type ResolvedLiveProgram = {
   streamUrl: string;
   seekSeconds: number;
   programTitle?: string;
+  channelName?: string;
 };
 
 const liveProgramInclude = {
@@ -110,16 +111,16 @@ export function liveProgramTitle(program: ScheduledProgramRow): string | undefin
   return undefined;
 }
 
-export async function listScheduledProgramsForChannel(
+export async function loadChannelSchedule(
   channelNumber: number,
   now: Date = new Date(),
-): Promise<ScheduledProgramRow[]> {
+): Promise<{ channelName?: string; programs: ScheduledProgramRow[] }> {
   const channel = await prisma.channel.findUnique({
     where: { number: channelNumber },
-    select: { id: true },
+    select: { id: true, name: true },
   });
   if (!channel) {
-    return [];
+    return { programs: [] };
   }
 
   const [started, upcoming] = await Promise.all([
@@ -147,7 +148,15 @@ export async function listScheduledProgramsForChannel(
   for (const row of [...started, ...upcoming]) {
     byId.set(row.id, row as ScheduledProgramRow);
   }
-  return [...byId.values()];
+  return { channelName: channel.name, programs: [...byId.values()] };
+}
+
+export async function listScheduledProgramsForChannel(
+  channelNumber: number,
+  now: Date = new Date(),
+): Promise<ScheduledProgramRow[]> {
+  const schedule = await loadChannelSchedule(channelNumber, now);
+  return schedule.programs;
 }
 
 export async function loadLiveProgramForChannel(
@@ -155,8 +164,9 @@ export async function loadLiveProgramForChannel(
   options?: { skipProgramId?: string; now?: Date },
 ): Promise<ResolvedLiveProgram | null> {
   const now = options?.now ?? new Date();
+  const schedule = await loadChannelSchedule(channelNumber, now);
   const picked = pickScheduledProgram(
-    await listScheduledProgramsForChannel(channelNumber, now),
+    schedule.programs,
     now,
     { skipProgramId: options?.skipProgramId },
   );
@@ -202,5 +212,6 @@ export async function loadLiveProgramForChannel(
     streamUrl: `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`,
     seekSeconds,
     programTitle: liveProgramTitle(picked),
+    channelName: schedule.channelName,
   };
 }

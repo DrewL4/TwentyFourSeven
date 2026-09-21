@@ -21,9 +21,14 @@ describe("SharedLiveTranscodePool", () => {
     assert.equal((packet[1] << 8 | packet[2]) & 0x1fff, 0x1fff);
   });
 
-  it("shares one hub key per live channel", () => {
-    assert.equal(pool.getLiveShareKey(5, "rk1"), "5:live");
-    assert.equal(pool.getLiveShareKey(5, "rk2"), "5:live");
+  it("shares one hub key per live channel and encode mode", () => {
+    assert.equal(pool.getLiveShareKey(5, "rk1"), "5:live:transcode");
+    assert.equal(pool.getLiveShareKey(5, "rk2"), "5:live:transcode");
+    assert.equal(pool.getLiveShareKey(5, "rk1", true), "5:live:copy");
+    assert.notEqual(
+      pool.getLiveShareKey(5, "rk1", false),
+      pool.getLiveShareKey(5, "rk1", true),
+    );
   });
 
   it("lets a second viewer join while FFmpeg is not attached yet", async () => {
@@ -51,6 +56,54 @@ describe("SharedLiveTranscodePool", () => {
     assert.equal(second.hub, first.hub);
     assert.equal(first.hub.viewers.size, 2);
     pool.dissolveHub(first.hub, { killFfmpeg: false });
+  });
+
+  it("keeps copy and transcode viewers on separate hubs", async () => {
+    const copyPass = new PassThrough();
+    const copyJoin = await pool.joinOrCreateLiveHub({
+      channelNumber: 3,
+      ratingKey: "ep1",
+      sessionId: "copy-owner",
+      streamUrl: "http://example/a",
+      seekSeconds: 0,
+      passthrough: copyPass,
+      copy: true,
+    });
+    assert.equal(copyJoin.shouldStartFfmpeg, true);
+    assert.equal(copyJoin.hub.copy, true);
+    assert.equal(copyJoin.hub.key, "3:live:copy");
+
+    const transPass = new PassThrough();
+    const transJoin = await pool.joinOrCreateLiveHub({
+      channelNumber: 3,
+      ratingKey: "ep1",
+      sessionId: "trans-owner",
+      streamUrl: "http://example/a",
+      seekSeconds: 0,
+      passthrough: transPass,
+      copy: false,
+    });
+    assert.equal(transJoin.shouldStartFfmpeg, true);
+    assert.equal(transJoin.hub.copy, false);
+    assert.notEqual(transJoin.hub, copyJoin.hub);
+
+    const copyJoinerPass = new PassThrough();
+    const copyJoiner = await pool.joinOrCreateLiveHub({
+      channelNumber: 3,
+      ratingKey: "ep1",
+      sessionId: "copy-joiner",
+      streamUrl: "http://example/poison",
+      seekSeconds: 0,
+      passthrough: copyJoinerPass,
+      copy: true,
+    });
+    assert.equal(copyJoiner.shouldStartFfmpeg, false);
+    assert.equal(copyJoiner.hub, copyJoin.hub);
+    assert.equal(copyJoin.hub.viewers.size, 2);
+    assert.equal(transJoin.hub.viewers.size, 1);
+
+    pool.dissolveHub(copyJoin.hub, { killFfmpeg: false });
+    pool.dissolveHub(transJoin.hub, { killFfmpeg: false });
   });
 
   it("fans out viewers on the same hub and kills FFmpeg only on last leave", () => {

@@ -35,6 +35,8 @@ export type SharedLiveHub = {
   streamUrl: string;
   seekSeconds: number;
   restartedToSoftware: boolean;
+  /** Remux hub (`copy=1`) — never mixed with a transcode hub on the same channel. */
+  copy: boolean;
 };
 
 /**
@@ -67,11 +69,16 @@ export class SharedLiveTranscodePool {
   }
 
   /**
-   * One live hub per channel (not per episode). Episode handoff keeps the
-   * same MPEG-TS HTTP response and late joiners attach mid-stream.
+   * One live hub per channel and encode mode (copy vs transcode). Episode
+   * handoff keeps the same MPEG-TS HTTP response; late joiners attach only
+   * to the hub that matches their copy flag.
    */
-  getLiveShareKey(channelNumber: number, _ratingKey?: string): string {
-    return `${channelNumber}:live`;
+  getLiveShareKey(
+    channelNumber: number,
+    _ratingKey?: string,
+    copy = false,
+  ): string {
+    return `${channelNumber}:live:${copy ? "copy" : "transcode"}`;
   }
 
   getHub(key: string): SharedLiveHub | undefined {
@@ -81,8 +88,9 @@ export class SharedLiveTranscodePool {
   findLiveHub(
     channelNumber: number,
     ratingKey: string,
+    copy = false,
   ): SharedLiveHub | undefined {
-    return this.hubs.get(this.getLiveShareKey(channelNumber, ratingKey));
+    return this.hubs.get(this.getLiveShareKey(channelNumber, ratingKey, copy));
   }
 
   /** True when this session is attached to a shared live hub. */
@@ -123,8 +131,13 @@ export class SharedLiveTranscodePool {
     streamUrl: string;
     seekSeconds: number;
     passthrough: PassThrough;
+    copy?: boolean;
   }): Promise<{ hub: SharedLiveHub; shouldStartFfmpeg: boolean }> {
-    const key = this.getLiveShareKey(options.channelNumber, options.ratingKey);
+    const key = this.getLiveShareKey(
+      options.channelNumber,
+      options.ratingKey,
+      options.copy === true,
+    );
 
     const existing = this.hubs.get(key);
     if (existing) {
@@ -155,6 +168,7 @@ export class SharedLiveTranscodePool {
         streamUrl: options.streamUrl,
         seekSeconds: options.seekSeconds,
         passthrough: options.passthrough,
+        copy: options.copy === true,
       });
       resolveHub(hub);
       return { hub, shouldStartFfmpeg: true };
@@ -176,8 +190,13 @@ export class SharedLiveTranscodePool {
     streamUrl: string;
     seekSeconds: number;
     passthrough: PassThrough;
+    copy?: boolean;
   }): SharedLiveHub {
-    const key = this.getLiveShareKey(options.channelNumber, options.ratingKey);
+    const key = this.getLiveShareKey(
+      options.channelNumber,
+      options.ratingKey,
+      options.copy === true,
+    );
     const existing = this.hubs.get(key);
     if (existing) {
       this.addViewer(existing, options.ownerSessionId, options.passthrough);
@@ -194,6 +213,7 @@ export class SharedLiveTranscodePool {
       streamUrl: options.streamUrl,
       seekSeconds: options.seekSeconds,
       restartedToSoftware: false,
+      copy: options.copy === true,
     };
     hub.viewers.set(options.ownerSessionId, {
       sessionId: options.ownerSessionId,

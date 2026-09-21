@@ -79,4 +79,28 @@ describe("shouldRejectNewTranscode", () => {
       true,
     );
   });
+
+  it("does not count copy remuxes toward the transcode cap", () => {
+    const atCapacity = [
+      { channelNumber: 1, programInfo: { ratingKey: "ep1" }, sharedLive: true },
+    ];
+    assert.equal(
+      shouldRejectNewTranscode(atCapacity, 2, "ep2", 1, true, true),
+      false,
+    );
+    const withCopyViewer = [
+      ...atCapacity,
+      {
+        channelNumber: 9,
+        programInfo: { ratingKey: "copy" },
+        sharedLive: true,
+        copyRemux: true,
+      },
+    ];
+    assert.equal(countActiveTranscodes(withCopyViewer), 1);
+    assert.equal(
+      shouldRejectNewTranscode(withCopyViewer, 2, "other", 1, true),
+      true,
+    );
+  });
 });

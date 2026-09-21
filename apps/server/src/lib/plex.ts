@@ -77,6 +77,35 @@ interface PlexEpisode extends PlexMedia {
   parentIndex: number;
 }
 
+const MEDIA_PART_TTL_MS = 6 * 60 * 60 * 1000;
+const mediaPartCache = new Map<string, { partKey: string; duration: number; expires: number }>();
+const mediaPartInflight = new Map<string, Promise<{ partKey: string; duration: number } | null>>();
+
+function mediaPartCacheKey(uri: string, ratingKey: string): string {
+  return `${uri}|${ratingKey}`;
+}
+
+function readMediaPartCache(uri: string, ratingKey: string): { partKey: string; duration: number } | null {
+  const cached = mediaPartCache.get(mediaPartCacheKey(uri, ratingKey));
+  if (!cached) return null;
+  if (cached.expires <= Date.now()) {
+    mediaPartCache.delete(mediaPartCacheKey(uri, ratingKey));
+    return null;
+  }
+  return { partKey: cached.partKey, duration: cached.duration };
+}
+
+function storeMediaPartCache(
+  uri: string,
+  ratingKey: string,
+  part: { partKey: string; duration: number },
+): void {
+  mediaPartCache.set(mediaPartCacheKey(uri, ratingKey), {
+    ...part,
+    expires: Date.now() + MEDIA_PART_TTL_MS,
+  });
+}
+
 export class PlexAPI {
   private accessToken: string;
   private server: {
@@ -445,6 +474,29 @@ export class PlexAPI {
    * Get media parts for a rating key
    */
   async getMediaParts(uri: string, token: string, ratingKey: string): Promise<{ partKey: string; duration: number } | null> {
+    const cached = readMediaPartCache(uri, ratingKey);
+    if (cached) {
+      return cached;
+    }
+    const key = mediaPartCacheKey(uri, ratingKey);
+    const pending = mediaPartInflight.get(key);
+    if (pending) {
+      return pending;
+    }
+    const request = this.fetchMediaParts(uri, token, ratingKey);
+    mediaPartInflight.set(key, request);
+    try {
+      const part = await request;
+      if (part) {
+        storeMediaPartCache(uri, ratingKey, part);
+      }
+      return part;
+    } finally {
+      mediaPartInflight.delete(key);
+    }
+  }
+
+  private async fetchMediaParts(uri: string, token: string, ratingKey: string): Promise<{ partKey: string; duration: number } | null> {
     try {
       console.log(`[PlexAPI] Getting media parts for ${ratingKey} from ${uri}`);
       

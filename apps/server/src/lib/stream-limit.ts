@@ -3,6 +3,8 @@ export interface TranscodeSessionRef {
   programInfo: { ratingKey: string };
   /** Live 24/7 hub is one transcode per channel across episode handoffs. */
   sharedLive?: boolean;
+  /** `copy=1` remux — does not consume a concurrent-streams slot. */
+  copyRemux?: boolean;
 }
 
 /** Stable identity for one channel+program transcode (shared by multiple viewers). */
@@ -10,23 +12,30 @@ export function getTranscodeKey(
   channelNumber: number,
   ratingKey: string,
   sharedLive = false,
+  copyRemux = false,
 ): string {
+  if (copyRemux) {
+    return `${channelNumber}:live:copy`;
+  }
   if (sharedLive) {
     return `${channelNumber}:live`;
   }
   return `${channelNumber}:${ratingKey}`;
 }
 
-/** Count distinct channel/program transcodes, not viewer connections. */
+/** Count distinct channel/program transcodes, not viewer connections or remuxes. */
 export function countActiveTranscodes(sessions: TranscodeSessionRef[]): number {
   const keys = new Set(
-    sessions.map((session) =>
-      getTranscodeKey(
-        session.channelNumber,
-        session.programInfo.ratingKey,
-        session.sharedLive === true,
+    sessions
+      .filter((session) => session.copyRemux !== true)
+      .map((session) =>
+        getTranscodeKey(
+          session.channelNumber,
+          session.programInfo.ratingKey,
+          session.sharedLive === true,
+          false,
+        ),
       ),
-    ),
   );
   return keys.size;
 }
@@ -59,20 +68,24 @@ export function shouldRejectNewTranscode(
   ratingKey: string,
   concurrentStreamsLimit: number,
   sharedLive = false,
+  copyRemux = false,
 ): boolean {
-  if (isUnlimitedConcurrentStreams(concurrentStreamsLimit)) {
+  if (copyRemux || isUnlimitedConcurrentStreams(concurrentStreamsLimit)) {
     return false;
   }
 
-  const incomingKey = getTranscodeKey(channelNumber, ratingKey, sharedLive);
+  const incomingKey = getTranscodeKey(channelNumber, ratingKey, sharedLive, false);
   const activeKeys = new Set(
-    activeSessions.map((session) =>
-      getTranscodeKey(
-        session.channelNumber,
-        session.programInfo.ratingKey,
-        session.sharedLive === true,
+    activeSessions
+      .filter((session) => session.copyRemux !== true)
+      .map((session) =>
+        getTranscodeKey(
+          session.channelNumber,
+          session.programInfo.ratingKey,
+          session.sharedLive === true,
+          false,
+        ),
       ),
-    ),
   );
   if (activeKeys.has(incomingKey)) {
     return false;

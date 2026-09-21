@@ -28,6 +28,8 @@ export interface StreamSession {
   seekSeconds: number;
   /** Live shared hub — capacity is per channel, not per episode. */
   sharedLive: boolean;
+  /** Remux (`copy=1`) — excluded from the transcode cap. */
+  copyRemux: boolean;
 }
 
 export class StreamMonitorService {
@@ -57,7 +59,7 @@ export class StreamMonitorService {
     channelNumber: number,
     programInfo: ProgramInfo,
     clientIp?: string,
-    options?: { sharedLive?: boolean },
+    options?: { sharedLive?: boolean; copyRemux?: boolean },
   ): string {
     const sessionId = randomUUID();
     const now = new Date();
@@ -78,6 +80,7 @@ export class StreamMonitorService {
       restartedToSoftware: false,
       seekSeconds: 0,
       sharedLive: options?.sharedLive === true,
+      copyRemux: options?.copyRemux === true,
     };
 
     this.sessions.set(sessionId, session);
