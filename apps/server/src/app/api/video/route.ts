@@ -32,6 +32,49 @@ const MPEGTS_RESPONSE_HEADERS = {
   'X-Accel-Buffering': 'no',
 };
 
+/** Next.js Node-stream piping logs `failed to pipe response` on IPTV aborts. */
+function asMpegTsBody(passthrough: PassThrough): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      const closeQuietly = () => {
+        try {
+          controller.close();
+        } catch {
+          // already closed
+        }
+      };
+      passthrough.on('data', (chunk: Buffer) => {
+        try {
+          controller.enqueue(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+        } catch {
+          // closed
+        }
+      });
+      passthrough.on('end', closeQuietly);
+      passthrough.on('error', (err: NodeJS.ErrnoException) => {
+        if (
+          err?.code === 'ERR_STREAM_PREMATURE_CLOSE' ||
+          err?.name === 'AbortError' ||
+          err?.message === 'Premature close'
+        ) {
+          closeQuietly();
+          return;
+        }
+        try {
+          controller.error(err);
+        } catch {
+          // already closed
+        }
+      });
+    },
+    cancel() {
+      if (!passthrough.destroyed) {
+        passthrough.destroy();
+      }
+    },
+  });
+}
+
 const LIVE_HANDOFF_ATTEMPTS = 12;
 const LIVE_HANDOFF_RETRY_MS = 500;
 const FFMPEG_SETTINGS_TTL_MS = 15_000;
@@ -328,7 +371,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Shared passthrough for the lifetime of the HTTP response
-    const passthrough = new PassThrough({ highWaterMark: 1024 * 64 });
+    const passthrough = new PassThrough({
+      highWaterMark: useCopyRemux ? 1024 * 256 : 1024 * 64,
+    });
     const useSharedLive = !isCatchup;
 
     let liveHub: SharedLiveHub | null = null;
@@ -386,7 +431,7 @@ export async function GET(request: NextRequest) {
         passthrough.on('close', endJoinerSession);
         passthrough.on('error', endJoinerSession);
 
-        return new NextResponse(passthrough as any, {
+        return new NextResponse(asMpegTsBody(passthrough) as any, {
           status: 200,
           headers: MPEGTS_RESPONSE_HEADERS,
         });
@@ -539,7 +584,11 @@ export async function GET(request: NextRequest) {
         sharedLiveTranscodePool.attachFfmpeg(liveHub, child);
         syncFfmpegToSessions(child);
         child.stdout?.on('data', () => {
-          for (const viewerSessionId of liveHub!.viewers.keys()) {
+          const hub = liveHub;
+          if (!hub) {
+            return;
+          }
+          for (const viewerSessionId of hub.viewers.keys()) {
             streamMonitorService.updateOutputActivity(viewerSessionId);
           }
         });
@@ -553,6 +602,12 @@ export async function GET(request: NextRequest) {
 
       child.stderr?.on('data', (data) => {
         const text = data.toString();
+        if (useCopyRemux) {
+          const line = text.replace(/\s+/g, ' ').trim().slice(0, 400);
+          if (line) {
+            console.warn(`[Video] copy ffmpeg channel=${channelNumber}: ${line}`);
+          }
+        }
         const hasGpuError = gpuErrorPatterns.some((p) => p.test(text));
         const hasNetworkError = networkErrorPatterns.some((p) => p.test(text));
         const hasCodecError = codecErrorPatterns.some((p) => p.test(text));
@@ -823,6 +878,9 @@ export async function GET(request: NextRequest) {
         : initialEncodeMode(ffmpegSettingsForMode.videoCodec);
     encodeMode = preferredMode;
     await startFfmpeg(encodeMode);
+    console.log(
+      `[Video] start channel=${channelNumber} mode=${useCopyRemux ? 'copy' : 'transcode'} encode=${encodeMode} session=${sessionId}${isCatchup ? ' catchup' : ''}`,
+    );
 
     // Handle client abort / stream close (IPTV clients often drop without a
     // clean abort — passthrough close must still reclaim FFmpeg).
@@ -869,7 +927,7 @@ export async function GET(request: NextRequest) {
     passthrough.on('close', onClientGone);
     passthrough.on('error', onClientGone);
     
-    return new NextResponse(passthrough as any, {
+    return new NextResponse(asMpegTsBody(passthrough) as any, {
       status: 200,
       headers: MPEGTS_RESPONSE_HEADERS,
     });

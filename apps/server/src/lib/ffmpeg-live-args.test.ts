@@ -92,12 +92,15 @@ describe("nvenc live args", () => {
       mode: "hardware",
       copy: true,
     });
-    assert.equal(args[args.indexOf("-c") + 1], "copy");
-    assert.equal(args.includes("-c:v"), false);
+    assert.equal(args[args.indexOf("-c:v") + 1], "copy");
+    assert.equal(args[args.indexOf("-c:a") + 1], "aac");
+    assert.ok(args.includes("-sn"));
     assert.equal(args.includes("hevc_nvenc"), false);
     assert.equal(args.includes("libx264"), false);
     assert.equal(args.includes("-crf"), false);
-    assert.ok(args.includes("+genpts+discardcorrupt+nobuffer+fastseek"));
+    assert.equal(args[args.indexOf("-probesize") + 1], "5000000");
     assert.equal(args[args.indexOf("-ss") + 1], "42");
+    assert.ok(args.includes("+resend_headers"));
+    assert.equal(args.includes("dump_extra=freq=keyframe"), false);
   });
 });

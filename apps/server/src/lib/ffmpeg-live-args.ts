@@ -121,8 +121,10 @@ function hasFlag(raw: string | null | undefined, flag: string): boolean {
 }
 
 /**
- * Seek-to-now remux. MPEG-TS gets Annex-B video automatically; AAC is
- * rewritten as ADTS by the muxer (do not use aac_adtstoasc — that is MP4).
+ * Seek-to-now remux. Copy video, transcode audio to AAC so MPEG-TS stays
+ * valid (TrueHD/DTS/PGS in an MKV will fail `-c copy`). FFmpeg inserts
+ * h264/hevc Annex-B for mpegts. Do not add dump_extra — it fails on many
+ * Plex MKVs (`Invalid data` on stream 0) and forces a full NVENC retry.
  */
 export function buildCopyFfmpegArgs(
   streamUrl: string,
@@ -139,28 +141,41 @@ export function buildCopyFfmpegArgs(
     "-ss",
     `${seekSeconds}`,
     "-probesize",
-    "131072",
+    "5000000",
     "-analyzeduration",
-    "200000",
+    "5000000",
     "-fflags",
-    "+genpts+discardcorrupt+nobuffer+fastseek",
-    "-flags",
-    "low_delay",
+    "+genpts+discardcorrupt+fastseek",
     "-i",
     streamUrl,
-    "-c",
+    "-map",
+    "0:v:0",
+    "-map",
+    "0:a:0?",
+    "-sn",
+    "-dn",
+    "-c:v",
     "copy",
+    "-c:a",
+    "aac",
+    "-ac",
+    "2",
+    "-b:a",
+    "160k",
     "-f",
     "mpegts",
+    "-mpegts_flags",
+    options?.discontinuity
+      ? "+resend_headers+initial_discontinuity"
+      : "+resend_headers",
+    "-flush_packets",
+    "1",
     "-muxdelay",
     "0",
     "-muxpreload",
     "0",
+    "-",
   ];
-  if (options?.discontinuity) {
-    args.push("-mpegts_flags", "+resend_headers+initial_discontinuity");
-  }
-  args.push("-");
   return args;
 }
 

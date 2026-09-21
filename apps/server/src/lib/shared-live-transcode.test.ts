@@ -171,6 +171,25 @@ describe("SharedLiveTranscodePool", () => {
     pool.releaseViewer("b");
   });
 
+  it("pauses copy remux on backpressure instead of dropping the viewer", () => {
+    const pass = new PassThrough({ highWaterMark: 16 });
+    const hub = pool.createHub({
+      channelNumber: 11,
+      ratingKey: "1100",
+      ownerSessionId: "owner",
+      streamUrl: "http://example/stream",
+      seekSeconds: 0,
+      passthrough: pass,
+      copy: true,
+    });
+    const stdout = new PassThrough();
+    pool.attachFfmpeg(hub, { kill: () => undefined, stdout } as any);
+    stdout.write(Buffer.alloc(64 * 1024, 0x47));
+    stdout.write(Buffer.alloc(64 * 1024, 0x47));
+    assert.equal(pass.destroyed, false);
+    pool.dissolveHub(hub, { killFfmpeg: false });
+  });
+
   it("does not overwrite hub streamUrl when a late joiner attaches", async () => {
     const ownerPass = new PassThrough();
     const first = await pool.joinOrCreateLiveHub({

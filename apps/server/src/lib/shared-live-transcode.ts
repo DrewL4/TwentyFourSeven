@@ -233,22 +233,33 @@ export class SharedLiveTranscodePool {
 
   /**
    * Wire FFmpeg stdout to all current (and future) viewers via chunk fan-out.
-   * Slow clients that back-pressure are dropped so they cannot stall the hub.
+   * Copy remux (and a single transcode viewer) must pause on backpressure —
+   * dropping the only client makes MWS reconnect and spawn a new FFmpeg.
+   * Multi-viewer transcode still drops a slow client so it cannot stall others.
    */
   attachFfmpeg(hub: SharedLiveHub, child: ChildProcess): void {
     this.stopHandoffStuffing(hub);
     hub.ffmpeg = child;
     this.clearPendingCreate(hub.key);
 
-    child.stdout?.on("data", (chunk: Buffer) => {
-      for (const viewer of hub.viewers.values()) {
-        if (viewer.passthrough.destroyed || viewer.passthrough.writableEnded) {
-          continue;
-        }
+    const stdout = child.stdout;
+    stdout?.on("data", (chunk: Buffer) => {
+      const viewers = [...hub.viewers.values()].filter(
+        (viewer) => !viewer.passthrough.destroyed && !viewer.passthrough.writableEnded,
+      );
+      const dropSlow = !hub.copy && viewers.length > 1;
+      for (const viewer of viewers) {
         try {
           const ok = viewer.passthrough.write(chunk);
           if (!ok) {
-            viewer.passthrough.destroy();
+            if (dropSlow) {
+              viewer.passthrough.destroy();
+            } else {
+              stdout.pause();
+              viewer.passthrough.once("drain", () => {
+                stdout.resume();
+              });
+            }
           }
         } catch {
           // ignore write errors from disconnected clients
