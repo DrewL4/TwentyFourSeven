@@ -77,7 +77,11 @@ export class SharedLiveTranscodePool {
     channelNumber: number,
     _ratingKey?: string,
     copy = false,
+    browser = false,
   ): string {
+    if (browser) {
+      return `${channelNumber}:live:browser`;
+    }
     return `${channelNumber}:live:${copy ? "copy" : "transcode"}`;
   }
 
@@ -89,8 +93,9 @@ export class SharedLiveTranscodePool {
     channelNumber: number,
     ratingKey: string,
     copy = false,
+    browser = false,
   ): SharedLiveHub | undefined {
-    return this.hubs.get(this.getLiveShareKey(channelNumber, ratingKey, copy));
+    return this.hubs.get(this.getLiveShareKey(channelNumber, ratingKey, copy, browser));
   }
 
   /** True when this session is attached to a shared live hub. */
@@ -132,11 +137,13 @@ export class SharedLiveTranscodePool {
     seekSeconds: number;
     passthrough: PassThrough;
     copy?: boolean;
+    browser?: boolean;
   }): Promise<{ hub: SharedLiveHub; shouldStartFfmpeg: boolean }> {
     const key = this.getLiveShareKey(
       options.channelNumber,
       options.ratingKey,
       options.copy === true,
+      options.browser === true,
     );
 
     const existing = this.hubs.get(key);
@@ -169,6 +176,7 @@ export class SharedLiveTranscodePool {
         seekSeconds: options.seekSeconds,
         passthrough: options.passthrough,
         copy: options.copy === true,
+        browser: options.browser === true,
       });
       resolveHub(hub);
       return { hub, shouldStartFfmpeg: true };
@@ -191,11 +199,13 @@ export class SharedLiveTranscodePool {
     seekSeconds: number;
     passthrough: PassThrough;
     copy?: boolean;
+    browser?: boolean;
   }): SharedLiveHub {
     const key = this.getLiveShareKey(
       options.channelNumber,
       options.ratingKey,
       options.copy === true,
+      options.browser === true,
     );
     const existing = this.hubs.get(key);
     if (existing) {

@@ -25,6 +25,7 @@ describe("SharedLiveTranscodePool", () => {
     assert.equal(pool.getLiveShareKey(5, "rk1"), "5:live:transcode");
     assert.equal(pool.getLiveShareKey(5, "rk2"), "5:live:transcode");
     assert.equal(pool.getLiveShareKey(5, "rk1", true), "5:live:copy");
+    assert.equal(pool.getLiveShareKey(5, "rk1", false, true), "5:live:browser");
     assert.notEqual(
       pool.getLiveShareKey(5, "rk1", false),
       pool.getLiveShareKey(5, "rk1", true),

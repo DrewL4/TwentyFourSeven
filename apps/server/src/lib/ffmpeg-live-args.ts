@@ -120,11 +120,31 @@ function hasFlag(raw: string | null | undefined, flag: string): boolean {
   return raw.split(/\s+/).includes(flag);
 }
 
+/** Browser MSE plays H.264 steadily. HEVC through mpegts.js stutters. */
+function browserSafeVideoCodec(codec: string): string {
+  if (codec.startsWith("hevc_")) {
+    return `h264_${codec.slice("hevc_".length)}`;
+  }
+  if (codec === "libx265") {
+    return "libx264";
+  }
+  return codec;
+}
+
 /**
  * Seek-to-now remux. Copy video, transcode audio to AAC so MPEG-TS stays
- * valid (TrueHD/DTS/PGS in an MKV will fail `-c copy`). FFmpeg inserts
- * h264/hevc Annex-B for mpegts. Do not add dump_extra — it fails on many
- * Plex MKVs (`Invalid data` on stream 0) and forces a full NVENC retry.
+ * valid (TrueHD/DTS/PGS in an MKV will fail `-c copy`). The mpegts muxer
+ * inserts h264/hevc Annex-B itself. Do not add dump_extra — it fails on
+ * many Plex MKVs and the client then waits out a dead stream before
+ * falling back to a full transcode.
+ *
+ * Keep the probe as short as the transcode path. A 5s/5MB probe plus
+ * FFmpeg's default 10s interleave hold (video copy waiting on AAC) sends
+ * no TS, and ExoPlayer reports an unrecognized container after ~17s.
+ *
+ * Pace the read at 1x after a short burst. Copy has no encoder to slow it
+ * down, so an unpaced remux pulls the whole MKV into Node and RAM climbs
+ * into multiple gigabytes while the player only consumes realtime.
  */
 export function buildCopyFfmpegArgs(
   streamUrl: string,
@@ -140,12 +160,18 @@ export function buildCopyFfmpegArgs(
     "-nostdin",
     "-ss",
     `${seekSeconds}`,
+    "-readrate",
+    "1",
+    "-readrate_initial_burst",
+    "2",
     "-probesize",
-    "5000000",
+    "131072",
     "-analyzeduration",
-    "5000000",
+    "200000",
     "-fflags",
-    "+genpts+discardcorrupt+fastseek",
+    "+genpts+discardcorrupt+nobuffer+fastseek",
+    "-flags",
+    "low_delay",
     "-i",
     streamUrl,
     "-map",
@@ -162,6 +188,8 @@ export function buildCopyFfmpegArgs(
     "2",
     "-b:a",
     "160k",
+    "-max_interleave_delta",
+    "0",
     "-f",
     "mpegts",
     "-mpegts_flags",
@@ -190,13 +218,18 @@ export function buildLiveFfmpegArgs(
     fallback?: boolean;
     /** MWS opt-in remux even when transcoding is enabled. */
     copy?: boolean;
+    /** In-browser playback. H.264, paced, no low-latency encoder tune. */
+    browser?: boolean;
   },
   env: LiveFfmpegEnv = {},
 ): string[] {
   const useEnvironmentFallback = !settings;
   const enableTranscoding = settings?.enableTranscoding ?? true;
 
-  if (options.copy === true || (!enableTranscoding && !useEnvironmentFallback && !options.fallback)) {
+  if (
+    !options.browser &&
+    (options.copy === true || (!enableTranscoding && !useEnvironmentFallback && !options.fallback))
+  ) {
     return buildCopyFfmpegArgs(streamUrl, seekSeconds, {
       discontinuity: options.discontinuity,
       logLevel: settings?.logLevel,
@@ -204,6 +237,9 @@ export function buildLiveFfmpegArgs(
   }
 
   let videoCodec = settings?.videoCodec || "libx264";
+  if (options.browser) {
+    videoCodec = browserSafeVideoCodec(videoCodec);
+  }
   if (useEnvironmentFallback) {
     switch (env.hwaccelMethod) {
       case "nvenc":
@@ -262,8 +298,15 @@ export function buildLiveFfmpegArgs(
   args.push("-ss", `${seekSeconds}`);
   args.push("-probesize", "131072");
   args.push("-analyzeduration", "200000");
-  args.push("-fflags", "+genpts+discardcorrupt+nobuffer+fastseek");
-  args.push("-flags", "low_delay");
+  args.push(
+    "-fflags",
+    options.browser
+      ? "+genpts+discardcorrupt+fastseek"
+      : "+genpts+discardcorrupt+nobuffer+fastseek",
+  );
+  if (!options.browser) {
+    args.push("-flags", "low_delay");
+  }
   pushWords(args, settings?.inputOptions);
   args.push("-i", streamUrl);
 
@@ -276,19 +319,22 @@ export function buildLiveFfmpegArgs(
   if (bufsize) args.push("-bufsize", bufsize);
 
   if (family === "nvenc") {
-    args.push("-preset", nvencPreset(settings?.videoPreset));
-    if (!hasFlag(settings?.outputOptions, "-tune")) {
+    args.push("-preset", options.browser ? "p4" : nvencPreset(settings?.videoPreset));
+    if (!options.browser && !hasFlag(settings?.outputOptions, "-tune")) {
       args.push("-tune", "ll");
     }
     args.push("-rc", "cbr");
     args.push("-bf", "0");
-    args.push("-g", "60");
+    args.push("-g", options.browser ? "48" : "60");
+    if (options.browser) {
+      args.push("-profile:v", "high");
+    }
   } else if (family === "software") {
     const preset = options.fallback
       ? "veryfast"
       : settings?.videoPreset || (useEnvironmentFallback ? "veryfast" : "veryfast");
     args.push("-preset", preset);
-    if (options.fallback || !settings?.videoPreset) {
+    if (!options.browser && (options.fallback || !settings?.videoPreset)) {
       args.push("-tune", "zerolatency");
     }
     const configuredThreads = settings?.threads ?? 0;
@@ -306,12 +352,17 @@ export function buildLiveFfmpegArgs(
     }
   }
 
+  // Do not add a CPU scale filter on the browser path when CUDA decode is
+  // active — that filter graph exits FFmpeg and the client only sees null TS.
   const resolution = settings?.targetResolution;
-  if (resolution && resolution !== "original") {
+  if (!options.browser && resolution && resolution !== "original") {
     args.push("-vf", `scale=${resolution}`);
   }
 
-  args.push("-c:a", settings?.audioCodec || "aac");
+  args.push("-c:a", options.browser ? "aac" : settings?.audioCodec || "aac");
+  if (options.browser) {
+    args.push("-profile:a", "aac_low");
+  }
   if (settings?.audioBitrate) args.push("-b:a", settings.audioBitrate);
   else if (useEnvironmentFallback) args.push("-b:a", "128k");
   if (settings?.audioChannels) args.push("-ac", `${settings.audioChannels}`);

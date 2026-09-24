@@ -12,6 +12,7 @@ import { shouldRejectNewTranscode } from '@/lib/stream-limit';
 import { finalizeStreamSession } from '@/lib/finalize-stream-session';
 import {
   sharedLiveTranscodePool,
+  createMpegTsNullBurst,
   type SharedLiveHub,
 } from '@/lib/shared-live-transcode';
 import { loadLiveProgramForChannel } from '@/lib/resolve-live-program';
@@ -32,7 +33,11 @@ const MPEGTS_RESPONSE_HEADERS = {
   'X-Accel-Buffering': 'no',
 };
 
-/** Next.js Node-stream piping logs `failed to pipe response` on IPTV aborts. */
+/**
+ * Next.js Node-stream piping logs `failed to pipe response` on IPTV aborts.
+ * Pause the source when the HTTP queue is full. Copy remux would otherwise
+ * enqueue the entire file in this process.
+ */
 function asMpegTsBody(passthrough: PassThrough): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
@@ -44,10 +49,15 @@ function asMpegTsBody(passthrough: PassThrough): ReadableStream<Uint8Array> {
         }
       };
       passthrough.on('data', (chunk: Buffer) => {
+        const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
         try {
-          controller.enqueue(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+          controller.enqueue(bytes);
         } catch {
-          // closed
+          passthrough.pause();
+          return;
+        }
+        if ((controller.desiredSize ?? 1) <= 0) {
+          passthrough.pause();
         }
       });
       passthrough.on('end', closeQuietly);
@@ -67,12 +77,17 @@ function asMpegTsBody(passthrough: PassThrough): ReadableStream<Uint8Array> {
         }
       });
     },
+    pull() {
+      if (!passthrough.destroyed && !passthrough.readableEnded) {
+        passthrough.resume();
+      }
+    },
     cancel() {
       if (!passthrough.destroyed) {
         passthrough.destroy();
       }
     },
-  });
+  }, new CountQueuingStrategy({ highWaterMark: 4 }));
 }
 
 const LIVE_HANDOFF_ATTEMPTS = 12;
@@ -112,6 +127,7 @@ async function buildFfmpegArgs(
     mode?: LiveEncodeMode;
     fallback?: boolean;
     copy?: boolean;
+    browser?: boolean;
   },
 ): Promise<string[]> {
   const ffmpegSettings = await loadFfmpegSettings();
@@ -127,6 +143,7 @@ async function buildFfmpegArgs(
       discontinuity: options?.discontinuity,
       fallback: options?.forceSoftware === true || options?.fallback === true,
       copy: options?.copy === true,
+      browser: options?.browser === true,
     },
     {
       hwaccelMethod: process.env.FFMPEG_HWACCEL_METHOD,
@@ -153,6 +170,7 @@ export async function GET(request: NextRequest) {
   //   • `lutc`  – "live" Unix epoch (current wall-clock when player made request)
   const isCatchup = request.nextUrl.searchParams.get('catchup') === 'true';
   const useCopyRemux = request.nextUrl.searchParams.get('copy') === '1';
+  const useBrowser = request.nextUrl.searchParams.get('browser') === '1';
   const timeParam = request.nextUrl.searchParams.get('time');
   const utcParam = request.nextUrl.searchParams.get('utc');
   const lutcParam = request.nextUrl.searchParams.get('lutc');
@@ -309,7 +327,7 @@ export async function GET(request: NextRequest) {
         programInfo.ratingKey,
         streamLimit,
         !isCatchup,
-        useCopyRemux,
+        useCopyRemux && !useBrowser,
       )
     ) {
       return NextResponse.json(
@@ -325,7 +343,7 @@ export async function GET(request: NextRequest) {
       channelNumber,
       { ratingKey: programInfo.ratingKey },
       clientIp,
-      { sharedLive: !isCatchup, copyRemux: useCopyRemux },
+      { sharedLive: !isCatchup, copyRemux: useCopyRemux && !useBrowser },
     );
 
     // Update session metadata
@@ -387,7 +405,8 @@ export async function GET(request: NextRequest) {
         streamUrl,
         seekSeconds,
         passthrough,
-        copy: useCopyRemux,
+        copy: useCopyRemux && !useBrowser,
+        browser: useBrowser,
       });
       liveHub = joined.hub;
       shouldStartFfmpeg = joined.shouldStartFfmpeg;
@@ -859,7 +878,8 @@ export async function GET(request: NextRequest) {
         mode,
         fallback: fallingBack,
         discontinuity: mpegtsDiscontinuity,
-        copy: useCopyRemux,
+        copy: useCopyRemux && !useBrowser,
+        browser: useBrowser,
       });
 
       const child = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -879,7 +899,7 @@ export async function GET(request: NextRequest) {
     encodeMode = preferredMode;
     await startFfmpeg(encodeMode);
     console.log(
-      `[Video] start channel=${channelNumber} mode=${useCopyRemux ? 'copy' : 'transcode'} encode=${encodeMode} session=${sessionId}${isCatchup ? ' catchup' : ''}`,
+      `[Video] start channel=${channelNumber} mode=${useBrowser ? 'browser' : useCopyRemux ? 'copy' : 'transcode'} encode=${encodeMode} session=${sessionId}${isCatchup ? ' catchup' : ''}`,
     );
 
     // Handle client abort / stream close (IPTV clients often drop without a
@@ -926,7 +946,14 @@ export async function GET(request: NextRequest) {
     request.signal.addEventListener('abort', onClientGone);
     passthrough.on('close', onClientGone);
     passthrough.on('error', onClientGone);
-    
+
+    // Keep the TCP/HTTP response alive for IPTV clients during FFmpeg seek.
+    // Browser MSE needs a real PAT/PMT first — null stuffing alone leaves the
+    // player stuck at readyState 0.
+    if (!useBrowser) {
+      passthrough.write(createMpegTsNullBurst());
+    }
+
     return new NextResponse(asMpegTsBody(passthrough) as any, {
       status: 200,
       headers: MPEGTS_RESPONSE_HEADERS,

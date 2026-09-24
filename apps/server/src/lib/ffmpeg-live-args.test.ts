@@ -87,6 +87,22 @@ describe("nvenc live args", () => {
     assert.equal(args.includes("zerolatency"), false);
   });
 
+  it("serves the browser H.264 instead of HEVC low-latency", () => {
+    const args = buildLiveFfmpegArgs("http://plex/file", 12, unraidSettings, {
+      mode: "hardware",
+      browser: true,
+    });
+    assert.equal(args[args.indexOf("-c:v") + 1], "h264_nvenc");
+    assert.equal(args.includes("hevc_nvenc"), false);
+    assert.equal(args.includes("-tune"), false);
+    assert.equal(args.includes("-readrate"), false);
+    assert.equal(args.includes("-vf"), false);
+    assert.equal(args[args.indexOf("-rc") + 1], "cbr");
+    assert.equal(args[args.indexOf("-profile:a") + 1], "aac_low");
+    assert.equal(args.includes("low_delay"), false);
+    assert.ok(args.includes("+genpts+discardcorrupt+fastseek"));
+  });
+
   it("copy=1 remuxes without a video encoder even when transcoding is on", () => {
     const args = buildLiveFfmpegArgs("http://plex/file", 42, unraidSettings, {
       mode: "hardware",
@@ -98,8 +114,13 @@ describe("nvenc live args", () => {
     assert.equal(args.includes("hevc_nvenc"), false);
     assert.equal(args.includes("libx264"), false);
     assert.equal(args.includes("-crf"), false);
-    assert.equal(args[args.indexOf("-probesize") + 1], "5000000");
+    assert.equal(args[args.indexOf("-readrate") + 1], "1");
+    assert.equal(args[args.indexOf("-readrate_initial_burst") + 1], "2");
+    assert.equal(args[args.indexOf("-probesize") + 1], "131072");
+    assert.equal(args[args.indexOf("-analyzeduration") + 1], "200000");
+    assert.equal(args[args.indexOf("-max_interleave_delta") + 1], "0");
     assert.equal(args[args.indexOf("-ss") + 1], "42");
+    assert.ok(args.includes("+genpts+discardcorrupt+nobuffer+fastseek"));
     assert.ok(args.includes("+resend_headers"));
     assert.equal(args.includes("dump_extra=freq=keyframe"), false);
   });
