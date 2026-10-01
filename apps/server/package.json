@@ -14,21 +14,21 @@
     "test": "node --import tsx --test src/lib/stream-limit.test.ts src/lib/shared-live-transcode.test.ts src/lib/resolve-live-program.test.ts src/lib/orphan-session-cleanup.test.ts src/lib/channel-summary-shape.test.ts src/lib/library-summary-shape.test.ts src/lib/timing-service.catchup.test.ts src/lib/franchise-sort-service.test.ts src/lib/franchise-sync-service.test.ts src/lib/franchise-collection-order.test.ts src/lib/franchise-story-supplements.test.ts src/lib/plex-guid.test.ts src/lib/ffmpeg-live-args.test.ts"
   },
   "dependencies": {
-    "@orpc/client": "^1.4.1",
-    "@orpc/server": "^1.4.1",
-    "@prisma/client": "^6.7.0",
-    "better-auth": "^1.2.8",
+    "@orpc/client": "^1.15.4",
+    "@orpc/server": "^1.15.4",
+    "@prisma/client": "^6.19.3",
+    "better-auth": "^1.7.7",
     "dotenv": "^16.5.0",
-    "fast-xml-parser": "^5.2.5",
+    "fast-xml-parser": "^5.11.2",
     "ioredis": "^5.11.1",
-    "next": "^15.3.0",
-    "socket.io": "^4.8.1",
+    "next": "15.5.27",
+    "socket.io": "^4.8.4",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
-    "prisma": "^6.7.0",
+    "prisma": "^6.19.3",
     "tsx": "^4.19.4",
     "typescript": "^5"
   }
