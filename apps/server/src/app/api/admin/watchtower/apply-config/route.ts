@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/context';
+import { checkWatchTowerReachable } from '@/lib/watchtower-reach';
 
 function extractToken(request: NextRequest): string | null {
   const auth = request.headers.get('Authorization') || '';
@@ -68,10 +69,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Round trip: can TwentyFourSeven reach WatchTower at the address it was given?
+    // WatchTower shows watchtower_error on its Connect card when this fails
+    // (e.g. it pushed its browser address http://localhost, which here means this container).
+    const reach = await checkWatchTowerReachable(watchtowerBaseUrl, apiToken);
+
     return NextResponse.json({
       success: true,
       message: 'WatchTower hub configuration applied',
       hub_managed: !!body.hub_managed,
+      watchtower_url: watchtowerBaseUrl,
+      watchtower_reachable: reach.ok,
+      ...(reach.ok ? {} : { watchtower_error: reach.error }),
     });
   } catch (error) {
     console.error('apply-config error:', error);

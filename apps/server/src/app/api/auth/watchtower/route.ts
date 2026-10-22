@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import {
+  classifyWatchTowerLoginFailure,
+  describeFetchError,
+  watchTowerUnreachableMessage,
+} from '@/lib/watchtower-reach';
 
 // Helper function to get WatchTower config
 async function getWatchTowerConfig() {
@@ -28,12 +33,14 @@ async function getWatchTowerConfig() {
 export async function POST(request: NextRequest) {
   try {
     
-    const { email, password } = await request.json();
+    const body = await request.json();
+    // WatchTower's login API matches this value against username, then email.
+    const login = String(body.login ?? body.email ?? '').trim();
+    const password = body.password;
 
-    if (!email || !password) {
-      
+    if (!login || !password) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: 'Enter your WatchTower email or username and your password.' },
         { status: 400 }
       );
     }
@@ -52,23 +59,37 @@ export async function POST(request: NextRequest) {
 
     
 
-    // Authenticate with WatchTower
-    const authResponse = await fetch(`${config.url}/api/api/v1/auth/login/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ email, password })
-    });
-
-    
+    // Authenticate with WatchTower. redirect: 'manual' so an address that is not
+    // WatchTower (e.g. http://localhost = this container's own nginx) is reported
+    // as a connection problem instead of "Invalid WatchTower credentials".
+    let authResponse: Response;
+    try {
+      authResponse = await fetch(`${config.url}/api/api/v1/auth/login/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: login, password }),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (fetchError) {
+      return NextResponse.json(
+        { error: watchTowerUnreachableMessage(config.url, describeFetchError(fetchError)) },
+        { status: 502 }
+      );
+    }
 
     if (!authResponse.ok) {
-      const error = await authResponse.text();
-      
+      const failure = classifyWatchTowerLoginFailure(
+        config.url,
+        authResponse.status,
+        authResponse.headers.get('content-type'),
+        await authResponse.text(),
+      );
       return NextResponse.json(
-        { error: 'Invalid WatchTower credentials', details: error },
-        { status: 401 }
+        { error: failure.kind === 'ok' ? 'Sign in failed.' : failure.message },
+        { status: failure.kind === 'bad_credentials' ? 401 : 502 }
       );
     }
 

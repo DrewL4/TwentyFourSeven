@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/context';
+import { checkWatchTowerReachable } from '@/lib/watchtower-reach';
 
 // Helper function to check admin permissions or allow configuration check
 async function checkAdminAuthOrAllowConfigCheck(request: NextRequest) {
@@ -47,61 +48,31 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Test connection to WatchTower using CrossAppToken validation
-    try {
-      const response = await fetch(`${configMap.watchtower_url}/api/v1/auth/validate-api-token/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          token: configMap.watchtower_api_token
-        })
-      });
+    // Round trip to WatchTower with the integration token (same API path as login: /api/api/v1/...).
+    const reach = await checkWatchTowerReachable(
+      configMap.watchtower_url,
+      configMap.watchtower_api_token,
+    );
 
-      const connected = response.ok;
-      let connectionDetails = null;
+    // Check if webhooks are registered
+    const webhookId = await db.setting.findUnique({
+      where: { key: 'watchtower_webhook_id' }
+    });
+    const webhookRegisteredAt = await db.setting.findUnique({
+      where: { key: 'watchtower_webhook_registered_at' }
+    });
 
-      if (connected) {
-        const tokenData = await response.json();
-        connectionDetails = {
-          tokenValid: tokenData.valid || false,
-          appName: tokenData.app_name,
-          permissions: tokenData.permissions,
-          lastChecked: new Date().toISOString()
-        };
-      }
-
-      // Check if webhooks are registered
-      const webhookId = await db.setting.findUnique({
-        where: { key: 'watchtower_webhook_id' }
-      });
-      const webhookRegisteredAt = await db.setting.findUnique({
-        where: { key: 'watchtower_webhook_registered_at' }
-      });
-
-      return NextResponse.json({
-        configured: true,
-        connected,
-        url: configMap.watchtower_url,
-        configuredAt: configMap.watchtower_configured_at,
-        connectionDetails,
-        webhookRegistered: !!webhookId,
-        webhookRegisteredAt: webhookRegisteredAt?.value || null,
-        message: connected ? 'Connected to WatchTower' : 'Cannot connect to WatchTower'
-      });
-
-    } catch (connectionError) {
-      console.error('💥 WatchTower connection error:', connectionError);
-      return NextResponse.json({
-        configured: true,
-        connected: false,
-        url: configMap.watchtower_url,
-        configuredAt: configMap.watchtower_configured_at,
-        error: connectionError instanceof Error ? connectionError.message : 'Connection failed',
-        message: 'Cannot connect to WatchTower'
-      });
-    }
+    return NextResponse.json({
+      configured: true,
+      connected: reach.ok,
+      url: configMap.watchtower_url,
+      configuredAt: configMap.watchtower_configured_at,
+      connectionDetails: reach.ok ? { tokenValid: true, lastChecked: new Date().toISOString() } : null,
+      webhookRegistered: !!webhookId,
+      webhookRegisteredAt: webhookRegisteredAt?.value || null,
+      ...(reach.ok ? {} : { error: reach.error }),
+      message: reach.ok ? 'Connected to WatchTower' : 'Cannot connect to WatchTower'
+    });
 
   } catch (error) {
     console.error('💥 Error checking WatchTower status:', error);
