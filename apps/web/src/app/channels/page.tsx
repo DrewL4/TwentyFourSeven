@@ -3306,6 +3306,9 @@ function ChannelsPageContent() {
                               </Badge>
                             )}
                           </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Changes on this page save automatically — there&apos;s no Save button.
+                          </p>
                         </div>
                       </div>
                     </div>
