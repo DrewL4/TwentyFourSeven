@@ -1253,7 +1253,7 @@ function AddContentDialog({
                            onCheckedChange={() => toggleShowSelection(show.id)}
                          />
                          <img 
-                           src={mediaImageSrc(show.poster) || "/placeholder.png"} 
+                           src={mediaImageSrc(show.poster) || "/placeholder.svg"} 
                            alt={show.title}
                            className="w-8 h-12 object-cover rounded"
                          />
@@ -1468,7 +1468,7 @@ function AddContentDialog({
                       onCheckedChange={() => toggleMovieSelection(movie.id)}
                     />
                     <img 
-                      src={mediaImageSrc(movie.poster) || "/placeholder.png"} 
+                      src={mediaImageSrc(movie.poster) || "/placeholder.svg"} 
                       alt={movie.title}
                       className="w-8 h-12 object-cover rounded"
                     />
@@ -2755,9 +2755,9 @@ function ChannelsPageContent() {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="outline" size="sm" asChild>
-                <Link href="/media.m3u">
+                <a href="/media.m3u" download="twentyfourseven.m3u">
                   <span className="hidden md:inline">Export M3U</span>
-                </Link>
+                </a>
               </Button>
             </TooltipTrigger>
             <TooltipContent>

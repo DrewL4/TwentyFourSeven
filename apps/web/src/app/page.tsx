@@ -53,16 +53,18 @@ export default function Home() {
           {/* Quick Links */}
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>
-              <Link href={`${serverUrl}/media.m3u`}>
+              {/* Plain <a>: these are file downloads, not app pages. next/link
+                  would try to prefetch them as pages and log 404s. */}
+              <a href={`${serverUrl}/media.m3u`} download="twentyfourseven.m3u">
                 <Radio className="w-4 h-4 mr-1" />
                 M3U
-              </Link>
+              </a>
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <Link href={`${serverUrl}/media.xml`}>
+              <a href={`${serverUrl}/media.xml`} download="twentyfourseven.xml">
                 <FileText className="w-4 h-4 mr-1" />
                 XMLTV
-              </Link>
+              </a>
             </Button>
           </div>
         </div>

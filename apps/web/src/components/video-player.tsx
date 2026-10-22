@@ -444,6 +444,12 @@ export default function VideoPlayer({
     const start = async () => {
       const mpegtsModule = await import('mpegts.js');
       const mpegts = mpegtsModule.default;
+      // mpegts.js logs every dropped/realigned audio frame as a console
+      // warning (hundreds per minute on live TV). Keep only real errors.
+      mpegts.LoggingControl.enableVerbose = false;
+      mpegts.LoggingControl.enableDebug = false;
+      mpegts.LoggingControl.enableInfo = false;
+      mpegts.LoggingControl.enableWarn = false;
       if (session.cancelled) {
         return;
       }

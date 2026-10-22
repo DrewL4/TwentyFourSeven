@@ -263,7 +263,7 @@ export function ChannelProgrammingList({
                       )}
 
                       <img
-                        src={mediaImageSrc(item.poster) || "/placeholder.png"}
+                        src={mediaImageSrc(item.poster) || "/placeholder.svg"}
                         alt=""
                         className="w-10 h-14 object-cover rounded border flex-shrink-0"
                       />
