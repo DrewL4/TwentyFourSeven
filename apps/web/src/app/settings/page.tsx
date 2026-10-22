@@ -30,6 +30,10 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import WatchTowerConnectionSetup from "@/components/watchtower-connection-setup";
 
+// The web UI and API are served by nginx on this port inside the container
+// (Dockerfile EXPOSE / Unraid webui label). The host port is set by the port mapping.
+const CONTAINER_HTTP_PORT = 80;
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
     port: 8089,
@@ -142,6 +146,7 @@ export default function SettingsPage() {
           <p className="text-muted-foreground mt-1">
             Configure your TwentyFourSeven server and streaming settings
           </p>
+          <WatchTowerStatusLine />
         </div>
         
         <Button 
@@ -192,17 +197,19 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="port">Server Port</Label>
+                  <Label htmlFor="port">Container Port</Label>
+                  {/* Fixed by the image: nginx serves the web UI and API on port 80.
+                      The stored settings.port value is not used by the server. */}
                   <Input
                     id="port"
                     type="number"
-                    value={settings.port}
-                    onChange={(e) => setSettings(prev => ({ ...prev, port: parseInt(e.target.value) || 8089 }))}
-                    min="1"
-                    max="65535"
+                    value={CONTAINER_HTTP_PORT}
+                    readOnly
+                    disabled
                   />
                   <p className="text-xs text-muted-foreground">
-                    Port for the web interface and API (default: 8089)
+                    TFS serves the web UI and API on port {CONTAINER_HTTP_PORT} inside the container.
+                    To use a different port, change the host port mapping in Docker or Unraid.
                   </p>
                 </div>
                 
@@ -669,4 +676,48 @@ export default function SettingsPage() {
       )}
     </div>
   );
-} 
+}
+
+type WatchTowerStatus = {
+  configured?: boolean;
+  connected?: boolean;
+  url?: string;
+  error?: string;
+};
+
+function WatchTowerStatusLine() {
+  const statusQuery = useQuery({
+    queryKey: ["watchtower", "status"],
+    queryFn: async (): Promise<WatchTowerStatus> => {
+      const response = await fetch("/api/admin/watchtower/status", { credentials: "include" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    },
+    staleTime: 60_000,
+  });
+
+  let dot = "bg-muted-foreground";
+  let text = "WatchTower: checking…";
+  if (statusQuery.isError) {
+    dot = "bg-amber-500";
+    text = "WatchTower: status unavailable";
+  } else if (statusQuery.data) {
+    const { configured, connected, url, error } = statusQuery.data;
+    if (connected) {
+      dot = "bg-green-500";
+      text = `WatchTower: Connected to ${url}`;
+    } else if (configured) {
+      dot = "bg-amber-500";
+      text = `WatchTower: Can't reach ${url}${error ? ` (${error})` : ""}`;
+    } else {
+      text = "WatchTower: Not connected";
+    }
+  }
+
+  return (
+    <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground" data-testid="watchtower-status">
+      <span className={cn("inline-block h-2 w-2 rounded-full", dot)} aria-hidden="true" />
+      {text}
+    </p>
+  );
+}
