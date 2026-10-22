@@ -510,6 +510,8 @@ export default function GuidePage() {
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0"
+                      aria-label={`Watch ${channel.name} live`}
+                      title={`Watch ${channel.name} live`}
                       onClick={() => {
                         setPlayingChannel({ number: channel.number, name: channel.name, icon: channel.icon });
                         setIsCatchupMode(false);

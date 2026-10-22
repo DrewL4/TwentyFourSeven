@@ -113,6 +113,8 @@ export function GuideDesktopChannelRow({
             size="sm"
             className="flex-shrink-0 h-6 w-6 p-0"
             onClick={() => onPlayLive(channel)}
+            aria-label={`Watch ${channel.name} live`}
+            title={`Watch ${channel.name} live`}
           >
             <Play className="w-3 h-3" />
           </Button>
