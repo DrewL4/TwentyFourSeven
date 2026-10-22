@@ -86,3 +86,8 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Secrets: never commit these
+cookies.txt
+*.pem
+*.key
