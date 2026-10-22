@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # Multi-stage build for production
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
@@ -29,6 +29,10 @@ RUN --mount=type=cache,target=/root/.npm \
     --mount=type=cache,target=/root/.cache \
     npm ci --prefer-offline --no-audit --progress=false --no-fund --parallel=4
 
+# npm workspaces sometimes nest packages under each app. Keep the directories
+# present so the builder can copy them even when a later install hoists everything.
+RUN mkdir -p apps/web/node_modules apps/server/node_modules
+
 # Build stage - separate from deps for faster rebuilds
 FROM base AS builder
 WORKDIR /app
@@ -47,6 +51,10 @@ COPY apps/server/package*.json ./apps/server/
 
 # Copy source code
 COPY . .
+
+# Direct workspace dependencies that npm did not hoist (for example @orpc/client).
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
 
 # Generate Prisma client for the target platform (Linux)
 WORKDIR /app/apps/server
@@ -70,7 +78,7 @@ ENV DISABLE_FONT_OPTIMIZATION=1
 RUN npm run build
 
 # Production stage - use NVIDIA-enabled FFmpeg base (following TwentyFourSeven pattern)
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -86,17 +94,22 @@ RUN apt-get update && apt-get install -y \
     vainfo \
     libva2 \
     libva-drm2 \
-    intel-media-va-driver \
     mesa-va-drivers \
     pciutils usbutils \
+    && if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+         apt-get install -y intel-media-va-driver; \
+       fi \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
+    && test -x /usr/bin/ffmpeg \
+    && test -x /usr/sbin/nginx \
+    && test -x /usr/bin/curl \
     # Create user and groups following Plex/Unraid best practices (abc user pattern)
-    && groupadd --gid 100 users || true \
+    && { groupadd --gid 100 users || true; } \
     && useradd --uid 99 --gid users --shell /bin/bash --create-home abc \
     # Add abc user to video and render groups for GPU access
     && usermod -a -G video abc \
-    && usermod -a -G render abc || true \
+    && { usermod -a -G render abc || true; } \
     # Create necessary directories
     && mkdir -p /app/database /app/static /var/log/nginx /var/lib/nginx /run/nginx \
     && mkdir -p /var/lib/nginx/tmp/client_body /var/lib/nginx/tmp/proxy /var/lib/nginx/tmp/fastcgi /var/lib/nginx/tmp/uwsgi /var/lib/nginx/tmp/scgi \
@@ -133,7 +146,7 @@ COPY --from=builder --chown=abc:users /app/apps/server/server.js ./apps/server/s
 
 # Verify ffmpeg is installed and check for common hardware accel encoders
 RUN echo "🔍 Checking ffmpeg installation..." \
-    && /usr/bin/ffmpeg -version || (echo "⚠️  ffmpeg not found" && exit 1) \
+    && /usr/bin/ffmpeg -version \
     && echo "🔍 Listing encoders (looking for vaapi/qsv/videotoolbox if available)..." \
     && /usr/bin/ffmpeg -encoders 2>/dev/null | grep -E "vaapi|qsv|videotoolbox" || /usr/bin/ffmpeg -encoders 2>/dev/null | head -20
 

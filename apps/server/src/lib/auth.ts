@@ -18,7 +18,10 @@ export const auth = betterAuth({
   },
   // Add credentials provider for custom authentication
   advanced: {
-    generateId: () => crypto.randomUUID(),
+    database: {
+      // better-auth 1.4 moved this off advanced.generateId
+      generateId: () => crypto.randomUUID(),
+    },
     crossSubDomainCookies: {
       enabled: false
     },

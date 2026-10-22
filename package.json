@@ -36,7 +36,7 @@
     "@types/react-window-infinite-loader": "^1.0.9",
     "cross-env": "^7.0.3",
     "dotenv-cli": "^8.0.0",
-    "turbo": "^2.4.2"
+    "turbo": "^2.11.10"
   },
   "packageManager": "npm@10.8.2"
 }
