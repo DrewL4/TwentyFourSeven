@@ -9,6 +9,8 @@ import { getServerUrl } from "@/utils/server-url";
 interface WatchTowerStatus {
   configured: boolean;
   url?: string;
+  connected?: boolean;
+  error?: string;
   allowInitialSetup?: boolean;
 }
 
@@ -38,6 +40,8 @@ export default function LoginPage() {
         setStatus({
           configured: Boolean(data.configured),
           url: data.url,
+          connected: Boolean(data.connected),
+          error: typeof data.error === "string" ? data.error : undefined,
           allowInitialSetup: Boolean(data.allowInitialSetup),
         });
       } catch {
@@ -67,7 +71,7 @@ export default function LoginPage() {
           <div className="mb-6 text-center">
             <h2 className="text-lg font-semibold text-foreground">Sign in with WatchTower</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use the same email and password as your WatchTower account
+              Use the same email (or username) and password as your WatchTower account
             </p>
           </div>
 
@@ -75,6 +79,8 @@ export default function LoginPage() {
             configured={status.configured}
             allowInitialSetup={status.allowInitialSetup ?? false}
             watchTowerUrl={status.url}
+            connected={status.connected}
+            connectionError={status.error}
           />
         </>
       )}

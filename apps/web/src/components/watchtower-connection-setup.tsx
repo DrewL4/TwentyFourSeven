@@ -45,7 +45,7 @@ const WatchTowerConnectionSetup: React.FC = () => {
       {
         id: 'enter-token',
         title: 'Enter WatchTower API Token',
-        description: 'Get this from WatchTower: Admin → Connections → WatchTower Guide & TFS Connect',
+        description: 'Get this in WatchTower: Admin → Connections → WatchTower Guide & TFS Connect (the "Connect apps" button on the Admin home page) → Create App Tokens',
         completed: false
       },
       {
@@ -79,7 +79,14 @@ const WatchTowerConnectionSetup: React.FC = () => {
         }
       });
       if (response.ok) {
-        const status = await response.json();
+        // /api/admin/watchtower/status answers { configured, connected, url, error }.
+        const raw = await response.json();
+        const status: ConnectionStatus = {
+          isConnected: Boolean(raw.connected),
+          watchTowerUrl: raw.url,
+          errors: raw.configured && !raw.connected && raw.error ? [raw.error] : undefined,
+        };
+        if (raw.url) setWatchTowerUrl(raw.url);
         setConnectionStatus(status);
         updateSetupStepsFromStatus(status);
       }
@@ -310,7 +317,9 @@ const WatchTowerConnectionSetup: React.FC = () => {
                 )}
               </CardTitle>
               <CardDescription>
-                Connect TwentyFourSeven to your WatchTower instance for user management and SSO
+                {connectionStatus.isConnected && connectionStatus.watchTowerUrl
+                  ? `Connected to WatchTower at ${connectionStatus.watchTowerUrl}`
+                  : 'Connect TwentyFourSeven to your WatchTower instance for user management and SSO'}
               </CardDescription>
             </div>
             {connectionStatus.isConnected && (
@@ -325,6 +334,15 @@ const WatchTowerConnectionSetup: React.FC = () => {
           </div>
         </CardHeader>
         
+        {connectionStatus.errors?.length ? (
+          <CardContent>
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{connectionStatus.errors[0]}</AlertDescription>
+            </Alert>
+          </CardContent>
+        ) : null}
+
         {connectionStatus.isConnected && (
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -399,7 +417,7 @@ const WatchTowerConnectionSetup: React.FC = () => {
                 )}
               </div>
               <p className="text-sm text-gray-600">
-                Get this token from WatchTower: Admin → Connections → WatchTower Guide & TFS Connect → Create App Tokens
+                Get this token in WatchTower: Admin → Connections → WatchTower Guide & TFS Connect (the “Connect apps” button on the Admin home page) → Create App Tokens. Easier: enter TwentyFourSeven’s address on the TwentyFourSeven card there and click Connect; WatchTower fills this in for you.
               </p>
             </div>
 

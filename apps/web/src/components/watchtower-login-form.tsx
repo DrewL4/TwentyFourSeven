@@ -14,16 +14,22 @@ interface WatchTowerLoginFormProps {
   configured: boolean;
   allowInitialSetup: boolean;
   watchTowerUrl?: string;
+  /** Status check reached WatchTower with the saved token. */
+  connected?: boolean;
+  /** Why the status check could not reach WatchTower. */
+  connectionError?: string;
 }
 
 export default function WatchTowerLoginForm({
   configured,
   allowInitialSetup,
   watchTowerUrl: initialUrl,
+  connected,
+  connectionError,
 }: WatchTowerLoginFormProps) {
   const [watchTowerUrl, setWatchTowerUrl] = useState(initialUrl ?? "");
   const [apiToken, setApiToken] = useState("");
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [showApiToken, setShowApiToken] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -70,7 +76,7 @@ export default function WatchTowerLoginForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ login, password }),
       });
 
       const data = await loginResponse.json().catch(() => ({}));
@@ -81,7 +87,7 @@ export default function WatchTowerLoginForm({
             `${data.error} Your subscription expired on ${data.expirationDateFormatted}. Please renew to continue.`,
           );
         } else {
-          setError(data.error || "Sign in failed. Check your WatchTower email and password.");
+          setError(data.error || "Sign in failed. Check your WatchTower email or username and password.");
         }
         return;
       }
@@ -126,6 +132,12 @@ export default function WatchTowerLoginForm({
               Connect this TwentyFour/Seven instance to your WatchTower server once. After
               that, only your WatchTower login is needed here.
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Easiest: in WatchTower open Admin → Connections → WatchTower Guide &amp; TFS Connect
+              (the &ldquo;Connect apps&rdquo; button on the Admin home page), enter this app&rsquo;s
+              address on the TwentyFourSeven card and click Connect. WatchTower fills this in for
+              you. Or click Create App Tokens there and paste the TwentyFourSeven token below.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -150,7 +162,7 @@ export default function WatchTowerLoginForm({
                 type={showApiToken ? "text" : "password"}
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
-                placeholder="From WatchTower → Connections → WatchTower Guide & TFS Connect"
+                placeholder="WatchTower: Admin → Connections → WatchTower Guide & TFS Connect"
                 autoComplete="off"
                 disabled={isLoading}
                 required
@@ -170,20 +182,37 @@ export default function WatchTowerLoginForm({
         </div>
       )}
 
+      {configured && initialUrl && (
+        connected ? (
+          <p className="text-center text-xs text-muted-foreground">
+            Connected to WatchTower at <span className="font-medium">{initialUrl}</span>
+          </p>
+        ) : (
+          <Alert variant="destructive">
+            <AlertTitle>Can&rsquo;t reach WatchTower</AlertTitle>
+            <AlertDescription>
+              {connectionError || `TwentyFourSeven can't reach WatchTower at ${initialUrl}.`}
+            </AlertDescription>
+          </Alert>
+        )
+      )}
+
       <div className="space-y-4">
         {showSetupFields && (
           <p className="text-sm text-muted-foreground">Sign in with your WatchTower account</p>
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="login">WatchTower email or username</Label>
           <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            autoComplete="email"
+            id="login"
+            type="text"
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
+            placeholder="you@example.com or your username"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             disabled={isLoading}
             required
           />
