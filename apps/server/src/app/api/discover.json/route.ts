@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
       DeviceID: "12345678",
       DeviceAuth: "test1234",
       BaseURL: baseUrl,
-      LineupURL: `${baseUrl}/api/lineup.json`
+      LineupURL: `${baseUrl}/lineup.json`
     };
 
     return NextResponse.json(discovery, {
