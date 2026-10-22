@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { CatchupService } from '@/lib/catchup-service';
 
 export const dynamic = 'force-dynamic';
@@ -74,12 +75,7 @@ export async function GET(request: NextRequest) {
           program.channel.catchupWindowHours * 60 * 60 * 1000,
       );
 
-    const forwardedHost =
-      request.headers.get('x-forwarded-host') ||
-      request.headers.get('host') ||
-      'localhost:3000';
-    const protocol = request.headers.get('x-forwarded-proto') || 'https';
-    const baseUrl = `${protocol}://${forwardedHost}`;
+    const baseUrl = getPublicBaseUrl(request.headers, request.url);
     const playbackTime = resolved.requestedTime.toISOString();
     const videoUrl = `${baseUrl}/api/video?channel=${channelNumber}&catchup=true&time=${encodeURIComponent(playbackTime)}`;
 

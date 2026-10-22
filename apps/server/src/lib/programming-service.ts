@@ -1053,8 +1053,8 @@ export class ProgrammingService {
     }
 
 
-    // Get base URL (you'll need to pass this or get it from config)
-    const baseUrl = 'https://247.midweststreams.us'; // Use your actual base URL
+    // Store a relative /images/plex link; /media.xml adds the caller's address.
+    const baseUrl = '';
 
     for (const channel of channels) {
       try {

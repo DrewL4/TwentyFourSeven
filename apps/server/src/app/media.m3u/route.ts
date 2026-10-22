@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getPublicBaseUrl } from "@/lib/public-base-url";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,9 +15,9 @@ export async function GET(request: NextRequest) {
     });
     const globalCatchupEnabled = globalSettings?.catchupEnabled ?? true;
 
-    // Force HTTPS for all URLs
-    const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '247.midweststreams.us';
-    const baseUrl = `https://${forwardedHost}`;
+    // Links use the address the player actually used (scheme, host and port),
+    // or the reverse proxy's public address when there is one.
+    const baseUrl = getPublicBaseUrl(request.headers, request.url);
 
 
     // Helpers
@@ -151,7 +152,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(m3u, {
       headers: {
         'Content-Type': 'application/vnd.apple.mpegurl',
-        'Content-Disposition': 'attachment; filename="247.m3u"'
+        'Content-Disposition': 'attachment; filename="twentyfourseven.m3u"'
       }
     });
   } catch (error) {

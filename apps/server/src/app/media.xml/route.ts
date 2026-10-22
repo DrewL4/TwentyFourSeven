@@ -3,8 +3,12 @@ import { prisma } from "@/lib/prisma";
 import {
   getXmlTvCachePath,
   openXmlTvCacheStreamIfFresh,
+  replaceBaseUrlPlaceholder,
+  toPlaceholderIconUrl,
   writeXmlTvCacheStreaming,
+  XMLTV_BASE_URL_PLACEHOLDER,
 } from "@/lib/xmltv-static-cache";
+import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { createReadStream } from "fs";
 import { Readable } from "stream";
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -53,14 +57,16 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const bypassCache = searchParams.get('bypass-cache') === 'true';
+    // Links use the address this client actually used (scheme, host and port).
+    const publicBaseUrl = escapeXml(getPublicBaseUrl(request.headers, request.url));
 
     if (!bypassCache) {
       const cachedStream = await openXmlTvCacheStreamIfFresh(CACHE_DURATION);
       if (cachedStream) {
-        return new NextResponse(Readable.toWeb(cachedStream) as any, {
+        return new NextResponse(Readable.toWeb(replaceBaseUrlPlaceholder(cachedStream, publicBaseUrl)) as any, {
           headers: {
             "Content-Type": "application/xml; charset=utf-8",
-            "Content-Disposition": 'attachment; filename="xmltv.xml"',
+            "Content-Disposition": 'attachment; filename="twentyfourseven.xml"',
             "Cache-Control": "public, max-age=300",
             "X-Cache": "HIT-DISK",
           },
@@ -86,9 +92,8 @@ export async function GET(request: NextRequest) {
       return `${baseUrl}/images/plex?origin=${encodeURIComponent(u.origin)}&path=${encodeURIComponent(pathWithQuery)}`;
     };
 
-    // Force HTTPS for all URLs
-    const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '247.midweststreams.us';
-    const baseUrl = `https://${forwardedHost}`;
+    // The cached guide is shared by all clients; the real address is filled in per request.
+    const baseUrl = XMLTV_BASE_URL_PLACEHOLDER;
 
     const queryNow = new Date();
     const queryStartTime = new Date(queryNow.getTime() - 4 * 60 * 60 * 1000);
@@ -167,7 +172,7 @@ export async function GET(request: NextRequest) {
 
       // Use pre-cached Plex collection artwork if available
     if (channel.cachedCollectionIcon) {
-      channelIconMap.set(channel.id, channel.cachedCollectionIcon);
+      channelIconMap.set(channel.id, toPlaceholderIconUrl(channel.cachedCollectionIcon));
       continue;
     }
 
@@ -480,10 +485,10 @@ export async function GET(request: NextRequest) {
     const xmltvStream = createReadStream(getXmlTvCachePath(), {
       encoding: "utf8",
     });
-    return new NextResponse(Readable.toWeb(xmltvStream) as any, {
+    return new NextResponse(Readable.toWeb(replaceBaseUrlPlaceholder(xmltvStream, publicBaseUrl)) as any, {
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="xmltv.xml"',
+        'Content-Disposition': 'attachment; filename="twentyfourseven.xml"',
         'Cache-Control': 'public, max-age=300',
         'X-Cache': 'MISS',
       },

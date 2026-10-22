@@ -85,3 +85,42 @@ export async function invalidateXmlTvCache(): Promise<void> {
     // no cache file
   }
 }
+
+/**
+ * The cached guide is shared by every client, but each client reached us at a
+ * different address (LAN IP and port, proxy domain, ...). The guide is written
+ * with this placeholder and the real address is filled in per request.
+ */
+export const XMLTV_BASE_URL_PLACEHOLDER = "@@TFS_PUBLIC_BASE_URL@@";
+
+/** Old builds stored collection artwork with a hard-coded public domain. */
+const LEGACY_ICON_BASE = "https://247.midweststreams.us";
+
+/** Turn a stored channel icon (relative `/images/...` or legacy absolute) into a placeholder URL. */
+export function toPlaceholderIconUrl(icon: string): string {
+  if (icon.startsWith("/")) return `${XMLTV_BASE_URL_PLACEHOLDER}${icon}`;
+  if (icon.startsWith(`${LEGACY_ICON_BASE}/images/`)) {
+    return `${XMLTV_BASE_URL_PLACEHOLDER}${icon.slice(LEGACY_ICON_BASE.length)}`;
+  }
+  return icon;
+}
+
+/**
+ * Stream transform that swaps the placeholder for the caller's base URL.
+ * Works line by line so a placeholder split across chunks is still replaced.
+ */
+export function replaceBaseUrlPlaceholder(source: Readable, replacement: string): Readable {
+  async function* run() {
+    let pending = "";
+    for await (const chunk of source) {
+      pending += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      const lastNewline = pending.lastIndexOf("\n");
+      if (lastNewline === -1) continue;
+      const complete = pending.slice(0, lastNewline + 1);
+      pending = pending.slice(lastNewline + 1);
+      yield complete.split(XMLTV_BASE_URL_PLACEHOLDER).join(replacement);
+    }
+    if (pending) yield pending.split(XMLTV_BASE_URL_PLACEHOLDER).join(replacement);
+  }
+  return Readable.from(run());
+}
