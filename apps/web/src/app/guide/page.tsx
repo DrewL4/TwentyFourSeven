@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tv, Clock, Calendar, Play, Film, RefreshCw, Zap, Settings, ChevronLeft, ChevronRight, Rewind } from "lucide-react";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { FixedSizeList as List, type ListChildComponentProps } from "react-window";
 import {
   GuideDesktopChannelRow,
@@ -405,6 +405,23 @@ export default function GuidePage() {
     setCatchupTime(undefined);
     setIsPlayerOpen(true);
   }, []);
+
+  // "Watch" on the Channels page links here as /guide/?play=<number>.
+  const autoPlayHandledRef = useRef(false);
+  useEffect(() => {
+    if (autoPlayHandledRef.current || !channelsQuery.data) return;
+    const params = new URLSearchParams(window.location.search);
+    const play = params.get("play");
+    if (!play) return;
+    autoPlayHandledRef.current = true;
+    const channel = (channelsQuery.data as GuideChannel[]).find(
+      (ch) => String(ch.number) === play,
+    );
+    params.delete("play");
+    const rest = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    if (channel) handlePlayLive(channel);
+  }, [channelsQuery.data, handlePlayLive]);
 
   const handleRegenerateChannel = useCallback(
     (channelId: string) => {

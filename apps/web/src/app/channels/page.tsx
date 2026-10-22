@@ -3291,7 +3291,7 @@ function ChannelsPageContent() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button variant="ghost" size="sm" asChild className="touch-manipulation">
-                            <Link href={`/player?channel=${selectedSummary!.number}`}>
+                            <Link href={`/guide/?play=${selectedSummary!.number}`}>
                               <Play className="w-4 h-4 md:mr-1" />
                               <span className="hidden md:inline">Watch</span>
                             </Link>
