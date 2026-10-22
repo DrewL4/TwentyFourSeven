@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, RefreshCw, AlertCircle, Loader2, Maximize, Minimize, Volume2, VolumeX, Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -712,10 +713,12 @@ export default function VideoPlayer({
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  return (
+  // Render into <body> so page chrome (theme toggle, mobile nav — both z-50)
+  // can never sit on top of the player's own buttons.
+  return createPortal(
     <div
       ref={containerRef}
-      className="fixed inset-0 z-50 bg-black flex items-center justify-center"
+      className="fixed inset-0 z-[100] bg-black flex items-center justify-center"
       onMouseMove={revealControls}
       onMouseLeave={() => {
         if (!error && !isRecovering && isPlaying) {
@@ -818,9 +821,16 @@ export default function VideoPlayer({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={onClose}
-                  className="text-white hover:bg-white/15"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                  }}
+                  // Stays clickable even after the controls fade out while
+                  // the video plays; otherwise the click falls through to the
+                  // video and only pauses it.
+                  className="pointer-events-auto text-white hover:bg-white/15"
                   aria-label="Close player"
+                  title="Close (Esc)"
                 >
                   <X className="w-5 h-5" />
                 </Button>
@@ -917,6 +927,7 @@ export default function VideoPlayer({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
