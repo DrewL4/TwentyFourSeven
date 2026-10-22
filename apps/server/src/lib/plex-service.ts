@@ -1,4 +1,4 @@
-import { PlexAPI } from './plex';
+import { PlexAPI, type PlexCheckResult } from './plex';
 import { parsePlexGuids } from './plex-guid';
 import { prisma } from './prisma';
 import type { MediaServer, MediaLibrary } from '../../prisma/generated/client';
@@ -135,12 +135,7 @@ export class PlexService {
   static async addPlexServer(config: PlexServerConfig): Promise<MediaServer> {
     // Test the connection first
     const plex = new PlexAPI({ uri: config.uri });
-    let connectionValid = false;
-    try {
-      connectionValid = await plex.testConnection(config.uri, config.accessToken);
-    } catch (e) {
-      connectionValid = false;
-    }
+    const connectionValid = (await plex.checkConnection(config.uri, config.accessToken)).ok;
  
     // If test fails, still allow adding the server as inactive so the user can fix the URL/token
 
@@ -623,9 +618,9 @@ export class PlexService {
   /**
    * Test connection to a Plex server
    */
-  static async testConnection(uri: string, token: string): Promise<boolean> {
+  static async testConnection(uri: string, token: string): Promise<PlexCheckResult> {
     const plex = new PlexAPI({ uri });
-    return await plex.testConnection(uri, token);
+    return await plex.checkConnection(uri, token);
   }
 
   /**

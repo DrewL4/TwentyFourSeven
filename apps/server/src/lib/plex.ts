@@ -106,6 +106,38 @@ function storeMediaPartCache(
   });
 }
 
+export const PLEX_REQUEST_TIMEOUT_MS = 10_000;
+
+export const PLEX_TOKEN_HINT =
+  'To find the token: in Plex Web, open any movie or episode → ⋯ → Get Info → View XML, then copy the X-Plex-Token value from the end of the address.';
+
+export type PlexCheckResult = { ok: true } | { ok: false; error: string };
+
+/** A Plex call failed for a reason worth showing the user as-is. */
+export class PlexRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PlexRequestError';
+  }
+}
+
+export function describePlexHttpError(uri: string, status: number, statusText = ''): string {
+  if (status === 401 || status === 403) {
+    return `Plex at ${uri} refused the token (HTTP ${status}). ${PLEX_TOKEN_HINT}`;
+  }
+  const text = statusText ? ` ${statusText}` : '';
+  return `Plex at ${uri} answered HTTP ${status}${text} when listing libraries.`;
+}
+
+export function describePlexNetworkError(uri: string, error: unknown): string {
+  const err = error as { name?: string; message?: string; cause?: { code?: string; message?: string } };
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+    return `Can't reach Plex at ${uri}: no answer within ${PLEX_REQUEST_TIMEOUT_MS / 1000} seconds.`;
+  }
+  const reason = err?.cause?.code || err?.cause?.message || err?.message || 'network error';
+  return `Can't reach Plex at ${uri} (${reason}). Check the address and that TFS can reach it.`;
+}
+
 export class PlexAPI {
   private accessToken: string;
   private server: {
@@ -252,38 +284,55 @@ export class PlexAPI {
   }
 
   /**
-   * Test connection to a Plex server
+   * Check that the server answers AND accepts the token. /identity is served
+   * without auth, so it cannot validate a token; /library/sections can.
    */
-  async testConnection(uri: string, token: string): Promise<boolean> {
+  async checkConnection(uri: string, token: string): Promise<PlexCheckResult> {
     try {
-      const response = await fetch(`${uri}/identity`, {
-        headers: {
-          ...this.headers,
-          'X-Plex-Token': token
-        }
-      });
-      return response.ok;
-    } catch {
-      return false;
+      await this.getLibraries(uri, token);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
   /**
-   * Get libraries from a Plex server
+   * Test connection to a Plex server (token included)
+   */
+  async testConnection(uri: string, token: string): Promise<boolean> {
+    return (await this.checkConnection(uri, token)).ok;
+  }
+
+  /**
+   * Get libraries from a Plex server. Throws PlexRequestError with a message
+   * that says what actually went wrong (unreachable, token refused, bad reply).
    */
   async getLibraries(uri: string, token: string): Promise<PlexLibrary[]> {
-    const response = await fetch(`${uri}/library/sections`, {
-      headers: {
-        ...this.headers,
-        'X-Plex-Token': token
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to fetch libraries");
+    let response: Response;
+    try {
+      response = await fetch(`${uri}/library/sections`, {
+        headers: {
+          ...this.headers,
+          'X-Plex-Token': token
+        },
+        signal: AbortSignal.timeout(PLEX_REQUEST_TIMEOUT_MS),
+      });
+    } catch (error) {
+      throw new PlexRequestError(describePlexNetworkError(uri, error));
     }
 
-    const data = await response.json();
+    if (!response.ok) {
+      throw new PlexRequestError(describePlexHttpError(uri, response.status, response.statusText));
+    }
+
+    let data: { MediaContainer?: { Directory?: PlexLibrary[] } };
+    try {
+      data = await response.json();
+    } catch {
+      throw new PlexRequestError(
+        `${uri} answered, but not with Plex library data. Check that the URL points at Plex (usually port 32400).`
+      );
+    }
     return data.MediaContainer?.Directory || [];
   }
 
