@@ -57,7 +57,8 @@ export type GuideDesktopChannelRowProps = {
   ) => boolean;
   onPlayLive: (channel: GuideChannel) => void;
   onPlayCatchup: (channel: GuideChannel, programStartTime: string | Date) => void;
-  onRegenerate: (channelId: string) => void;
+  /** Admins only; omitted for viewers. */
+  onRegenerate?: (channelId: string) => void;
   isRegeneratePending: boolean;
 };
 
@@ -114,16 +115,18 @@ export function GuideDesktopChannelRow({
           >
             <Play className="w-3 h-3" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex-shrink-0 h-6 w-6 p-0"
-            title="Regenerate this channel's guide"
-            onClick={() => onRegenerate(channel.id)}
-            disabled={isRegeneratePending}
-          >
-            <Zap className="w-3 h-3" />
-          </Button>
+          {onRegenerate && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-shrink-0 h-6 w-6 p-0"
+              title="Regenerate this channel's guide"
+              onClick={() => onRegenerate(channel.id)}
+              disabled={isRegeneratePending}
+            >
+              <Zap className="w-3 h-3" />
+            </Button>
+          )}
         </div>
       </div>
       <div className="flex-1 relative">

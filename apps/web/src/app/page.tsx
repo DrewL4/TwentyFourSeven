@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { AppLogo } from "@/components/app-logo";
 import { Library, Settings, Play, Radio, FileText, Tv } from "lucide-react";
 import { getServerUrl } from "@/utils/server-url";
+import { useAdmin } from "@/hooks/use-admin";
 
 // Type for channel data from the API
 type Channel = {
@@ -23,8 +24,11 @@ export default function Home() {
   const healthCheck = useQuery(orpc.healthCheck.queryOptions());
   const channelsQuery = useQuery(orpc.channels.listSummary.queryOptions());
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
-  const serversQuery = useQuery(orpc.servers.list.queryOptions());
+  const { isAdmin } = useAdmin();
+  // Media servers (and their tokens) are admin-only.
+  const serversQuery = useQuery({ ...orpc.servers.list.queryOptions(), enabled: isAdmin });
   const serverUrl = getServerUrl();
+  const needsMediaServer = isAdmin && serversQuery.isSuccess && serversQuery.data.length === 0;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -64,8 +68,22 @@ export default function Home() {
         </div>
       </div>
 
+      {needsMediaServer && (
+        <Card className="mb-8 border-amber-500/50 bg-amber-500/5" data-testid="next-step-plex">
+          <CardContent className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between">
+            <p className="text-sm">
+              <span className="font-semibold">Next step:</span> connect Plex in Settings → Plex.
+              Channels, the guide, and the M3U/XMLTV feeds stay empty until a media server is added.
+            </p>
+            <Button size="sm" asChild>
+              <Link href="/settings/plex">Open Plex settings</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${isAdmin ? "lg:grid-cols-4" : ""} gap-6 mb-8`}>
         <Card className="hover:shadow-lg transition-shadow cursor-pointer">
           <Link href="/guide">
             <CardHeader className="pb-3">
@@ -82,6 +100,7 @@ export default function Home() {
           </Link>
         </Card>
 
+        {isAdmin && (<>
         <Card className="hover:shadow-lg transition-shadow cursor-pointer">
           <Link href="/channels">
             <CardHeader className="pb-3">
@@ -132,10 +151,11 @@ export default function Home() {
             </CardContent>
           </Link>
         </Card>
+        </>)}
       </div>
 
       {/* Status Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${isAdmin ? "md:grid-cols-3" : "md:grid-cols-2"} gap-6`}>
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -181,6 +201,7 @@ export default function Home() {
           </CardContent>
         </Card>
 
+        {isAdmin && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -201,6 +222,7 @@ export default function Home() {
             </p>
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* Recent Channels Preview */}
@@ -218,11 +240,13 @@ export default function Home() {
                     <Badge variant="outline">{channel.number}</Badge>
                     <span className="font-medium">{channel.name}</span>
                   </div>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/channels/${channel.id}`}>
-                      Configure
-                    </Link>
-                  </Button>
+                  {isAdmin && (
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link href={`/channels/${channel.id}`}>
+                        Configure
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>

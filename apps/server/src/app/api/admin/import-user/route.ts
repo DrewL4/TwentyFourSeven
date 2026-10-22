@@ -1,10 +1,13 @@
+import { guardAdminRoute } from '@/lib/admin-route-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "crypto";
 
 export async function POST(request: NextRequest) {
+  const denied = await guardAdminRoute(request);
+  if (denied) return denied;
+
   try {
-    // TODO: Add admin authentication check here
     
     const body = await request.json();
     const { name, email, emailVerified, source, originalJoinDate } = body;

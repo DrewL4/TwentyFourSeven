@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/context';
 import { WatchTowerHubService } from '@/lib/watchtower-hub-service';
+import { integrationTokenMatches } from '@/lib/integration-token';
 
 function extractToken(request: NextRequest): string | null {
   const auth = request.headers.get('Authorization') || '';
@@ -25,6 +26,12 @@ export async function POST(request: NextRequest) {
   const token = extractToken(request);
   if (!token) {
     return NextResponse.json({ error: 'Token authentication required' }, { status: 401 });
+  }
+  // Reconcile can deactivate every WatchTower-linked user, so the token must be the
+  // one WatchTower pushed in apply-config, not just any non-empty string.
+  const stored = await db.setting.findUnique({ where: { key: 'watchtower_api_token' } });
+  if (!integrationTokenMatches(token, stored?.value)) {
+    return NextResponse.json({ error: 'Invalid integration token' }, { status: 401 });
   }
 
   try {

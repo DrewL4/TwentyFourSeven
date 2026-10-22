@@ -1,9 +1,12 @@
+import { guardAdminRoute } from '@/lib/admin-route-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
+  const denied = await guardAdminRoute(request);
+  if (denied) return denied;
+
   try {
-    // TODO: Add admin authentication check here
     // For now, we'll return all users
     
     const users = await prisma.user.findMany({

@@ -1,8 +1,12 @@
+import { guardAdminRoute } from '@/lib/admin-route-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
+  const denied = await guardAdminRoute(request, { allowWhenNoUsers: true });
+  if (denied) return denied;
+
   try {
     const body = await request.json();
     const { name, email, password, source } = body;

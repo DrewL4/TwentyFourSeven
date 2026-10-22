@@ -22,6 +22,7 @@ import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "./ui/skeleton";
 import { useAdmin } from "@/hooks/use-admin";
+import { isAdminOnlyPath } from "@/lib/admin-routes";
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -36,9 +37,9 @@ export default function Sidebar() {
     { to: "/channels", label: "Channels", icon: Radio },
     { to: "/library", label: "Library", icon: Library },
     { to: "/users", label: "Users", icon: Users },
-    ...(isAdmin ? [{ to: "/viewers", label: "Viewers", icon: Eye }] : []),
+    { to: "/viewers", label: "Viewers", icon: Eye },
     { to: "/settings", label: "Settings", icon: Settings },
-  ];
+  ].filter((link) => isAdmin || !isAdminOnlyPath(link.to));
 
   const handleSignOut = () => {
     authClient.signOut({

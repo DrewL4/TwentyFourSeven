@@ -193,11 +193,9 @@ export default function PlexSettingsPage() {
     }
   }));
 
-  const testConnectionMutation = useMutation(orpc.servers.testConnection.mutationOptions({
-    onSuccess: (data) => {
-      toast.success(data.valid ? 'Connection successful' : 'Connection failed');
-    }
-  }));
+  // No toast here: the manual-add flow and the Test button report results
+  // differently, and a blanket "success" toast used to sit next to real errors.
+  const testConnectionMutation = useMutation(orpc.servers.testConnection.mutationOptions());
 
   const syncLibrariesMutation = useMutation({
     mutationFn: async (variables: { serverId: string }) => {
@@ -449,14 +447,21 @@ export default function PlexSettingsPage() {
       return;
     }
     
-    // First test connection and get libraries
-    const connectionValid = await testConnectionMutation.mutateAsync({
-      url: serverForm.uri,
-      token: serverForm.accessToken
-    });
-    
-    if (!connectionValid.valid) {
-      toast.error('Unable to connect to server. Please check your URL and token.');
+    // Check the URL and token (Plex's library list needs a working token) before
+    // asking which libraries to add. Nothing is saved until libraries are chosen.
+    let check;
+    try {
+      check = await testConnectionMutation.mutateAsync({
+        url: serverForm.uri,
+        token: serverForm.accessToken
+      });
+    } catch (error) {
+      toast.error(`Can't add server: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+
+    if (!check.valid) {
+      toast.error(`Can't add server: ${check.error}`, { duration: 15000 });
       return;
     }
     
@@ -522,10 +527,21 @@ export default function PlexSettingsPage() {
       toast.error('No access token available');
       return;
     }
-    testConnectionMutation.mutate({
-      url: server.url,
-      token: server.token
-    });
+    testConnectionMutation.mutate(
+      { url: server.url, token: server.token },
+      {
+        onSuccess: (data) => {
+          if (data.valid) {
+            toast.success(`Connected to ${server.name}: token accepted and libraries readable`);
+          } else {
+            toast.error(`Connection failed: ${data.error}`, { duration: 15000 });
+          }
+        },
+        onError: (error) => {
+          toast.error(`Connection failed: ${error.message}`);
+        },
+      },
+    );
   };
 
   const handleSyncLibraries = (serverId: string) => {
@@ -639,7 +655,8 @@ export default function PlexSettingsPage() {
                     type={showPassword ? "text" : "password"}
                     value={loginForm.password}
                     onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="••••••••"
+                    placeholder="Your Plex password"
+                    autoComplete="current-password"
                   />
                   <Button
                     type="button"
@@ -754,19 +771,26 @@ export default function PlexSettingsPage() {
                       id="accessToken"
                       value={serverForm.accessToken}
                       onChange={(e) => setServerForm(prev => ({ ...prev, accessToken: e.target.value }))}
-                      placeholder="xxxxxxxxxxxxxxxxxxxx"
+                      placeholder="Paste the X-Plex-Token value"
+                      autoComplete="off"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Find your token at: Settings → Account → Privacy & Online Services → Plex Web
+                      To find it: in Plex Web, open any movie or episode → ⋯ → Get Info → View XML.
+                      The token is the X-Plex-Token value at the end of the address that opens.
                     </p>
                   </div>
 
                   <Button 
                     type="submit" 
                     className="w-full"
-                    disabled={addServerMutation.isPending}
+                    disabled={addServerMutation.isPending || testConnectionMutation.isPending}
                   >
-                    {addServerMutation.isPending ? (
+                    {testConnectionMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Checking server...
+                      </>
+                    ) : addServerMutation.isPending ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         Adding Server...
@@ -1048,7 +1072,7 @@ export default function PlexSettingsPage() {
                             id={`edit-token-${server.id}`}
                             value={editForm.accessToken}
                             onChange={(e) => setEditForm(prev => ({ ...prev, accessToken: e.target.value }))}
-                            placeholder="xxxxxxxxxxxxxxxxxxxx"
+                            placeholder="Paste the X-Plex-Token value"
                           />
                         </div>
                       </div>

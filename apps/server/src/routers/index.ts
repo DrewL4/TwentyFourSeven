@@ -1,7 +1,8 @@
+import { ORPCError } from "@orpc/server";
 import { z } from "zod";
-import { protectedProcedure, publicProcedure } from "../lib/orpc";
+import { adminProcedure, protectedProcedure, publicProcedure } from "../lib/orpc";
 import { prisma } from "../lib/prisma";
-import { requireAdminAsync } from "../lib/admin-auth";
+import { isAdmin, redactSettingsSecrets, requireAdminAsync } from "../lib/admin-auth";
 import { viewingHistoryService } from "../lib/viewing-history-service";
 import { buildChannelsListSummary, getChannelLineup, getChannelShowEpisodes } from "../lib/channel-queries";
 import { guideRouter } from "./guide-router";
@@ -29,7 +30,7 @@ export const appRouter = {
       return buildChannelsListSummary();
     }),
 
-    createFromCollections: protectedProcedure
+    createFromCollections: adminProcedure
       .input(z.object({
         collections: z.array(z.string()).optional(),
         groupTitle: z.string().optional(),
@@ -253,7 +254,7 @@ export const appRouter = {
         return getChannelShowEpisodes(input.channelId, input.showId);
       }),
 
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         number: z.number(),
         name: z.string(),
@@ -294,7 +295,7 @@ export const appRouter = {
         });
       }),
 
-    update: protectedProcedure
+    update: adminProcedure
       .input(z.object({
         id: z.string(),
         number: z.number().optional(),
@@ -338,7 +339,7 @@ export const appRouter = {
         });
       }),
 
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.string() }))
       .handler(async ({ input }) => {
         return await prisma.channel.delete({
@@ -346,7 +347,7 @@ export const appRouter = {
         });
       }),
 
-    addShow: protectedProcedure
+    addShow: adminProcedure
       .input(z.object({
         channelId: z.string(),
         showId: z.string(),
@@ -370,7 +371,7 @@ export const appRouter = {
         return result;
       }),
 
-    removeShow: protectedProcedure
+    removeShow: adminProcedure
       .input(z.object({
         channelId: z.string(),
         showId: z.string()
@@ -396,7 +397,7 @@ export const appRouter = {
         return result;
       }),
 
-    addMovie: protectedProcedure
+    addMovie: adminProcedure
       .input(z.object({
         channelId: z.string(),
         movieId: z.string(),
@@ -418,7 +419,7 @@ export const appRouter = {
         return result;
       }),
 
-          removeMovie: protectedProcedure
+          removeMovie: adminProcedure
       .input(z.object({
         channelId: z.string(),
         movieId: z.string()
@@ -444,7 +445,7 @@ export const appRouter = {
         return result;
       }),
 
-    generatePrograms: protectedProcedure
+    generatePrograms: adminProcedure
       .input(z.object({
         channelId: z.string(),
         hours: z.number().default(24)
@@ -455,7 +456,7 @@ export const appRouter = {
         return { success: true };
       }),
 
-    updateShowOrder: protectedProcedure
+    updateShowOrder: adminProcedure
       .input(z.object({
         channelId: z.string(),
         showId: z.string(),
@@ -475,7 +476,7 @@ export const appRouter = {
         });
       }),
 
-    updateMovieOrder: protectedProcedure
+    updateMovieOrder: adminProcedure
       .input(z.object({
         channelId: z.string(),
         movieId: z.string(),
@@ -496,7 +497,7 @@ export const appRouter = {
       }),
 
     // Channel automation endpoints
-    processAutomation: protectedProcedure
+    processAutomation: adminProcedure
       .input(z.object({
         channelId: z.string()
       }))
@@ -506,14 +507,14 @@ export const appRouter = {
         return { success: true };
       }),
 
-    processAllAutomation: protectedProcedure
+    processAllAutomation: adminProcedure
       .handler(async () => {
         const { channelAutomationService } = await import('@/lib/channel-automation-service');
         await channelAutomationService.processAutomatedChannels();
         return { success: true };
       }),
 
-    updateFilters: protectedProcedure
+    updateFilters: adminProcedure
       .input(z.object({
         id: z.string(),
         autoFilterEnabled: z.boolean(),
@@ -543,7 +544,7 @@ export const appRouter = {
       }),
 
     // Metadata endpoints for autocomplete
-    getActors: protectedProcedure
+    getActors: adminProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
@@ -609,7 +610,7 @@ export const appRouter = {
         return actorList.slice(0, limit);
       }),
 
-    getDirectors: protectedProcedure
+    getDirectors: adminProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
@@ -675,7 +676,7 @@ export const appRouter = {
         return directorList.slice(0, limit);
       }),
 
-    getGenres: protectedProcedure
+    getGenres: adminProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
@@ -741,7 +742,7 @@ export const appRouter = {
         return genreList.slice(0, limit);
       }),
 
-    getStudios: protectedProcedure
+    getStudios: adminProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
@@ -796,7 +797,7 @@ export const appRouter = {
         return studioList.slice(0, limit);
       }),
 
-    reorderContent: protectedProcedure
+    reorderContent: adminProcedure
       .input(z.object({
         channelId: z.string(),
         items: z.array(z.object({
@@ -857,7 +858,7 @@ export const appRouter = {
         return result;
       }),
 
-    reorderEpisodes: protectedProcedure
+    reorderEpisodes: adminProcedure
       .input(z.object({
         channelId: z.string(),
         episodes: z.array(z.object({
@@ -910,7 +911,7 @@ export const appRouter = {
       }),
 
     // Quick Actions
-    regenerateSchedule: protectedProcedure
+    regenerateSchedule: adminProcedure
       .input(z.object({ channelId: z.string() }))
       .handler(async ({ input }) => {
         try {
@@ -924,7 +925,7 @@ export const appRouter = {
         }
       }),
 
-    ensureAllChannelsHaveProgramming: protectedProcedure
+    ensureAllChannelsHaveProgramming: adminProcedure
       .handler(async () => {
         try {
           const { programmingService } = await import('@/lib/programming-service');
@@ -937,7 +938,7 @@ export const appRouter = {
         }
       }),
 
-    cacheChannelCollectionIcons: protectedProcedure
+    cacheChannelCollectionIcons: adminProcedure
       .handler(async () => {
         try {
           const { programmingService } = await import('@/lib/programming-service');
@@ -953,7 +954,7 @@ export const appRouter = {
         }
       }),
 
-    shuffleAllContent: protectedProcedure
+    shuffleAllContent: adminProcedure
       .input(z.object({ channelId: z.string() }))
       .handler(async ({ input }) => {
         const { channelId } = input;
@@ -1016,7 +1017,7 @@ export const appRouter = {
       }),
 
     // Programming Rules
-    updateChannelSettings: protectedProcedure
+    updateChannelSettings: adminProcedure
       .input(z.object({
         channelId: z.string(),
         settings: z.object({
@@ -1039,7 +1040,7 @@ export const appRouter = {
         });
       }),
 
-    updateShowSettings: protectedProcedure
+    updateShowSettings: adminProcedure
       .input(z.object({
         channelId: z.string(),
         showId: z.string(),
@@ -1066,7 +1067,7 @@ export const appRouter = {
         });
       }),
 
-    updateMovieSettings: protectedProcedure
+    updateMovieSettings: adminProcedure
       .input(z.object({
         channelId: z.string(),
         movieId: z.string(),
@@ -1089,7 +1090,7 @@ export const appRouter = {
         });
       }),
 
-    sortByFranchise: protectedProcedure
+    sortByFranchise: adminProcedure
       .input(z.object({
         channelId: z.string(),
         franchiseSlug: z.string(),
@@ -1114,7 +1115,7 @@ export const appRouter = {
 
   // Media Server Management
   servers: {
-    list: protectedProcedure.handler(async () => {
+    list: adminProcedure.handler(async () => {
       return await prisma.mediaServer.findMany({
         include: {
           libraries: {
@@ -1127,7 +1128,7 @@ export const appRouter = {
       });
     }),
 
-    listForLibrary: protectedProcedure.handler(async () => {
+    listForLibrary: adminProcedure.handler(async () => {
       return await prisma.mediaServer.findMany({
         select: {
           id: true,
@@ -1148,7 +1149,7 @@ export const appRouter = {
       });
     }),
 
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         name: z.string(),
         url: z.string().url(),
@@ -1162,7 +1163,7 @@ export const appRouter = {
         });
       }),
 
-    update: protectedProcedure
+    update: adminProcedure
       .input(z.object({
         id: z.string(),
         name: z.string().optional(),
@@ -1179,7 +1180,7 @@ export const appRouter = {
         });
       }),
 
-    delete: protectedProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.string() }))
       .handler(async ({ input }) => {
         return await prisma.mediaServer.delete({
@@ -1187,25 +1188,25 @@ export const appRouter = {
         });
       }),
 
-    syncLibraries: protectedProcedure
+    syncLibraries: adminProcedure
       .input(z.object({ serverId: z.string() }))
       .handler(async ({ input }) => {
         const { PlexService } = await import('../lib/plex-service');
         return await PlexService.syncLibraries(input.serverId);
       }),
 
-    testConnection: protectedProcedure
+    testConnection: adminProcedure
       .input(z.object({
         url: z.string().url(),
         token: z.string()
       }))
       .handler(async ({ input }) => {
         const { PlexService } = await import('../lib/plex-service');
-        const isValid = await PlexService.testConnection(input.url, input.token);
-        return { valid: isValid };
+        const result = await PlexService.testConnection(input.url, input.token);
+        return result.ok ? { valid: true as const } : { valid: false as const, error: result.error };
       }),
 
-    plexLogin: protectedProcedure
+    plexLogin: adminProcedure
       .input(z.object({
         username: z.string(),
         password: z.string()
@@ -1274,7 +1275,7 @@ export const appRouter = {
         }
       }),
 
-    addPlexServer: protectedProcedure
+    addPlexServer: adminProcedure
       .input(z.object({
         name: z.string(),
         uri: z.string().url(),
@@ -1288,7 +1289,7 @@ export const appRouter = {
         return await PlexService.addPlexServer(input);
       }),
 
-    getServerInfo: protectedProcedure
+    getServerInfo: adminProcedure
       .input(z.object({
         url: z.string().url(),
         token: z.string()
@@ -1298,7 +1299,7 @@ export const appRouter = {
         return await PlexService.getServerInfo(input.url, input.token);
       }),
 
-    getLibraries: protectedProcedure
+    getLibraries: adminProcedure
       .input(z.object({
         url: z.string().url(),
         token: z.string()
@@ -1314,13 +1315,22 @@ export const appRouter = {
         updatedAt: number;
         createdAt: number;
       }>> => {
-        const { PlexAPI } = await import('../lib/plex');
+        const { PlexAPI, PlexRequestError } = await import('../lib/plex');
         const {
           isPlexLibrarySyncable,
           normalizePlexLibraryKey,
         } = await import('../lib/plex-service');
         const plex = new PlexAPI({ uri: input.url });
-        const libraries = await plex.getLibraries(input.url, input.token);
+        let libraries;
+        try {
+          libraries = await plex.getLibraries(input.url, input.token);
+        } catch (error) {
+          // A plain Error would reach the browser as "Internal server error".
+          if (error instanceof PlexRequestError) {
+            throw new ORPCError("BAD_REQUEST", { message: error.message });
+          }
+          throw error;
+        }
         return libraries
           .filter((lib) => isPlexLibrarySyncable(lib.type))
           .map((lib) => ({
@@ -1329,14 +1339,14 @@ export const appRouter = {
           }));
       }),
 
-    syncLibrariesFast: protectedProcedure
+    syncLibrariesFast: adminProcedure
       .input(z.object({ serverId: z.string() }))
       .handler(async ({ input }) => {
         const { PlexService } = await import('../lib/plex-service');
         return await PlexService.syncLibraries(input.serverId);
       }),
 
-    updateLibrarySelection: protectedProcedure
+    updateLibrarySelection: adminProcedure
       .input(z.object({ 
         serverId: z.string(),
         selectedLibraryKeys: z.array(z.string())
@@ -1406,7 +1416,7 @@ export const appRouter = {
 
   // Programming Management
   programming: {
-    generateForChannel: protectedProcedure
+    generateForChannel: adminProcedure
       .input(z.object({
         channelId: z.string(),
         hours: z.number().optional()
@@ -1417,7 +1427,7 @@ export const appRouter = {
         return { success: true };
       }),
 
-    generateForAllChannels: protectedProcedure
+    generateForAllChannels: adminProcedure
       .input(z.object({
         hours: z.number().optional()
       }))
@@ -1427,19 +1437,19 @@ export const appRouter = {
         return { success: true };
       }),
 
-    maintain: protectedProcedure.handler(async () => {
+    maintain: adminProcedure.handler(async () => {
       const { programmingService } = await import('@/lib/programming-service');
       await programmingService.maintainPrograms();
       return { success: true };
     }),
 
-    cleanup: protectedProcedure.handler(async () => {
+    cleanup: adminProcedure.handler(async () => {
       const { programmingService } = await import('@/lib/programming-service');
       await programmingService.cleanupOldPrograms();
       return { success: true };
     }),
 
-    cleanupOverlaps: protectedProcedure.handler(async () => {
+    cleanupOverlaps: adminProcedure.handler(async () => {
       const { programmingService } = await import('@/lib/programming-service');
       const overlapsCleaned = await programmingService.cleanupAllOverlaps();
       return { success: true, overlapsCleaned };
@@ -1465,7 +1475,7 @@ export const appRouter = {
 
   // System Management
   system: {
-    fixXmltvProgramming: publicProcedure
+    fixXmltvProgramming: adminProcedure
       .handler(async () => {
         try {
           const { programmingService } = await import('@/lib/programming-service');
@@ -1485,7 +1495,7 @@ export const appRouter = {
 
   // Settings Management
   settings: {
-        get: publicProcedure.handler(async () => {
+        get: publicProcedure.handler(async ({ context }) => {
       let settings = await prisma.settings.findUnique({
         where: { id: "singleton" },
         include: { plexSettings: true }
@@ -1498,10 +1508,15 @@ export const appRouter = {
         });
       }
 
-      return settings;
+      // Home and Guide read this as viewers too; only admins get secrets.
+      const userId = context.session?.user?.id;
+      if (userId && (await isAdmin(userId, prisma))) {
+        return settings;
+      }
+      return redactSettingsSecrets(settings);
     }),
 
-    update: protectedProcedure
+    update: adminProcedure
       .input(z.object({
         port: z.number().optional(),
         ffmpegPath: z.string().optional(), // Temporary for compatibility
@@ -1543,7 +1558,7 @@ export const appRouter = {
       }),
 
     ffmpeg: {
-      get: publicProcedure.handler(async () => {
+      get: adminProcedure.handler(async () => {
         let ffmpegSettings = await prisma.ffmpegSettings.findUnique({
           where: { id: "singleton" }
         });
@@ -1567,7 +1582,7 @@ export const appRouter = {
         return ffmpegSettings;
       }),
 
-      update: protectedProcedure
+      update: adminProcedure
         .input(z.object({
           ffmpegPath: z.string().optional(),
           ffprobePath: z.string().optional(),
@@ -1621,31 +1636,31 @@ export const appRouter = {
         }),
 
       // System information endpoints
-      systemInfo: publicProcedure.handler(async () => {
+      systemInfo: adminProcedure.handler(async () => {
         const ffmpegService = await import('@/lib/ffmpeg-service').then(m => m.ffmpegService);
         return await ffmpegService.getSystemInfo();
       }),
 
-      detectPaths: publicProcedure.handler(async () => {
+      detectPaths: adminProcedure.handler(async () => {
         const ffmpegService = await import('@/lib/ffmpeg-service').then(m => m.ffmpegService);
         return await ffmpegService.detectFfmpegPath();
       }),
 
-      validatePath: publicProcedure
+      validatePath: adminProcedure
         .input(z.object({ path: z.string() }))
         .handler(async ({ input }) => {
           const ffmpegService = await import('@/lib/ffmpeg-service').then(m => m.ffmpegService);
           return await ffmpegService.validateFfmpegPath(input.path);
         }),
 
-      getInfo: publicProcedure
+      getInfo: adminProcedure
         .input(z.object({ path: z.string().optional() }))
         .handler(async ({ input }) => {
           const ffmpegService = await import('@/lib/ffmpeg-service').then(m => m.ffmpegService);
           return await ffmpegService.getFfmpegInfo(input.path);
         }),
 
-      testHardwareAccel: publicProcedure
+      testHardwareAccel: adminProcedure
         .input(z.object({ 
           type: z.string(),
           device: z.string().optional(),
@@ -1660,14 +1675,14 @@ export const appRouter = {
           );
         }),
 
-      getRecommendedSettings: publicProcedure.handler(async () => {
+      getRecommendedSettings: adminProcedure.handler(async () => {
         const ffmpegService = await import('@/lib/ffmpeg-service').then(m => m.ffmpegService);
         return await ffmpegService.getRecommendedSettings();
       })
     },
 
     plex: {
-      get: publicProcedure.handler(async () => {
+      get: adminProcedure.handler(async () => {
         let plexSettings = await prisma.plexSettings.findUnique({
           where: { id: "singleton" }
         });
@@ -1691,7 +1706,7 @@ export const appRouter = {
         return plexSettings;
       }),
 
-      update: protectedProcedure
+      update: adminProcedure
         .input(z.object({
           autoRefreshLibraries: z.boolean().optional(),
           refreshInterval: z.number().optional(),
@@ -1748,7 +1763,7 @@ export const appRouter = {
     },
 
     webhooks: {
-      getActivity: publicProcedure
+      getActivity: adminProcedure
         .input(z.object({
           limit: z.number().default(50),
           offset: z.number().default(0),
@@ -1783,7 +1798,7 @@ export const appRouter = {
           };
         }),
         
-      getStats: publicProcedure.handler(async () => {
+      getStats: adminProcedure.handler(async () => {
         const stats = await Promise.all([
           prisma.webhookActivity.count(),
           prisma.webhookActivity.count({ where: { status: 'processed' } }),
@@ -1805,7 +1820,7 @@ export const appRouter = {
         };
       }),
       
-      clearActivity: protectedProcedure
+      clearActivity: adminProcedure
         .input(z.object({
           olderThanDays: z.number().default(7)
         }))
@@ -1876,7 +1891,7 @@ export const appRouter = {
       return 'Please use /media.xml endpoint for complete XMLTV guide data';
     }),
 
-    validate: protectedProcedure.handler(async () => {
+    validate: adminProcedure.handler(async () => {
       const { XmltvValidator } = await import('../lib/xmltv-validator');
       const report = await XmltvValidator.generateValidationReport();
       const consistency = await XmltvValidator.validateXmltvConsistency();
@@ -1892,12 +1907,12 @@ export const appRouter = {
   },
 
   viewers: {
-    getActive: protectedProcedure.handler(async ({ context }) => {
+    getActive: adminProcedure.handler(async ({ context }) => {
       await requireAdminAsync(context.session?.user?.id, prisma);
       return await viewingHistoryService.getActiveViewers();
     }),
 
-    getHistory: protectedProcedure
+    getHistory: adminProcedure
       .input(
         z.object({
           ipAddress: z.string().optional(),
@@ -1914,7 +1929,7 @@ export const appRouter = {
         return await viewingHistoryService.getViewingHistory(input);
       }),
 
-    getViewingSessions: protectedProcedure
+    getViewingSessions: adminProcedure
       .input(
         z.object({
           ipAddress: z.string().optional(),
@@ -1931,14 +1946,14 @@ export const appRouter = {
         return await viewingHistoryService.getViewingSessions(input);
       }),
 
-    listMappings: protectedProcedure.handler(async ({ context }) => {
+    listMappings: adminProcedure.handler(async ({ context }) => {
       await requireAdminAsync(context.session?.user?.id, prisma);
       return await prisma.viewer.findMany({
         orderBy: { createdAt: 'desc' },
       });
     }),
 
-    createMapping: protectedProcedure
+    createMapping: adminProcedure
       .input(
         z.object({
           ipAddress: z.string(),
@@ -1957,7 +1972,7 @@ export const appRouter = {
         return await viewingHistoryService.createIpMapping(input);
       }),
 
-    blockIp: protectedProcedure
+    blockIp: adminProcedure
       .input(
         z.object({
           ipAddress: z.string(),
@@ -1969,7 +1984,7 @@ export const appRouter = {
         return await viewingHistoryService.blockIp(input.ipAddress);
       }),
 
-    unblockIp: protectedProcedure
+    unblockIp: adminProcedure
       .input(
         z.object({
           ipAddress: z.string(),
@@ -1981,7 +1996,7 @@ export const appRouter = {
         return await viewingHistoryService.unblockIp(input.ipAddress);
       }),
 
-    assignIpToUser: protectedProcedure
+    assignIpToUser: adminProcedure
       .input(
         z.object({
           ipAddress: z.string(),
@@ -1994,7 +2009,7 @@ export const appRouter = {
         return await viewingHistoryService.assignIpToUser(input.ipAddress, input.userId);
       }),
 
-    getUsers: protectedProcedure.handler(async ({ context }) => {
+    getUsers: adminProcedure.handler(async ({ context }) => {
       await requireAdminAsync(context.session?.user?.id, prisma);
       return await prisma.user.findMany({
         select: {
@@ -2006,7 +2021,7 @@ export const appRouter = {
       });
     }),
 
-    getUnassignedIps: protectedProcedure.handler(async ({ context }) => {
+    getUnassignedIps: adminProcedure.handler(async ({ context }) => {
       await requireAdminAsync(context.session?.user?.id, prisma);
       
       // Get all unique IP addresses from viewing history using groupBy
@@ -2028,7 +2043,7 @@ export const appRouter = {
       return unassignedIps;
     }),
 
-    deleteMapping: protectedProcedure
+    deleteMapping: adminProcedure
       .input(
         z.object({
           id: z.string().optional(),

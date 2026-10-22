@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ORPCError } from '@orpc/server';
-import { protectedProcedure } from '../lib/orpc';
+import { adminProcedure } from '../lib/orpc';
 import { prisma } from '../lib/prisma';
 import { applyFranchiseToChannel } from '../lib/franchise-channel-service';
 import { syncFranchise, syncAllFranchises } from '../lib/franchise-sync-service';
@@ -31,7 +31,7 @@ function slugify(name: string): string {
 }
 
 export const franchisesRouter = {
-  list: protectedProcedure.handler(async () => {
+  list: adminProcedure.handler(async () => {
     const franchises = await prisma.franchise.findMany({
       orderBy: { name: 'asc' },
       include: { _count: { select: { entries: true, channels: true } } },
@@ -52,7 +52,7 @@ export const franchisesRouter = {
     }));
   }),
 
-  get: protectedProcedure
+  get: adminProcedure
     .input(z.object({ id: z.string().optional(), slug: z.string().optional() }))
     .handler(async ({ input }) => {
       if (!input.id && !input.slug) {
@@ -78,11 +78,11 @@ export const franchisesRouter = {
       return franchise;
     }),
 
-  searchTmdbCollection: protectedProcedure
+  searchTmdbCollection: adminProcedure
     .input(z.object({ query: z.string().min(2) }))
     .handler(async ({ input }) => searchTmdbCollections(input.query)),
 
-  previewTmdbCollection: protectedProcedure
+  previewTmdbCollection: adminProcedure
     .input(
       z.object({
         collectionId: z.number().int().positive(),
@@ -151,7 +151,7 @@ export const franchisesRouter = {
       };
     }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -208,7 +208,7 @@ export const franchisesRouter = {
       return franchise;
     }),
 
-  update: protectedProcedure
+  update: adminProcedure
     .input(
       z.object({
         id: z.string(),
@@ -263,7 +263,7 @@ export const franchisesRouter = {
       });
     }),
 
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .handler(async ({ input }) => {
       await prisma.channel.updateMany({
@@ -274,14 +274,14 @@ export const franchisesRouter = {
       return { success: true };
     }),
 
-  previewChannelSort: protectedProcedure
+  previewChannelSort: adminProcedure
     .input(z.object({ channelId: z.string(), franchiseSlug: z.string() }))
     .handler(async ({ input }) => {
       return previewFranchiseSortForChannel(input.channelId, input.franchiseSlug);
     }),
 
   /** Link channel to franchise: TMDB-based automation + timeline autoSortMethod */
-  applyToChannel: protectedProcedure
+  applyToChannel: adminProcedure
     .input(
       z.object({
         channelId: z.string(),
@@ -312,7 +312,7 @@ export const franchisesRouter = {
       return link;
     }),
 
-  importFromTmdbCollection: protectedProcedure
+  importFromTmdbCollection: adminProcedure
     .input(
       z.object({
         collectionId: z.number().int().positive(),
@@ -383,7 +383,7 @@ export const franchisesRouter = {
       });
     }),
 
-  syncNow: protectedProcedure
+  syncNow: adminProcedure
     .input(z.object({ slug: z.string().optional() }))
     .handler(async ({ input }) => {
       if (input.slug) {
@@ -392,7 +392,7 @@ export const franchisesRouter = {
       return syncAllFranchises();
     }),
 
-  suggestFromCollection: protectedProcedure
+  suggestFromCollection: adminProcedure
     .input(z.object({ collectionName: z.string().min(1) }))
     .handler(async ({ input }) => {
       const needle = input.collectionName.trim();

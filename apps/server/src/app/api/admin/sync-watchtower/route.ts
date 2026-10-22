@@ -1,14 +1,12 @@
+import { guardAdminRoute } from '@/lib/admin-route-guard';
 import { NextRequest, NextResponse } from 'next/server';
 import { WatchTowerHubService } from '@/lib/watchtower-hub-service';
 
 export async function POST(request: NextRequest) {
-  try {
-    // You should add authentication here to ensure only admins can trigger sync
-    // const session = await getSession(request);
-    // if (!session?.user?.isAdmin) {
-    //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    // }
+  const denied = await guardAdminRoute(request);
+  if (denied) return denied;
 
+  try {
     const watchTowerService = WatchTowerHubService.getInstance();
     
     // Check connection first

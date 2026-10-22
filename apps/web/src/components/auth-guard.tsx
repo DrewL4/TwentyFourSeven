@@ -4,6 +4,8 @@ import { authClient } from "@/lib/auth-client";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Loader from "./loader";
+import { useAdmin } from "@/hooks/use-admin";
+import { isAdminOnlyPath } from "@/lib/admin-routes";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -18,6 +20,9 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const pathname = usePathname();
 
   const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+  const { isAdmin, isLoading: roleLoading } = useAdmin();
+  const adminOnly = isAdminOnlyPath(pathname);
+  const blockedForRole = !!session && adminOnly && !roleLoading && !isAdmin;
 
   useEffect(() => {
     if (!isPending) {
@@ -32,8 +37,14 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         router.replace("/");
         return;
       }
+
+      // Viewers (WatchTower non-admins) can't open admin pages
+      if (blockedForRole) {
+        router.replace("/");
+        return;
+      }
     }
-  }, [session, isPending, isPublicPath, pathname, router]);
+  }, [session, isPending, isPublicPath, pathname, router, blockedForRole]);
 
   // Show loading while checking auth status
   if (isPending) {
@@ -49,7 +60,14 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     return <>{children}</>;
   }
 
-  // Show protected content only if authenticated
+  // Show protected content only if authenticated (and, for admin pages, admin)
+  if (session && adminOnly && (roleLoading || !isAdmin)) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader />
+      </div>
+    );
+  }
   if (session) {
     return <>{children}</>;
   }

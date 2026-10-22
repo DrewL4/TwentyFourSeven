@@ -1,22 +1,18 @@
-import type { Context } from './context';
+import { ORPCError } from '@orpc/server';
 
-/**
- * Require admin role, throw error if user is not admin
- */
-export function requireAdmin(context: Context): void {
-  if (!context.session?.user?.id) {
-    throw new Error('Unauthorized');
-  }
+export const ADMIN_REQUIRED_MESSAGE =
+  'Admin access required. Only WatchTower admins can manage TFS.';
 
-  // Check if user is admin
-  // Note: This will need to fetch user from DB to check role
-  // For now, we'll check this in the handler
-}
+type RoleLookup = {
+  user: {
+    findUnique(args: { where: { id: string }; select: { role: true } }): Promise<{ role: string } | null>;
+  };
+};
 
 /**
  * Check if user is admin (async, fetches from DB)
  */
-export async function isAdmin(userId: string, prisma: any): Promise<boolean> {
+export async function isAdmin(userId: string, prisma: RoleLookup): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { role: true },
@@ -26,19 +22,34 @@ export async function isAdmin(userId: string, prisma: any): Promise<boolean> {
 }
 
 /**
- * Require admin role (async version)
+ * Require admin role. Throws ORPCError so callers get 401/403 with a readable
+ * message instead of a masked "Internal server error".
  */
 export async function requireAdminAsync(
   userId: string | undefined,
-  prisma: any
+  prisma: RoleLookup
 ): Promise<void> {
   if (!userId) {
-    throw new Error('Unauthorized');
+    throw new ORPCError('UNAUTHORIZED');
   }
 
-  const admin = await isAdmin(userId, prisma);
-  if (!admin) {
-    throw new Error('Admin access required');
+  if (!(await isAdmin(userId, prisma))) {
+    throw new ORPCError('FORBIDDEN', { message: ADMIN_REQUIRED_MESSAGE });
   }
 }
 
+type SettingsWithSecrets = {
+  watchTowerPassword: string;
+  tmdbApiKey: string;
+  plexSettings: { token: string } | null;
+};
+
+/** Blank credentials before returning settings to a non-admin or anonymous caller. */
+export function redactSettingsSecrets<T extends SettingsWithSecrets>(settings: T): T {
+  return {
+    ...settings,
+    watchTowerPassword: '',
+    tmdbApiKey: '',
+    plexSettings: settings.plexSettings ? { ...settings.plexSettings, token: '' } : null,
+  };
+}

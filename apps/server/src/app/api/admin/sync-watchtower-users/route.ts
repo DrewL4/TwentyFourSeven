@@ -1,7 +1,11 @@
+import { guardAdminRoute } from '@/lib/admin-route-guard';
 import { NextRequest, NextResponse } from "next/server";
 import { WatchTowerHubService } from "@/lib/watchtower-hub-service";
 
 export async function POST(request: NextRequest) {
+  const denied = await guardAdminRoute(request);
+  if (denied) return denied;
+
   try {
     const watchTowerService = WatchTowerHubService.getInstance();
     await watchTowerService.initialize(); // Ensure service is initialized

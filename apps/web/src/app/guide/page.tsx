@@ -15,6 +15,7 @@ import { HEAVY_QUERY_OPTIONS } from "@/utils/query-options";
 import Link from "next/link";
 import { toast } from "sonner";
 import VideoPlayer from "@/components/video-player";
+import { useAdmin } from "@/hooks/use-admin";
 
 type Program = {
   id: string;
@@ -54,6 +55,7 @@ export default function GuidePage() {
   });
   const [isMobileView, setIsMobileView] = useState(false);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
+  const { isAdmin } = useAdmin();
   const [playingChannel, setPlayingChannel] = useState<{ number: number; name: string; icon?: string | null } | null>(null);
   // Catchup state
   const [isCatchupMode, setIsCatchupMode] = useState(false);
@@ -425,7 +427,7 @@ export default function GuidePage() {
         isCatchupEligible={isCatchupEligible}
         onPlayLive={handlePlayLive}
         onPlayCatchup={playCatchup}
-        onRegenerate={handleRegenerateChannel}
+        onRegenerate={isAdmin ? handleRegenerateChannel : undefined}
         isRegeneratePending={generateForChannelMutation.isPending}
       />
     ),
@@ -437,6 +439,7 @@ export default function GuidePage() {
       generateForChannelMutation.isPending,
       handlePlayLive,
       handleRegenerateChannel,
+      isAdmin,
       playCatchup,
       isPastProgram,
       isCatchupEligible,
@@ -498,16 +501,18 @@ export default function GuidePage() {
                     >
                         <Play className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      title="Regenerate guide"
-                      onClick={() => generateForChannelMutation.mutate({ channelId: channel.id, hours: 24 })}
-                      disabled={generateForChannelMutation.isPending}
-                    >
-                      <Zap className="w-4 h-4" />
-                    </Button>
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        title="Regenerate guide"
+                        onClick={() => generateForChannelMutation.mutate({ channelId: channel.id, hours: 24 })}
+                        disabled={generateForChannelMutation.isPending}
+                      >
+                        <Zap className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -642,6 +647,7 @@ export default function GuidePage() {
           </p>
         </div>
         
+        {isAdmin && (
         <div className="flex items-center gap-2 flex-wrap">
           <Button 
             onClick={() => maintainProgramsMutation.mutate({})}
@@ -662,6 +668,7 @@ export default function GuidePage() {
             <span className="sm:hidden">Generate</span>
           </Button>
         </div>
+        )}
       </div>
 
       {/* Loading State */}
@@ -700,12 +707,12 @@ export default function GuidePage() {
             <h3 className="text-lg sm:text-xl font-semibold mb-2">No programs scheduled</h3>
             <p className="text-muted-foreground mb-4 text-sm sm:text-base">
               {channelsQuery.data && channelsQuery.data.length > 0 
-                ? "Generate programs for your channels to see the TV guide"
-                : "Create some channels and add content to see the TV guide"
+                ? (isAdmin ? "Generate programs for your channels to see the TV guide" : "Programs haven't been scheduled yet. Check back soon.")
+                : (isAdmin ? "Create some channels and add content to see the TV guide" : "No channels yet. A TFS admin needs to set them up.")
               }
             </p>
             <div className="flex flex-col sm:flex-row gap-2 justify-center">
-              {channelsQuery.data && channelsQuery.data.length > 0 ? (
+              {!isAdmin ? null : channelsQuery.data && channelsQuery.data.length > 0 ? (
                 <>
                   <Button 
                     onClick={() => generateProgramsMutation.mutate({})}

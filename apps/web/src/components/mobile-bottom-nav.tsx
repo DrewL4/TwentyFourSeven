@@ -11,10 +11,13 @@ import {
   User
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { useAdmin } from "@/hooks/use-admin";
+import { isAdminOnlyPath } from "@/lib/admin-routes";
 
 export default function MobileBottomNav() {
   const pathname = usePathname();
   const { data: session } = authClient.useSession();
+  const { isAdmin } = useAdmin();
 
   // Core navigation items for mobile (limited to 5 for best UX)
   const navigationLinks = [
@@ -23,7 +26,7 @@ export default function MobileBottomNav() {
     { to: "/channels", label: "Channels", icon: Radio },
     { to: "/library", label: "Library", icon: Library },
     { to: "/settings", label: "Settings", icon: Settings },
-  ];
+  ].filter((link) => isAdmin || !isAdminOnlyPath(link.to));
 
   if (!session) return null;
 
