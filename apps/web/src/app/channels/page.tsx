@@ -40,7 +40,7 @@ import {
   CheckSquare,
   Square
 } from "lucide-react";
-import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1699,13 +1699,19 @@ function ChannelsPageContent() {
     }, delay);
   };
 
+  const appliedUrlChannelRef = useRef<string | null>(null);
+
   // Auto-select channel from URL or first channel when channels load
   useEffect(() => {
     if (channelsQuery.data && channelsQuery.data.length > 0) {
-      // If there's a channel ID from URL, try to select it
-      if (channelIdFromUrl) {
+      // If the URL points at a channel we haven't applied yet, select it.
+      // Only react to URL *changes*: right after Create Channel the URL still
+      // holds the previous channel for a moment, and re-applying it would snap
+      // the panel back to the old channel.
+      if (channelIdFromUrl && channelIdFromUrl !== appliedUrlChannelRef.current) {
         const channelExists = channelsQuery.data.some((ch: any) => ch.id === channelIdFromUrl);
         if (channelExists) {
+          appliedUrlChannelRef.current = channelIdFromUrl;
           setSelectedChannelId(channelIdFromUrl);
           return;
         }
@@ -1764,9 +1770,33 @@ function ChannelsPageContent() {
 
   const createChannelMutation = useMutation(orpc.channels.create.mutationOptions({
     onSuccess: (data) => {
-      // Invalidate and refetch to get the real data from server
+      // Put the new channel in the list right away so its panel can render,
+      // then refetch to get the real data from the server.
       const queryKey = orpc.channels.listSummary.queryOptions().queryKey;
-      queryClient.invalidateQueries({ queryKey });
+      queryClient.setQueryData(queryKey, (old: ChannelSummary[] | undefined) => {
+        const list = old ?? [];
+        if (list.some((ch) => ch.id === data.id)) return list;
+        const summary: ChannelSummary = {
+          id: data.id,
+          number: data.number,
+          name: data.name,
+          icon: data.icon ?? null,
+          groupTitle: data.groupTitle ?? null,
+          stealth: data.stealth ?? false,
+          catchupEnabled: data.catchupEnabled ?? true,
+          catchupWindowHours: data.catchupWindowHours ?? 24,
+          programCount: 0,
+          channelShowCount: 0,
+          channelMovieCount: 0,
+          currentProgram: null,
+          nextProgram: null,
+        };
+        return [...list, summary].sort((a, b) => a.number - b.number);
+      });
+      void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === 'guide',
+      });
       
       // Clear the form and select the new channel
       const nextChannelNumber = channelsQuery.data ? Math.max(...(channelsQuery.data as any[]).map((ch: any) => ch.number)) + 1 : 1;
@@ -1834,9 +1864,33 @@ function ChannelsPageContent() {
       }
     },
     onSuccess: (data) => {
-      // Invalidate and refetch to get the real data from server
+      // Put the new channel in the list right away so its panel can render,
+      // then refetch to get the real data from the server.
       const queryKey = orpc.channels.listSummary.queryOptions().queryKey;
-      queryClient.invalidateQueries({ queryKey });
+      queryClient.setQueryData(queryKey, (old: ChannelSummary[] | undefined) => {
+        const list = old ?? [];
+        if (list.some((ch) => ch.id === data.id)) return list;
+        const summary: ChannelSummary = {
+          id: data.id,
+          number: data.number,
+          name: data.name,
+          icon: data.icon ?? null,
+          groupTitle: data.groupTitle ?? null,
+          stealth: data.stealth ?? false,
+          catchupEnabled: data.catchupEnabled ?? true,
+          catchupWindowHours: data.catchupWindowHours ?? 24,
+          programCount: 0,
+          channelShowCount: 0,
+          channelMovieCount: 0,
+          currentProgram: null,
+          nextProgram: null,
+        };
+        return [...list, summary].sort((a, b) => a.number - b.number);
+      });
+      void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === 'guide',
+      });
       
       // Also invalidate the selected channel query
       if (selectedChannelId) {
