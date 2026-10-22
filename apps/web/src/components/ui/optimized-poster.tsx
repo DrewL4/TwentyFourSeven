@@ -1,5 +1,6 @@
 "use client";
 
+import { mediaImageSrc } from "@/utils/media-image";
 import Image from "next/image";
 import { useState } from "react";
 import { Film, Tv, ImageIcon } from "lucide-react";
@@ -17,7 +18,7 @@ interface OptimizedPosterProps {
 }
 
 export function OptimizedPoster({ 
-  src, 
+  src: rawSrc, 
   alt, 
   title, 
   type = 'movie', 
@@ -37,6 +38,7 @@ export function OptimizedPoster({
   };
 
   const Icon = getIcon();
+  const src = mediaImageSrc(rawSrc);
 
   // If no src is provided, show fallback immediately
   if (!src) {
@@ -79,7 +81,7 @@ export function OptimizedPoster({
             ? "(max-width: 640px) 33vw, (max-width: 1024px) 20vw, 150px"
             : "(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
         }
-        unoptimized={src.includes('plex.direct') || src.includes('192.168') || src.includes('127.0.0.1') || src.includes('localhost')}
+        unoptimized={src.startsWith('/images/') || src.includes('plex.direct') || src.includes('192.168') || src.includes('127.0.0.1') || src.includes('localhost')}
       />
 
       {/* Loading state */}

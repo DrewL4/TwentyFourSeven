@@ -1,5 +1,6 @@
 "use client";
 
+import { mediaImageSrc } from "@/utils/media-image";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
@@ -262,7 +263,7 @@ export function ChannelProgrammingList({
                       )}
 
                       <img
-                        src={item.poster || "/placeholder.png"}
+                        src={mediaImageSrc(item.poster) || "/placeholder.png"}
                         alt=""
                         className="w-10 h-14 object-cover rounded border flex-shrink-0"
                       />

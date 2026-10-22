@@ -1,5 +1,6 @@
 "use client";
 
+import { mediaImageSrc } from "@/utils/media-image";
 import { FixedSizeList as List, type ListChildComponentProps } from "react-window";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,7 +57,7 @@ function ChannelRow({
           </Badge>
           {channel.icon && (
             <img
-              src={channel.icon}
+              src={mediaImageSrc(channel.icon)}
               alt=""
               className="w-6 h-6 rounded object-cover"
               onError={(e) => {

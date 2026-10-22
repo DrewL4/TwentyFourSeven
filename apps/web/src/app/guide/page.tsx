@@ -1,4 +1,5 @@
 "use client"
+import { mediaImageSrc } from "@/utils/media-image";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -475,7 +476,7 @@ export default function GuidePage() {
                     </Badge>
                     {channel.icon && (
                       <img 
-                        src={channel.icon} 
+                        src={mediaImageSrc(channel.icon)} 
                         alt=""
                         className="w-8 h-8 rounded object-cover"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -535,7 +536,7 @@ export default function GuidePage() {
                       <div className="flex items-start gap-3">
                         {(current.episode?.show.poster || current.movie?.poster) && (
                           <img
-                            src={current.episode?.show.poster || current.movie?.poster || ''}
+                            src={mediaImageSrc(current.episode?.show.poster || current.movie?.poster) || ''}
                             alt=""
                             className="w-12 h-16 object-cover rounded flex-shrink-0"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -598,7 +599,7 @@ export default function GuidePage() {
                       <div className="flex items-center gap-3">
                         {(next.episode?.show.poster || next.movie?.poster) && (
                           <img
-                            src={next.episode?.show.poster || next.movie?.poster || ''}
+                            src={mediaImageSrc(next.episode?.show.poster || next.movie?.poster) || ''}
                             alt=""
                             className="w-8 h-10 object-cover rounded flex-shrink-0"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -892,7 +893,7 @@ export default function GuidePage() {
             setIsCatchupMode(false);
             setCatchupTime(undefined);
           }}
-          posterImage={playingChannel.icon || undefined}
+          posterImage={mediaImageSrc(playingChannel.icon)}
           autoPlay={true}
           isLiveTV={!isCatchupMode}
           isCatchup={isCatchupMode}

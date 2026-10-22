@@ -1,4 +1,5 @@
 "use client"
+import { mediaImageSrc } from "@/utils/media-image";
 import React from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
@@ -1251,7 +1252,7 @@ function AddContentDialog({
                            onCheckedChange={() => toggleShowSelection(show.id)}
                          />
                          <img 
-                           src={show.poster || "/placeholder.png"} 
+                           src={mediaImageSrc(show.poster) || "/placeholder.png"} 
                            alt={show.title}
                            className="w-8 h-12 object-cover rounded"
                          />
@@ -1466,7 +1467,7 @@ function AddContentDialog({
                       onCheckedChange={() => toggleMovieSelection(movie.id)}
                     />
                     <img 
-                      src={movie.poster || "/placeholder.png"} 
+                      src={mediaImageSrc(movie.poster) || "/placeholder.png"} 
                       alt={movie.title}
                       className="w-8 h-12 object-cover rounded"
                     />
@@ -2757,7 +2758,7 @@ function ChannelsPageContent() {
                             </Badge>
                             {channel.icon && (
                               <img 
-                                src={channel.icon} 
+                                src={mediaImageSrc(channel.icon)} 
                                 alt=""
                                 className="w-4 h-4 rounded object-cover"
                                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -2779,7 +2780,7 @@ function ChannelsPageContent() {
                         </Badge>
                         {channel.icon && (
                           <img 
-                            src={channel.icon} 
+                            src={mediaImageSrc(channel.icon)} 
                             alt=""
                             className="w-4 h-4 rounded object-cover"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -3207,7 +3208,7 @@ function ChannelsPageContent() {
                       <div className="flex items-center gap-3">
                         {selectedSummary!.icon && (
                           <img 
-                            src={selectedSummary!.icon!} 
+                            src={mediaImageSrc(selectedSummary!.icon!)} 
                             alt=""
                             className="w-8 h-8 rounded object-cover"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}

@@ -1,5 +1,6 @@
 "use client";
 
+import { mediaImageSrc } from "@/utils/media-image";
 import type { KeyboardEvent } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,7 +97,7 @@ export function GuideDesktopChannelRow({
           </Badge>
           {channel.icon ? (
             <img
-              src={channel.icon}
+              src={mediaImageSrc(channel.icon)}
               alt=""
               className="w-6 h-6 rounded object-cover flex-shrink-0"
               onError={(e) => {
