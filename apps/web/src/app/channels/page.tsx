@@ -1795,9 +1795,9 @@ function ChannelsPageContent() {
       // Put the new channel in the list right away so its panel can render,
       // then refetch to get the real data from the server.
       const queryKey = orpc.channels.listSummary.queryOptions().queryKey;
-      queryClient.setQueryData(queryKey, (old: ChannelSummary[] | undefined) => {
-        const list = old ?? [];
-        if (list.some((ch) => ch.id === data.id)) return list;
+      queryClient.setQueryData(queryKey, (old) => {
+        const list = (old ?? []) as ChannelSummary[];
+        if (list.some((ch) => ch.id === data.id)) return old;
         const summary: ChannelSummary = {
           id: data.id,
           number: data.number,
@@ -1813,7 +1813,7 @@ function ChannelsPageContent() {
           currentProgram: null,
           nextProgram: null,
         };
-        return [...list, summary].sort((a, b) => a.number - b.number);
+        return [...list, summary].sort((a, b) => a.number - b.number) as typeof old;
       });
       void queryClient.invalidateQueries({ queryKey });
       void queryClient.invalidateQueries({
@@ -1889,9 +1889,9 @@ function ChannelsPageContent() {
       // Put the new channel in the list right away so its panel can render,
       // then refetch to get the real data from the server.
       const queryKey = orpc.channels.listSummary.queryOptions().queryKey;
-      queryClient.setQueryData(queryKey, (old: ChannelSummary[] | undefined) => {
-        const list = old ?? [];
-        if (list.some((ch) => ch.id === data.id)) return list;
+      queryClient.setQueryData(queryKey, (old) => {
+        const list = (old ?? []) as ChannelSummary[];
+        if (list.some((ch) => ch.id === data.id)) return old;
         const summary: ChannelSummary = {
           id: data.id,
           number: data.number,
@@ -1907,7 +1907,7 @@ function ChannelsPageContent() {
           currentProgram: null,
           nextProgram: null,
         };
-        return [...list, summary].sort((a, b) => a.number - b.number);
+        return [...list, summary].sort((a, b) => a.number - b.number) as typeof old;
       });
       void queryClient.invalidateQueries({ queryKey });
       void queryClient.invalidateQueries({
