@@ -73,6 +73,9 @@ export default function LoginPage() {
             <p className="mt-1 text-sm text-muted-foreground">
               Use the same email (or username) and password as your WatchTower account
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              WatchTower is the shared sign-in for your media apps, so TwentyFourSeven doesn&apos;t have a separate password.
+            </p>
           </div>
 
           <WatchTowerLoginForm
