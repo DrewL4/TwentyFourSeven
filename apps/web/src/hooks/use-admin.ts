@@ -9,11 +9,16 @@ import { TFS_USER_UPDATES_EVENT } from "@/constants/userRealtime";
 export function useAdmin() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [roleLoading, setRoleLoading] = useState(true);
+  // Which signed-in user the current role belongs to. Until it matches the
+  // session, the role is still loading (avoids a render where a fresh session
+  // looks like a non-admin and admin pages redirect away).
+  const [roleFor, setRoleFor] = useState<string | null | undefined>(undefined);
+  const userId = session?.user?.id ?? null;
 
   const fetchRole = useCallback(async () => {
-    if (!session?.user?.id) {
-      setRoleLoading(false);
+    if (!userId) {
+      setUserRole(null);
+      setRoleFor(null);
       return;
     }
     try {
@@ -31,9 +36,9 @@ export function useAdmin() {
     } catch {
       setUserRole(null);
     } finally {
-      setRoleLoading(false);
+      setRoleFor(userId);
     }
-  }, [session?.user?.id]);
+  }, [userId]);
 
   useEffect(() => {
     void fetchRole();
@@ -51,7 +56,7 @@ export function useAdmin() {
 
   return {
     isAdmin,
-    isLoading: sessionPending || roleLoading,
+    isLoading: sessionPending || roleFor !== userId,
     session: session ? {
       ...session,
       user: {
