@@ -82,4 +82,8 @@ describe("library list select shapes", () => {
     assert.equal(libraryMovieListSelect.poster, true);
     assert.equal("summary" in libraryMovieListSelect, false);
   });
+
+  it("movie list select includes duration so Add Content can show the length", () => {
+    assert.equal(libraryMovieListSelect.duration, true);
+  });
 });

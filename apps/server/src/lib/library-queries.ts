@@ -48,6 +48,8 @@ export const libraryMovieListSelect = {
   year: true,
   poster: true,
   tmdbId: true,
+  /** Add Content shows "<year> • <n> min" for each movie. */
+  duration: true,
   library: { select: { id: true, name: true } },
 } satisfies Prisma.MediaMovieSelect;
 

@@ -1,5 +1,6 @@
 "use client"
 import { mediaImageSrc } from "@/utils/media-image";
+import { formatMinutes } from "@/utils/format-duration";
 import React from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { orpc } from "@/utils/orpc";
@@ -1474,7 +1475,7 @@ function AddContentDialog({
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium truncate">{movie.title}</h4>
                       <p className="text-sm text-muted-foreground">
-                        {movie.year} • {Math.floor(movie.duration / 60000)} min
+                        {[movie.year, formatMinutes(movie.duration)].filter(Boolean).join(" • ")}
                       </p>
                     </div>
                     <Tooltip>
