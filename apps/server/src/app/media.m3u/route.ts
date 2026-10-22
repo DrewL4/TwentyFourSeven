@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
+import { createPlayerImageLinker } from "@/lib/plex-image";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,12 +23,11 @@ export async function GET(request: NextRequest) {
 
     // Helpers
     const isAbsolute = (url?: string | null) => !!url && /^(https?:)?\/\//i.test(url);
-    const toPlexProxy = (url: string): string => {
-      const u = new URL(url);
-      u.searchParams.delete('X-Plex-Token');
-      const pathWithQuery = u.pathname + (u.search ? u.search : '');
-      return `${baseUrl}/images/plex?origin=${encodeURIComponent(u.origin)}&path=${encodeURIComponent(pathWithQuery)}`;
-    };
+    // Players load logos without a session, so Plex artwork links are signed.
+    const playerImage = createPlayerImageLinker(
+      await prisma.mediaServer.findMany({ where: { type: 'PLEX' }, select: { url: true, token: true } })
+    );
+    const toPlexProxy = (url: string): string => playerImage(url, baseUrl);
 
     // Pre-compute best icon for each channel using Plex posters where available
     const channelIconMap = new Map<string, string>();
@@ -52,10 +52,7 @@ export async function GET(request: NextRequest) {
               const directories = data?.MediaContainer?.Directory || [];
               for (const d of directories) {
                 if (collectionNames.includes(d.title) && d.thumb) {
-                  const u = new URL(`${server.url}${d.thumb}`);
-                  u.searchParams.set('X-Plex-Token', server.token);
-                  // Route will strip token; provide origin+path
-                  return `${baseUrl}/images/plex?origin=${encodeURIComponent(server.url)}&path=${encodeURIComponent(d.thumb)}`;
+                  return toPlexProxy(new URL(d.thumb, server.url).toString());
                 }
               }
             } catch {}
@@ -72,7 +69,7 @@ export async function GET(request: NextRequest) {
           try {
             const u = new URL(channel.icon as string);
             if (!u.searchParams.has('X-Plex-Token')) {
-              channelIconMap.set(channel.id, channel.icon as string);
+              channelIconMap.set(channel.id, toPlexProxy(channel.icon as string));
               return;
             }
           } catch {}
@@ -123,7 +120,7 @@ export async function GET(request: NextRequest) {
       const iconUrl = channelIconMap.get(channel.id) || (isAbsolute(channel.icon) ? (() => {
         try {
           const u = new URL(channel.icon as string);
-          return u.searchParams.has('X-Plex-Token') ? toPlexProxy(channel.icon as string) : (channel.icon as string);
+          return toPlexProxy(u.toString());
         } catch {
           return undefined;
         }

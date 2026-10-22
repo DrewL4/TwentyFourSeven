@@ -9,6 +9,7 @@ import {
   XMLTV_BASE_URL_PLACEHOLDER,
 } from "@/lib/xmltv-static-cache";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
+import { createPlayerImageLinker, parsePlexImageReference } from "@/lib/plex-image";
 import { createReadStream } from "fs";
 import { Readable } from "stream";
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -85,12 +86,11 @@ export async function GET(request: NextRequest) {
 
     // Helper to ensure absolute URLs
     const isAbsolute = (url?: string | null) => !!url && /^(https?:)?\/\//i.test(url);
-    const toPlexProxy = (baseUrl: string, url: string): string => {
-      const u = new URL(url);
-      u.searchParams.delete('X-Plex-Token');
-      const pathWithQuery = u.pathname + (u.search ? u.search : '');
-      return `${baseUrl}/images/plex?origin=${encodeURIComponent(u.origin)}&path=${encodeURIComponent(pathWithQuery)}`;
-    };
+    // Players load artwork without a session, so Plex artwork links are signed.
+    const playerImage = createPlayerImageLinker(
+      await prisma.mediaServer.findMany({ where: { type: 'PLEX' }, select: { url: true, token: true } })
+    );
+    const toPlexProxy = (baseUrl: string, url: string): string => playerImage(url, baseUrl);
 
     // The cached guide is shared by all clients; the real address is filled in per request.
     const baseUrl = XMLTV_BASE_URL_PLACEHOLDER;
@@ -165,14 +165,19 @@ export async function GET(request: NextRequest) {
       if (isAbsolute(channel.icon)) {
         try {
           const u = new URL(channel.icon as string);
-          channelIconMap.set(channel.id, u.searchParams.has('X-Plex-Token') ? toPlexProxy(baseUrl, channel.icon as string) : (channel.icon as string));
+          channelIconMap.set(channel.id, toPlexProxy(baseUrl, u.toString()));
           continue;
         } catch {}
       }
 
       // Use pre-cached Plex collection artwork if available
     if (channel.cachedCollectionIcon) {
-      channelIconMap.set(channel.id, toPlaceholderIconUrl(channel.cachedCollectionIcon));
+      channelIconMap.set(
+        channel.id,
+        parsePlexImageReference(channel.cachedCollectionIcon)
+          ? toPlexProxy(baseUrl, channel.cachedCollectionIcon)
+          : toPlaceholderIconUrl(channel.cachedCollectionIcon)
+      );
       continue;
     }
 
@@ -181,7 +186,7 @@ export async function GET(request: NextRequest) {
     if (isAbsolute(channel.icon)) {
       try {
         const u = new URL(channel.icon as string);
-        channelIconMap.set(channel.id, u.searchParams.has('X-Plex-Token') ? toPlexProxy(baseUrl, channel.icon as string) : (channel.icon as string));
+        channelIconMap.set(channel.id, toPlexProxy(baseUrl, u.toString()));
         continue;
       } catch {}
     }
@@ -225,7 +230,7 @@ export async function GET(request: NextRequest) {
       const iconUrl = channelIconMap.get(channel.id) || (isAbsolute(channel.icon) ? (() => {
         try {
           const u = new URL(channel.icon as string);
-          return u.searchParams.has('X-Plex-Token') ? toPlexProxy(baseUrl, channel.icon as string) : (channel.icon as string);
+          return toPlexProxy(baseUrl, u.toString());
         } catch {
           return undefined;
         }

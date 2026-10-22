@@ -2,6 +2,7 @@ import { prisma } from './prisma';
 import { TimingService } from './timing-service';
 import { invalidateXmlTvCache } from './xmltv-static-cache';
 import { scheduleXmlTvWarm } from './xmltv-warm';
+import { buildPlexImageLink, normalizePlexImageTarget } from './plex-image';
 
 async function invalidateXmlTvCacheSafe() {
   try {
@@ -1101,7 +1102,8 @@ export class ProgrammingService {
             const directories = data?.MediaContainer?.Directory || [];
             for (const d of directories) {
               if (collectionNames.includes(d.title) && d.thumb) {
-                return `${baseUrl}/images/plex?origin=${encodeURIComponent(server.url)}&path=${encodeURIComponent(d.thumb)}`;
+                const target = normalizePlexImageTarget(new URL(server.url).origin, d.thumb);
+                if (target) return buildPlexImageLink(target, { baseUrl });
               }
             }
           } catch {}
