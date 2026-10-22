@@ -144,7 +144,23 @@ set -e
 # Set default environment variables if not provided
 export PORT=${PORT:-3000}
 export DATABASE_URL=${DATABASE_URL:-"file:/app/database/production.db"}
-export BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-"$(openssl rand -hex 32)"}
+# Auth secret: use the env value if given; otherwise generate once and keep it in the
+# database volume so restarts/updates don't log everyone out.
+# (xtrace is paused here so the secret is never written to the container log.)
+{ set +x; } 2>/dev/null
+if [ -z "$BETTER_AUTH_SECRET" ] || [ "$BETTER_AUTH_SECRET" = "auto-generated" ]; then
+    AUTH_SECRET_FILE=${BETTER_AUTH_SECRET_FILE:-/app/database/.better_auth_secret}
+    mkdir -p "$(dirname "$AUTH_SECRET_FILE")"
+    if [ -s "$AUTH_SECRET_FILE" ]; then
+        echo "🔑 Using saved auth secret from $AUTH_SECRET_FILE"
+    else
+        (umask 077; openssl rand -hex 32 > "$AUTH_SECRET_FILE")
+        echo "🔑 Generated new auth secret and saved it to $AUTH_SECRET_FILE"
+    fi
+    BETTER_AUTH_SECRET="$(cat "$AUTH_SECRET_FILE")"
+fi
+export BETTER_AUTH_SECRET
+set -x
 
 # Handle external domain configuration (for Nginx Proxy Manager and reverse proxies)
 if [ -n "$EXTERNAL_DOMAIN" ]; then

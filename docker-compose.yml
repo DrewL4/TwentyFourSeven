@@ -9,23 +9,24 @@ services:
       - ./database:/app/database
       - ./static:/app/static
     environment:
-      # External domain configuration
-      - EXTERNAL_DOMAIN=247.midweststreams.us
-      - EXTERNAL_PROTOCOL=https
+      # External domain configuration (set these if you use a reverse proxy / your own domain)
+      # - EXTERNAL_DOMAIN=tv.example.com
+      # - EXTERNAL_PROTOCOL=https
       - EXTERNAL_HTTP_PORT=8080
       
       # Database configuration
       - DATABASE_URL=file:/app/database/production.db
       
-      # Authentication
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-auto-generated}
+      # Authentication: leave BETTER_AUTH_SECRET unset to have one generated once and
+      # saved in ./database (kept across restarts). Set it yourself to override.
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-}
       
       # GPU settings (optional)
       - GPU_DETECTION_ENABLED=true
       - ENABLE_HARDWARE_ACCEL=true
       
       # Trusted origins for security
-      - TRUSTED_ORIGINS=https://247.midweststreams.us,http://localhost:8080
+      # - TRUSTED_ORIGINS=https://tv.example.com,http://localhost:8080
     
     # For GPU support (optional)
     # runtime: nvidia
@@ -35,7 +36,7 @@ services:
     
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/", "||", "exit", "1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
