@@ -1,5 +1,9 @@
 # NVIDIA GPU Setup Guide for Unraid (TwentyFourSeven-Style Implementation)
 
+> **Developer reference (older notes).** For a normal install, follow [README.md](../README.md).
+> The published image is `drew4/twentyfourseven:latest`, so you don't need to build anything yourself. App tokens are made in WatchTower:
+> **Admin → Connections → WatchTower Guide & TFS Connect → Create App Tokens**.
+
 This guide will walk you through setting up NVIDIA GPU hardware acceleration for TwentyFourSeven on Unraid, following the same proven patterns used by TwentyFourSeven.
 
 ## Key Changes - TwentyFourSeven-Style Implementation

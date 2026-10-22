@@ -1,6 +1,13 @@
-# TwentyFour/Seven
+# TwentyFour/Seven (TFS)
 
-A modern, self-hosted IPTV server that creates virtual TV channels from your media library. Stream your Plex content as traditional TV channels with continuous programming, channel automation, and seamless playback.
+TwentyFour/Seven turns your Plex library into always-on TV channels, with a program guide, that any IPTV app can play. It is a sister app of **WatchTower**. Everyone signs in with their WatchTower account.
+
+**Install WatchTower first.** TFS sign-in only works through WatchTower, so set WatchTower up and create your WatchTower admin account before this. See the WatchTower README.
+
+Setup order:
+1. WatchTower
+2. WatchTower Guide
+3. TwentyFourSeven (this page)
 
 ## Features
 
@@ -22,7 +29,58 @@ A modern, self-hosted IPTV server that creates virtual TV channels from your med
 - **Smart Content Rotation** - Content loops seamlessly when reaching the end of your library
 - **Automated Content Discovery** - Channels can automatically add new content based on your filter criteria
 
-## Getting Started
+---
+
+## Install on Unraid
+
+### Step 1: Add the container
+
+Go to **Docker → Add Container** and pick the **TwentyFourSeven** template (`twentyfourseven-unraid-template.xml` in this repo), or enter the repository `drew4/twentyfourseven:latest`. Then fill in:
+
+| Field | What to enter |
+|---|---|
+| **HTTP Port** | `8088`, or any free port. You open TFS at `http://YOUR-UNRAID-IP:PORT` |
+| **Server URL** | The address you open TFS with, for example `http://192.168.1.50:8088` or `https://tv.example.com` |
+| **Trusted Origins** | Every address you open TFS with, separated by commas. For example: `http://localhost:8088,http://192.168.1.50:8088,https://tv.example.com`. If your address is missing, sign-in fails. |
+| **Database Storage** | `/mnt/user/appdata/twentyfourseven/database`. **Don't leave it empty.** It holds your channels and settings, and the sign-in key. |
+| **Static Files Storage** | `/mnt/user/appdata/twentyfourseven/static`. Files placed here can be opened at `http://YOUR-UNRAID-IP:PORT/files/`. |
+| **Authentication Secret** | Leave empty. TFS makes one on first start and saves it in the Database Storage folder, so restarts and updates don't sign anyone out. |
+| **Timezone** | For example `America/Chicago` (under **Show more settings**) |
+
+**Using your own domain** (for example through Nginx Proxy Manager)? At the bottom of the template, use **Add another Path, Port, Variable, Label or Device** to add the variables `EXTERNAL_DOMAIN` (for example `tv.example.com`) and `EXTERNAL_PROTOCOL` (`https`). TFS then builds its own addresses from them.
+
+**Graphics card (optional):** TFS works without one. For faster video with an NVIDIA card, you need the Unraid NVIDIA-Driver plugin. Then add `--runtime=nvidia` to **Extra Parameters** (under **Show more settings**). Leave **NVIDIA Visible Devices** at `all`. For Intel or AMD, set **Hardware Acceleration Device** to `/dev/dri/renderD128` and add the `/dev/dri` device.
+
+If you see "permission denied" errors for the database or static folder, run this once in the Unraid terminal:
+`chown -R 1001:100 /mnt/user/appdata/twentyfourseven`
+
+Click **Apply**.
+
+### Step 2: Connect TFS to WatchTower
+
+1. In **WatchTower**, go to **Admin → Connections → WatchTower Guide & TFS Connect**. If the TwentyFourSeven card has no token yet, click **Create App Tokens**.
+2. On the **TwentyFourSeven** card, type TFS's address (the Server URL from Step 1) and click **Connect**. WatchTower sends TFS its address and token.
+3. If TFS still shows **First-time server setup** on its **Sign in with WatchTower** page, fill it in by hand:
+   - **WatchTower server URL**: your WatchTower address, for example `https://watchtower.example.com`
+   - **Integration API token**: the TwentyFourSeven token from that WatchTower page
+
+### Step 3: Sign in
+
+On the same page, sign in with your WatchTower email and password.
+
+---
+
+## Good to know
+
+- **Updates:** updating the container is enough. Your channels and the sign-in key are kept in the Database Storage folder.
+- **Health check:** `http://YOUR-UNRAID-IP:PORT/api/health` should answer with `"status":"ok"`.
+- **Docker Hub image:** pushing to `main` builds and pushes `drew4/twentyfourseven:latest` on GitHub's own servers (`.github/workflows/docker-build.yml`).
+
+---
+
+## For developers
+
+### Local development
 
 First, install the dependencies:
 
@@ -30,7 +88,7 @@ First, install the dependencies:
 npm install
 ```
 
-### Environment Configuration
+#### Environment configuration
 
 Configure your environment variables for both applications:
 
@@ -46,7 +104,7 @@ To verify your configuration is correct, run:
 npm run check-env
 ```
 
-#### Port Configuration
+##### Port configuration
 
 By default:
 - **Server** runs on port `3000`
@@ -70,7 +128,7 @@ NEXT_PUBLIC_SERVER_URL=http://localhost:3000
 ```
 
 > **Important:** If you change the server port, make sure to update `NEXT_PUBLIC_SERVER_URL` in the web `.env` and `BETTER_AUTH_URL` in the server `.env`. If you change the web port, update `CORS_ORIGIN` in the server `.env`.
-## Database Setup
+#### Database setup
 
 This project uses SQLite with Prisma.
 
@@ -99,7 +157,7 @@ The API is running at [http://localhost:3000](http://localhost:3000).
 
 
 
-## Project Structure
+#### Project structure
 
 ```
 my-app/
@@ -108,7 +166,7 @@ my-app/
 │   └── server/      # Backend API (Next, ORPC)
 ```
 
-## Available Scripts
+#### Available scripts
 
 - `npm run dev`: Start all applications in development mode
 - `npm run build`: Build all applications

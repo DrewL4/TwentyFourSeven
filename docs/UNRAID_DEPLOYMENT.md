@@ -1,5 +1,9 @@
 # Unraid Docker Deployment Guide
 
+> **Developer reference (older notes).** For a normal install, follow [README.md](../README.md).
+> The published image is `drew4/twentyfourseven:latest`, so you don't need to build anything yourself. App tokens are made in WatchTower:
+> **Admin → Connections → WatchTower Guide & TFS Connect → Create App Tokens**.
+
 This guide will help you deploy your application as a Docker container on Unraid.
 
 ## 🚀 Quick Start

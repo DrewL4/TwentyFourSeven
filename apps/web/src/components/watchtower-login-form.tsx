@@ -150,7 +150,7 @@ export default function WatchTowerLoginForm({
                 type={showApiToken ? "text" : "password"}
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
-                placeholder="From WatchTower → Integration Management"
+                placeholder="From WatchTower → Connections → WatchTower Guide & TFS Connect"
                 autoComplete="off"
                 disabled={isLoading}
                 required

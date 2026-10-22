@@ -45,7 +45,7 @@ const WatchTowerConnectionSetup: React.FC = () => {
       {
         id: 'enter-token',
         title: 'Enter WatchTower API Token',
-        description: 'Get this from your WatchTower admin panel under Integration Management',
+        description: 'Get this from WatchTower: Admin → Connections → WatchTower Guide & TFS Connect',
         completed: false
       },
       {
@@ -399,7 +399,7 @@ const WatchTowerConnectionSetup: React.FC = () => {
                 )}
               </div>
               <p className="text-sm text-gray-600">
-                Get this token from WatchTower Admin → Integration Management → Create App Tokens
+                Get this token from WatchTower: Admin → Connections → WatchTower Guide & TFS Connect → Create App Tokens
               </p>
             </div>
 

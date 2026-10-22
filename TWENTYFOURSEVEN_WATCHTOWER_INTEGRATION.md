@@ -1,5 +1,9 @@
 # TwentyFourSeven ↔ WatchTower Integration Guide
 
+> **Developer reference (older notes).** For a normal install, follow [README.md](README.md).
+> The published image is `drew4/twentyfourseven:latest`, so you don't need to build anything yourself. App tokens are made in WatchTower:
+> **Admin → Connections → WatchTower Guide & TFS Connect → Create App Tokens**.
+
 ## 🎯 Overview
 
 This guide shows exactly how TwentyFourSeven integrates with WatchTower as the central hub. WatchTower becomes the **single source of truth** for user management, while TwentyFourSeven provides the TV streaming service.
@@ -87,12 +91,7 @@ npx prisma db push
 
 ### Step 4: Get Your API Token
 
-From WatchTower setup:
-
-```bash
-cd WatchTower/backend
-python manage.py setup_cross_app_tokens
-```
+In WatchTower, open **Admin → Connections → WatchTower Guide & TFS Connect** and click **Create App Tokens**. (Developers can also run `python manage.py setup_cross_app_tokens` in WatchTower's backend.)
 
 Copy the TwentyFourSeven token to your `.env` file.
 
