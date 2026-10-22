@@ -8,6 +8,26 @@ import { buildChannelsListSummary, getChannelLineup, getChannelShowEpisodes } fr
 import { guideRouter } from "./guide-router";
 import { libraryRouter } from "./library-router";
 import { franchisesRouter } from "./franchises-router";
+import { resolvePlexCredentials, toPublicServer, tokenUpdate } from "../lib/media-server-public";
+
+// Plex checks take either a token typed by the admin, or a saved server's id so the
+// stored token is used server-side and never sent to the browser.
+const plexCheckInput = z.object({
+  url: z.string().url().optional(),
+  token: z.string().optional(),
+  serverId: z.string().optional(),
+});
+
+async function loadPlexCredentials(input: z.infer<typeof plexCheckInput>) {
+  const stored = input.serverId
+    ? await prisma.mediaServer.findUnique({
+        where: { id: input.serverId },
+        select: { url: true, token: true },
+      })
+    : null;
+  if (input.serverId && !stored) return { error: "Server not found" };
+  return resolvePlexCredentials(input, stored);
+}
 
 export const appRouter = {
   healthCheck: publicProcedure.handler(() => {
@@ -1116,7 +1136,7 @@ export const appRouter = {
   // Media Server Management
   servers: {
     list: adminProcedure.handler(async () => {
-      return await prisma.mediaServer.findMany({
+      const servers = await prisma.mediaServer.findMany({
         include: {
           libraries: {
             include: {
@@ -1126,6 +1146,7 @@ export const appRouter = {
           }
         }
       });
+      return servers.map(toPublicServer);
     }),
 
     listForLibrary: adminProcedure.handler(async () => {
@@ -1158,9 +1179,9 @@ export const appRouter = {
         active: z.boolean().default(true)
       }))
       .handler(async ({ input }) => {
-        return await prisma.mediaServer.create({
+        return toPublicServer(await prisma.mediaServer.create({
           data: input
-        });
+        }));
       }),
 
     update: adminProcedure
@@ -1173,19 +1194,20 @@ export const appRouter = {
         active: z.boolean().optional()
       }))
       .handler(async ({ input }) => {
-        const { id, ...data } = input;
-        return await prisma.mediaServer.update({
+        const { id, token, ...data } = input;
+        // A blank token field means "keep the stored token".
+        return toPublicServer(await prisma.mediaServer.update({
           where: { id },
-          data
-        });
+          data: { ...data, token: tokenUpdate(token) }
+        }));
       }),
 
     delete: adminProcedure
       .input(z.object({ id: z.string() }))
       .handler(async ({ input }) => {
-        return await prisma.mediaServer.delete({
+        return toPublicServer(await prisma.mediaServer.delete({
           where: { id: input.id }
-        });
+        }));
       }),
 
     syncLibraries: adminProcedure
@@ -1196,13 +1218,12 @@ export const appRouter = {
       }),
 
     testConnection: adminProcedure
-      .input(z.object({
-        url: z.string().url(),
-        token: z.string()
-      }))
+      .input(plexCheckInput)
       .handler(async ({ input }) => {
         const { PlexService } = await import('../lib/plex-service');
-        const result = await PlexService.testConnection(input.url, input.token);
+        const creds = await loadPlexCredentials(input);
+        if ('error' in creds) return { valid: false as const, error: creds.error };
+        const result = await PlexService.testConnection(creds.url, creds.token);
         return result.ok ? { valid: true as const } : { valid: false as const, error: result.error };
       }),
 
@@ -1286,24 +1307,20 @@ export const appRouter = {
       }))
       .handler(async ({ input }) => {
         const { PlexService } = await import('../lib/plex-service');
-        return await PlexService.addPlexServer(input);
+        return toPublicServer(await PlexService.addPlexServer(input));
       }),
 
     getServerInfo: adminProcedure
-      .input(z.object({
-        url: z.string().url(),
-        token: z.string()
-      }))
+      .input(plexCheckInput)
       .handler(async ({ input }) => {
         const { PlexService } = await import('../lib/plex-service');
-        return await PlexService.getServerInfo(input.url, input.token);
+        const creds = await loadPlexCredentials(input);
+        if ('error' in creds) throw new ORPCError("BAD_REQUEST", { message: creds.error });
+        return await PlexService.getServerInfo(creds.url, creds.token);
       }),
 
     getLibraries: adminProcedure
-      .input(z.object({
-        url: z.string().url(),
-        token: z.string()
-      }))
+      .input(plexCheckInput)
       .handler(async ({ input }): Promise<Array<{
         key: string;
         title: string;
@@ -1320,10 +1337,12 @@ export const appRouter = {
           isPlexLibrarySyncable,
           normalizePlexLibraryKey,
         } = await import('../lib/plex-service');
-        const plex = new PlexAPI({ uri: input.url });
+        const creds = await loadPlexCredentials(input);
+        if ('error' in creds) throw new ORPCError("BAD_REQUEST", { message: creds.error });
+        const plex = new PlexAPI({ uri: creds.url });
         let libraries;
         try {
-          libraries = await plex.getLibraries(input.url, input.token);
+          libraries = await plex.getLibraries(creds.url, creds.token);
         } catch (error) {
           // A plain Error would reach the browser as "Internal server error".
           if (error instanceof PlexRequestError) {

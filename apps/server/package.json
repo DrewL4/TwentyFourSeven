@@ -11,7 +11,7 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate --schema ./prisma/schema",
     "db:migrate": "prisma migrate dev",
-    "test": "node --import tsx --test src/lib/stream-limit.test.ts src/lib/shared-live-transcode.test.ts src/lib/resolve-live-program.test.ts src/lib/orphan-session-cleanup.test.ts src/lib/channel-summary-shape.test.ts src/lib/library-summary-shape.test.ts src/lib/timing-service.catchup.test.ts src/lib/franchise-sort-service.test.ts src/lib/franchise-sync-service.test.ts src/lib/franchise-collection-order.test.ts src/lib/franchise-story-supplements.test.ts src/lib/plex-guid.test.ts src/lib/ffmpeg-live-args.test.ts src/lib/watchtower-reach.test.ts src/lib/admin-auth.test.ts src/lib/plex-connection.test.ts src/lib/public-base-url.test.ts src/lib/xmltv-base-url.test.ts src/lib/plex-image-access.test.ts src/lib/plex-token-scrub.test.ts"
+    "test": "node --import tsx --test src/lib/stream-limit.test.ts src/lib/shared-live-transcode.test.ts src/lib/resolve-live-program.test.ts src/lib/orphan-session-cleanup.test.ts src/lib/channel-summary-shape.test.ts src/lib/library-summary-shape.test.ts src/lib/timing-service.catchup.test.ts src/lib/franchise-sort-service.test.ts src/lib/franchise-sync-service.test.ts src/lib/franchise-collection-order.test.ts src/lib/franchise-story-supplements.test.ts src/lib/plex-guid.test.ts src/lib/ffmpeg-live-args.test.ts src/lib/watchtower-reach.test.ts src/lib/admin-auth.test.ts src/lib/plex-connection.test.ts src/lib/public-base-url.test.ts src/lib/xmltv-base-url.test.ts src/lib/plex-image-access.test.ts src/lib/plex-token-scrub.test.ts src/lib/media-server-public.test.ts"
   },
   "dependencies": {
     "@orpc/client": "^1.15.7",

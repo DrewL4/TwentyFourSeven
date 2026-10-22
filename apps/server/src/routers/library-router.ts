@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ORPCError } from "@orpc/server";
 import { publicProcedure } from "../lib/orpc";
 import { prisma } from "../lib/prisma";
+import { toPublicServer } from "../lib/media-server-public";
 import {
   buildCollectionsFromDb,
   readCollectionsCacheIfFresh,
@@ -81,8 +82,11 @@ export const libraryRouter = {
     });
 
     return {
-      servers,
-      libraries: allLibraries,
+      servers: servers.map(toPublicServer),
+      libraries: allLibraries.map(({ server, ...library }) => ({
+        ...library,
+        server: toPublicServer(server),
+      })),
       counts: {
         servers: servers.length,
         libraries: allLibraries.length,

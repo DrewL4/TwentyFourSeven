@@ -33,7 +33,8 @@ interface PlexServer {
   id: string;
   name: string;
   url: string;
-  token?: string | null;
+  /** The token itself never reaches the browser; the server says whether one is stored. */
+  hasToken: boolean;
   type: string;
   active: boolean;
   libraries?: any[];
@@ -66,12 +67,14 @@ type LibrarySelectionServer = {
   id?: string;
   name: string;
   uri: string;
+  /** Empty for a saved server: its stored token is used server-side via `id`. */
   accessToken: string;
 };
 
 type GetLibrariesVariables = {
   url: string;
-  token: string;
+  token?: string;
+  serverId?: string;
   mode: "create" | "edit";
   requestId: string;
   preselectedKeys?: string[];
@@ -279,10 +282,11 @@ export default function PlexSettingsPage() {
   const getLibrariesMutation = useMutation({
     mutationFn: async (variables: GetLibrariesVariables) => {
       const { client } = await import("@/utils/orpc");
-      const libraries = await client.servers.getLibraries({
-        url: variables.url,
-        token: variables.token,
-      });
+      const libraries = await client.servers.getLibraries(
+        variables.serverId
+          ? { serverId: variables.serverId }
+          : { url: variables.url, token: variables.token },
+      );
       return {
         libraries: normalizeSelectableLibraries(libraries as PlexLibrary[]),
         mode: variables.mode,
@@ -405,7 +409,8 @@ export default function PlexSettingsPage() {
 
       getLibrariesMutation.mutate({
         url: params.server.uri,
-        token: params.server.accessToken,
+        token: params.server.accessToken || undefined,
+        serverId: params.server.accessToken ? undefined : params.server.id,
         mode: params.mode,
         requestId,
         preselectedKeys: params.preselectedKeys?.map(String),
@@ -480,12 +485,12 @@ export default function PlexSettingsPage() {
     setEditForm({
       name: server.name,
       uri: server.url,
-      accessToken: server.token || ''
+      accessToken: ''
     });
   };
 
   const handleEditServerLibraries = (server: PlexServer) => {
-    if (!server.token) {
+    if (!server.hasToken) {
       toast.error('No access token available');
       return;
     }
@@ -497,7 +502,7 @@ export default function PlexSettingsPage() {
         id: server.id,
         name: server.name,
         uri: server.url,
-        accessToken: server.token,
+        accessToken: '',
       },
       mode: "edit",
       preselectedKeys,
@@ -505,15 +510,16 @@ export default function PlexSettingsPage() {
   };
 
   const handleUpdateServer = async (serverId: string) => {
-    if (!editForm.name || !editForm.uri || !editForm.accessToken) {
-      toast.error('Please fill in all fields');
+    if (!editForm.name || !editForm.uri) {
+      toast.error('Please fill in the name and URL');
       return;
     }
+    // A blank token field keeps the stored token.
     updateServerMutation.mutate({
       id: serverId,
       name: editForm.name,
       url: editForm.uri,
-      token: editForm.accessToken
+      ...(editForm.accessToken.trim() ? { token: editForm.accessToken.trim() } : {})
     });
   };
 
@@ -523,12 +529,12 @@ export default function PlexSettingsPage() {
   };
 
   const handleTestConnection = (server: PlexServer) => {
-    if (!server.token) {
+    if (!server.hasToken) {
       toast.error('No access token available');
       return;
     }
     testConnectionMutation.mutate(
-      { url: server.url, token: server.token },
+      { serverId: server.id },
       {
         onSuccess: (data) => {
           if (data.valid) {
@@ -1072,7 +1078,7 @@ export default function PlexSettingsPage() {
                             id={`edit-token-${server.id}`}
                             value={editForm.accessToken}
                             onChange={(e) => setEditForm(prev => ({ ...prev, accessToken: e.target.value }))}
-                            placeholder="Paste the X-Plex-Token value"
+                            placeholder="Leave blank to keep the current token"
                           />
                         </div>
                       </div>
