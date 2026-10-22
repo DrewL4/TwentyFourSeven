@@ -11,7 +11,9 @@ import {
   buildMovieWhere,
   buildShowWhere,
   getCollectionCount,
+  libraryMovieFilterSelect,
   libraryMovieListSelect,
+  libraryShowFilterSelect,
   libraryShowListSelect,
 } from "../lib/library-queries";
 
@@ -99,6 +101,8 @@ export const libraryRouter = {
         limit: z.number().default(50),
         offset: z.number().default(0),
         includeEpisodes: z.boolean().optional().default(false),
+        /** Add Content: also send the fields the smart filters use. */
+        filterFields: z.boolean().optional(),
       }),
     )
     .handler(async ({ input }) => {
@@ -132,7 +136,7 @@ export const libraryRouter = {
         prisma.mediaShow.count({ where }),
         prisma.mediaShow.findMany({
           where,
-          select: libraryShowListSelect,
+          select: input.filterFields ? libraryShowFilterSelect : libraryShowListSelect,
           take: limit,
           skip,
           orderBy: { title: "asc" },
@@ -150,6 +154,8 @@ export const libraryRouter = {
         collection: z.string().optional(),
         limit: z.number().default(50),
         offset: z.number().default(0),
+        /** Add Content: also send the fields the smart filters use. */
+        filterFields: z.boolean().optional(),
       }),
     )
     .handler(async ({ input }) => {
@@ -161,7 +167,7 @@ export const libraryRouter = {
         prisma.mediaMovie.count({ where }),
         prisma.mediaMovie.findMany({
           where,
-          select: libraryMovieListSelect,
+          select: input.filterFields ? libraryMovieFilterSelect : libraryMovieListSelect,
           take: limit,
           skip,
           orderBy: { title: "asc" },
@@ -178,6 +184,8 @@ export const libraryRouter = {
         libraryId: z.string().optional(),
         collection: z.string().optional(),
         limit: z.number().default(40).optional(),
+        /** Add Content: send smart-filter fields and match summaries too. */
+        filterFields: z.boolean().optional(),
       }),
     )
     .handler(async ({ input }) => {
@@ -190,23 +198,25 @@ export const libraryRouter = {
         libraryId: input.libraryId,
         search: q,
         collection: input.collection,
+        searchSummary: input.filterFields,
       });
       const movieWhere = buildMovieWhere({
         libraryId: input.libraryId,
         search: q,
         collection: input.collection,
+        searchSummary: input.filterFields,
       });
 
       const [shows, movies] = await Promise.all([
         prisma.mediaShow.findMany({
           where: showWhere,
-          select: libraryShowListSelect,
+          select: input.filterFields ? libraryShowFilterSelect : libraryShowListSelect,
           orderBy: { title: "asc" },
           take: lim,
         }),
         prisma.mediaMovie.findMany({
           where: movieWhere,
-          select: libraryMovieListSelect,
+          select: input.filterFields ? libraryMovieFilterSelect : libraryMovieListSelect,
           orderBy: { title: "asc" },
           take: lim,
         }),

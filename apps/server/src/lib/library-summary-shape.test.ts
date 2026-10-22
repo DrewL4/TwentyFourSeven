@@ -87,3 +87,25 @@ describe("library list select shapes", () => {
     assert.equal(libraryMovieListSelect.duration, true);
   });
 });
+
+describe("Add Content smart-filter selects", () => {
+  it("add the filter fields but no summaries or heavy relations", async () => {
+    const { libraryMovieFilterSelect, libraryShowFilterSelect, buildMovieWhere } = await import("./library-queries");
+    for (const select of [libraryMovieFilterSelect, libraryShowFilterSelect] as Record<string, unknown>[]) {
+      for (const key of ["genres", "actors", "directors", "studio", "contentRating", "poster", "title", "year"]) {
+        assert.equal(select[key], true, key);
+      }
+      assert.equal(select.summary, undefined);
+      assert.equal(select.episodes, undefined);
+    }
+    // the plain browse lists stay slim
+    assert.equal((libraryMovieListSelect as Record<string, unknown>).genres, undefined);
+    assert.equal((libraryShowListSelect as Record<string, unknown>).actors, undefined);
+    // search can match summaries on the server
+    assert.deepEqual(buildMovieWhere({ search: "rabbit", searchSummary: true }).OR, [
+      { title: { contains: "rabbit" } },
+      { summary: { contains: "rabbit" } },
+    ]);
+    assert.deepEqual(buildMovieWhere({ search: "rabbit" }).title, { contains: "rabbit" });
+  });
+});

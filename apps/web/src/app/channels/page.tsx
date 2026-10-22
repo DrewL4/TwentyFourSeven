@@ -209,14 +209,18 @@ function AddContentDialog({
     enabled: isOpen && debouncedSearch.trim().length < 2,
   });
   const moviesQuery = useQuery({
-    ...orpc.library.movies.queryOptions({ input: { limit: 200 } }),
+    ...orpc.library.movies.queryOptions({ input: { limit: 200, filterFields: true } }),
     enabled: isOpen && debouncedSearch.trim().length < 2,
   });
   const librarySearchQuery = useQuery({
-    ...orpc.library.search.queryOptions({ input: { query: debouncedSearch, limit: 200 } }),
+    ...orpc.library.search.queryOptions({ input: { query: debouncedSearch, limit: 200, filterFields: true } }),
     enabled: isOpen && debouncedSearch.trim().length >= 2,
   });
 
+  // The smart filters read genres/actors/directors/studio/rating, so the lists ask
+  // for those fields (filterFields). Typed searches are matched on the server
+  // (title or summary); the client then only applies the filters.
+  const serverSearchActive = debouncedSearch.trim().length >= 2;
   const catalogShows =
     debouncedSearch.trim().length >= 2
       ? (librarySearchQuery.data?.shows ?? [])
@@ -416,7 +420,7 @@ function AddContentDialog({
 
   // Enhanced filter logic
   const filteredShows = (catalogShows || []).filter((show: any) => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm || serverSearchActive ||
       show.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       show.summary?.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -458,7 +462,7 @@ function AddContentDialog({
   });
 
   const filteredMovies = (catalogMovies || []).filter((movie: any) => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm || serverSearchActive ||
       movie.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       movie.summary?.toLowerCase().includes(searchTerm.toLowerCase());
     

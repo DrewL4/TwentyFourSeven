@@ -4,11 +4,17 @@ export function buildShowWhere(input: {
   libraryId?: string;
   search?: string;
   collection?: string;
+  /** Also match the summary, not just the title. */
+  searchSummary?: boolean;
 }): Prisma.MediaShowWhereInput {
   const where: Prisma.MediaShowWhereInput = {};
   if (input.libraryId) where.libraryId = input.libraryId;
   if (input.search) {
-    where.title = { contains: input.search };
+    if (input.searchSummary) {
+      where.OR = [{ title: { contains: input.search } }, { summary: { contains: input.search } }];
+    } else {
+      where.title = { contains: input.search };
+    }
   }
   if (input.collection) {
     where.collections = { contains: `"${input.collection}"` };
@@ -20,11 +26,17 @@ export function buildMovieWhere(input: {
   libraryId?: string;
   search?: string;
   collection?: string;
+  /** Also match the summary, not just the title. */
+  searchSummary?: boolean;
 }): Prisma.MediaMovieWhereInput {
   const where: Prisma.MediaMovieWhereInput = {};
   if (input.libraryId) where.libraryId = input.libraryId;
   if (input.search) {
-    where.title = { contains: input.search };
+    if (input.searchSummary) {
+      where.OR = [{ title: { contains: input.search } }, { summary: { contains: input.search } }];
+    } else {
+      where.title = { contains: input.search };
+    }
   }
   if (input.collection) {
     where.collections = { contains: `"${input.collection}"` };
@@ -51,6 +63,29 @@ export const libraryMovieListSelect = {
   /** Add Content shows "<year> • <n> min" for each movie. */
   duration: true,
   library: { select: { id: true, name: true } },
+} satisfies Prisma.MediaMovieSelect;
+
+/**
+ * Fields Add Content's smart filters read (genres, actors, directors, studio,
+ * rating). Loaded only when asked for (`filterFields: true`) so browse lists stay
+ * light; summaries are never sent, search matches them on the server instead.
+ */
+const filterFieldsSelect = {
+  genres: true,
+  actors: true,
+  directors: true,
+  studio: true,
+  contentRating: true,
+} as const;
+
+export const libraryShowFilterSelect = {
+  ...libraryShowListSelect,
+  ...filterFieldsSelect,
+} satisfies Prisma.MediaShowSelect;
+
+export const libraryMovieFilterSelect = {
+  ...libraryMovieListSelect,
+  ...filterFieldsSelect,
 } satisfies Prisma.MediaMovieSelect;
 
 export async function getCollectionCount(): Promise<number> {
