@@ -226,6 +226,21 @@ function AddContentDialog({
       ? (librarySearchQuery.data?.movies ?? [])
       : (moviesQuery.data?.items ?? []);
 
+  // Open on a tab that actually has something: a movies-only library
+  // shouldn't land on an empty "TV Shows (0)" tab.
+  const tabChosenRef = useRef(false);
+  useEffect(() => {
+    if (!isOpen) {
+      tabChosenRef.current = false;
+      return;
+    }
+    if (tabChosenRef.current || !showsQuery.isSuccess || !moviesQuery.isSuccess) return;
+    tabChosenRef.current = true;
+    const showCount = showsQuery.data?.items?.length ?? 0;
+    const movieCount = moviesQuery.data?.items?.length ?? 0;
+    setActiveTab(showCount === 0 && movieCount > 0 ? "movies" : "shows");
+  }, [isOpen, showsQuery.isSuccess, moviesQuery.isSuccess, showsQuery.data, moviesQuery.data]);
+
   // Populate form fields with existing channel data when dialog opens
   useEffect(() => {
     if (isOpen && existingChannelData) {
@@ -1163,7 +1178,14 @@ function AddContentDialog({
         </CardHeader>
 
         <CardContent className="p-0 h-full">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={(tab) => {
+              tabChosenRef.current = true;
+              setActiveTab(tab);
+            }}
+            className="h-full"
+          >
             <div className="border-b px-6">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="shows" className="flex items-center gap-2">
