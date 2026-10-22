@@ -1,0 +1,62 @@
+name: Build and Push Docker Image
+
+# Builds drew4/twentyfourseven on GitHub's own machines.
+# This repo is public, so never switch this to a self-hosted (Unraid) runner:
+# outside pull requests could then run code on the server.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-build-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check Docker Hub secrets
+      env:
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      run: |
+        if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
+          echo "::error::Add the DOCKERHUB_USERNAME and DOCKERHUB_TOKEN repository secrets (Settings > Secrets and variables > Actions)."
+          exit 1
+        fi
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Set Docker tags
+      id: set-tag
+      run: echo "timestamp=$(date +%Y%m%d_%H%M%S)" >> "$GITHUB_OUTPUT"
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        # Docker Hub occasionally rejects buildx attestation blobs ("blob upload unknown").
+        provenance: false
+        sbom: false
+        tags: |
+          drew4/twentyfourseven:latest
+          drew4/twentyfourseven:latest_${{ steps.set-tag.outputs.timestamp }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
