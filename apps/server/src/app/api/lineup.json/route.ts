@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
       orderBy: { number: 'asc' }
     });
 
-    const baseUrl = process.env.BASE_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    const baseUrl = process.env.BASE_URL || getPublicBaseUrl(request.headers, request.url);
     
     // HDHomeRun lineup format
     const lineup = channels.map(channel => ({

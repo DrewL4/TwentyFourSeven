@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getPublicBaseUrl } from "@/lib/public-base-url";
 
 export async function GET(request: NextRequest) {
   try {
-    const baseUrl = process.env.BASE_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    const baseUrl = process.env.BASE_URL || getPublicBaseUrl(request.headers, request.url);
     
     const discovery = {
       FriendlyName: "TwentyFourSeven",
