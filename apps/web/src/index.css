@@ -452,3 +452,37 @@ html.dark body {
     background: #1c1c1e;
   }
 }
+
+/* Sign-in page: ESPG's .espg-liquid-home frame and field, value for value. */
+.tfs-login {
+  background-color: #f2f2f7;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", sans-serif;
+}
+.dark .tfs-login {
+  background-color: #000000;
+}
+.tfs-login .tfs-login-field {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  color: #111827;
+  line-height: 1.5rem;
+}
+@media (min-width: 768px) {
+  .tfs-login .tfs-login-field {
+    line-height: 1.25rem;
+  }
+}
+.dark .tfs-login .tfs-login-field {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: #f5f5f7;
+}
+.tfs-login .tfs-login-field:focus {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 0 0 2px #90a8c0;
+}
+.dark .tfs-login .tfs-login-field:focus {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 2px #90a8c0;
+}

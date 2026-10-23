@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 import WatchTowerLoginForm from "@/components/watchtower-login-form";
-import { AppBrandHeader } from "@/components/app-logo";
+import { APP_LOGO_SRC } from "@/components/app-logo";
 import { getServerUrl } from "@/utils/server-url";
+
+const PRODUCT_NAME = "TwentyFour/Seven";
 
 interface WatchTowerStatus {
   configured: boolean;
@@ -58,44 +59,42 @@ export default function LoginPage() {
   }, []);
 
   return (
-    <div className="space-y-8">
-      <AppBrandHeader size="login" titleClassName="text-3xl font-extrabold tracking-[-0.03em]" />
-
-      {status === null ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-10 text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <p className="text-sm">Checking sign-in…</p>
+    <>
+      <div>
+        <div className="flex justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={APP_LOGO_SRC} alt={PRODUCT_NAME} width={80} height={80} className="h-20 w-20 rounded-[16px] object-cover shadow-md" />
         </div>
-      ) : (
-        <>
-          <div className="relative" aria-hidden="true">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-black/10 dark:border-white/15" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="bg-background px-3 text-muted-foreground">Account sign-in</span>
-            </div>
-          </div>
+        <h2 className="mt-6 text-center text-3xl font-extrabold">{PRODUCT_NAME}</h2>
+        <p className="mt-2 text-center text-sm text-[#4b5563] dark:text-[#9ca3af]">
+          Live TV from your media library. Sign in below with your WatchTower account.
+        </p>
+      </div>
 
-          <div className="text-center">
-            <h2 className="text-lg font-semibold text-foreground">Sign in with WatchTower</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Use the same email (or username) and password as your WatchTower account
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              WatchTower is the shared sign-in for your media apps, so TwentyFourSeven doesn&apos;t have a separate password.
-            </p>
-          </div>
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center" aria-hidden="true">
+          <div className="w-full border-t border-black/10 dark:border-white/15" />
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="bg-[#f2f2f7] px-3 text-[#6b7280] dark:bg-black dark:text-[#9ca3af]">{PRODUCT_NAME} sign-in</span>
+        </div>
+      </div>
 
-          <WatchTowerLoginForm
-            configured={status.configured}
-            allowInitialSetup={status.allowInitialSetup ?? false}
-            watchTowerUrl={status.url}
-            connected={status.connected}
-            connectionError={status.error}
-          />
-        </>
-      )}
-    </div>
+      <div>
+        <h3 className="text-center text-lg font-semibold">Sign in to {PRODUCT_NAME}</h3>
+        <p className="mt-1 text-center text-sm text-[#4b5563] dark:text-[#9ca3af]">
+          WatchTower SSO is required. Use the same email (or username) and password as WatchTower.
+        </p>
+      </div>
+
+      <WatchTowerLoginForm
+        loading={status === null}
+        configured={status?.configured ?? true}
+        allowInitialSetup={status?.allowInitialSetup ?? false}
+        watchTowerUrl={status?.url}
+        connected={status?.connected ?? true}
+        connectionError={status?.error}
+      />
+    </>
   );
 }
