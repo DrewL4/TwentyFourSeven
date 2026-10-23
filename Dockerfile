@@ -74,8 +74,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_SHARP=1
 ENV DISABLE_FONT_OPTIMIZATION=1
 
-# Build applications
-RUN npm run build
+# Build applications. Next's build cache lives in a BuildKit cache mount (faster
+# rebuilds, never shipped), and the unused standalone bundle is dropped: the server
+# runs through the custom server.js with `next()`, not .next/standalone.
+RUN --mount=type=cache,target=/app/apps/server/.next/cache \
+    --mount=type=cache,target=/app/apps/web/.next/cache \
+    npm run build \
+    && rm -rf /app/apps/server/.next/standalone
 
 # Production stage - use NVIDIA-enabled FFmpeg base (following TwentyFourSeven pattern)
 FROM node:22-slim AS runner
@@ -84,8 +89,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# DEPS_REFRESH: CI passes the ISO week so apt picks up security fixes weekly; empty locally.
+ARG DEPS_REFRESH=
 # Install system dependencies, Nginx, and Debian ffmpeg with VAAPI like ESPG
-RUN apt-get update && apt-get install -y \
+RUN echo "deps refresh: ${DEPS_REFRESH:-none}" && apt-get update && apt-get install -y \
     curl \
     wget \
     nginx \
@@ -131,18 +138,6 @@ RUN --mount=type=cache,target=/root/.npm \
     --mount=type=cache,target=/root/.cache \
     npm ci --prefer-offline --no-audit --progress=false --no-fund --omit=dev --parallel=4 && \
     npm cache clean --force
-
-# Copy built applications with proper ownership (abc user like Plex)
-COPY --from=builder --chown=abc:users /app/apps/web/out ./apps/web/out
-COPY --from=builder --chown=abc:users /app/apps/server/.next ./apps/server/.next
-COPY --from=builder --chown=abc:users /app/apps/web/public ./apps/web/public
-COPY --from=builder --chown=abc:users /app/apps/server/package.json ./apps/server/package.json
-
-# Copy prisma files
-COPY --from=builder --chown=abc:users /app/apps/server/prisma ./apps/server/prisma
-
-# Copy server.js (required for running the server)
-COPY --from=builder --chown=abc:users /app/apps/server/server.js ./apps/server/server.js
 
 # Verify ffmpeg is installed and check for common hardware accel encoders
 RUN echo "🔍 Checking ffmpeg installation..." \
@@ -190,6 +185,19 @@ RUN echo '#!/bin/bash' > /app/init-gpu-permissions.sh && \
     echo '' >> /app/init-gpu-permissions.sh && \
     echo 'echo "✅ GPU device permissions setup complete"' >> /app/init-gpu-permissions.sh && \
     chmod +x /app/init-gpu-permissions.sh
+
+# App build output last: these are the only layers a normal code update changes.
+# Copy built applications with proper ownership (abc user like Plex)
+COPY --from=builder --chown=abc:users /app/apps/web/out ./apps/web/out
+COPY --from=builder --chown=abc:users /app/apps/server/.next ./apps/server/.next
+COPY --from=builder --chown=abc:users /app/apps/web/public ./apps/web/public
+COPY --from=builder --chown=abc:users /app/apps/server/package.json ./apps/server/package.json
+
+# Copy prisma files
+COPY --from=builder --chown=abc:users /app/apps/server/prisma ./apps/server/prisma
+
+# Copy server.js (required for running the server)
+COPY --from=builder --chown=abc:users /app/apps/server/server.js ./apps/server/server.js
 
 # Set hardware acceleration environment variables (TwentyFourSeven pattern)
 ENV NVIDIA_VISIBLE_DEVICES=all
