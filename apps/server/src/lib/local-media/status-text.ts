@@ -5,10 +5,23 @@ const plural = (v: number, one: string, many: string) => `${n(v)} ${v === 1 ? on
 const joinPaths = (paths: string[]) =>
   paths.length <= 1 ? paths.join("") : `${paths.slice(0, -1).join(", ")} and ${paths[paths.length - 1]}`;
 
-export type FriendlyStatus = { tone: "ok" | "working" | "problem"; message: string; fixes: string[] };
+/**
+ * `setup` tells the page which helper to show:
+ * - "map-folders": the container can't see any media folder yet (show the Unraid steps).
+ * - "pick-folders": a folder is mapped but nothing is chosen in it yet (show Find my videos).
+ */
+export type FriendlyStatus = {
+  tone: "ok" | "working" | "problem";
+  message: string;
+  fixes: string[];
+  setup?: "map-folders" | "pick-folders";
+};
 
 /** One plain sentence about the local folders, plus what to do when something is off. */
-export function describeLocalStatus(state: LocalScanState, opts: { enabled: boolean }): FriendlyStatus {
+export function describeLocalStatus(
+  state: LocalScanState,
+  opts: { enabled: boolean; mapped?: string[] },
+): FriendlyStatus {
   if (!opts.enabled) return { tone: "ok", message: "Local files are turned off.", fixes: [] };
   if (state.running && state.folders.length === 0) {
     return { tone: "working", message: "Looking through your video folders…", fixes: [] };
@@ -17,13 +30,19 @@ export function describeLocalStatus(state: LocalScanState, opts: { enabled: bool
     return { tone: "working", message: "Getting ready to look through your video folders…", fixes: [] };
   }
   if (state.folders.length === 0) {
+    if (opts.mapped && opts.mapped.length > 0) {
+      return {
+        tone: "problem",
+        message: "Pick the folders that have your movies and TV shows.",
+        fixes: ["Press Find my videos and TwentyFourSeven will look for them, or press Browse to pick them yourself."],
+        setup: "pick-folders",
+      };
+    }
     return {
       tone: "problem",
-      message: "No video folders were found.",
-      fixes: [
-        "In your container settings, map your movies folder to /movies and your TV folder to /tv. Read-only is fine.",
-        "Then press Scan now.",
-      ],
+      message: "TwentyFourSeven can't see your video folders yet.",
+      fixes: ["Your server has to share them with TwentyFourSeven once. It takes about a minute; the steps are below."],
+      setup: "map-folders",
     };
   }
 

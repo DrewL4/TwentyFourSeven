@@ -111,10 +111,16 @@ describe("describeLocalStatus", () => {
     assert.equal(s.tone, "problem");
     assert.match(s.fixes[0], /can't open \/tv/);
   });
-  test("nothing mapped", () => {
-    const s = describeLocalStatus({ ...base, folders: [] }, { enabled: true });
+  test("nothing mapped: point at the setup steps", () => {
+    const s = describeLocalStatus({ ...base, folders: [] }, { enabled: true, mapped: [] });
     assert.equal(s.tone, "problem");
-    assert.match(s.fixes[0], /map your movies folder to \/movies/);
+    assert.equal(s.setup, "map-folders");
+    assert.doesNotMatch(s.message + s.fixes.join(" "), /container|mount|\/movies/);
+  });
+  test("a folder is mapped but none picked: offer Find my videos", () => {
+    const s = describeLocalStatus({ ...base, folders: [] }, { enabled: true, mapped: ["/media"] });
+    assert.equal(s.setup, "pick-folders");
+    assert.match(s.fixes[0], /Find my videos/);
   });
 });
 

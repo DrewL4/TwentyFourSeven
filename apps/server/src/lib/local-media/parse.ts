@@ -5,7 +5,7 @@ export const VIDEO_EXTENSIONS = new Set([
 ]);
 export const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 
-const SKIP_DIRS = /^(extras?|trailers?|samples?|featurettes?|behind the scenes|deleted scenes|interviews|scenes|shorts|other|\.[^/]*|@eadir|#recycle|\$recycle\.bin|lost\+found)$/i;
+const SKIP_DIRS = /^(extras?|trailers?|samples?|featurettes?|behind the scenes|deleted scenes|interviews|scenes|shorts|other|\.[^/]*|@eadir|#recycle|\$recycle\.bin|lost\+found|appdata|domains|isos)$/i;
 
 export function isSkippedDir(name: string): boolean {
   return SKIP_DIRS.test(name.trim());

@@ -33,9 +33,11 @@ async function mediaSourceStatus() {
   const { getLocalScanState } = await import('../lib/local-media/scanner');
   const { describeLocalStatus } = await import('../lib/local-media/status-text');
   const { configuredLocalRoots } = await import('../lib/local-media/paths');
+  const { mappedRoots } = await import('../lib/local-media/browse');
   const settings = await prisma.settings.findUnique({ where: { id: "singleton" } });
   const enabled = settings?.localMediaEnabled ?? true;
   const scan = getLocalScanState();
+  const mapped = await mappedRoots();
   const plexServers = await prisma.mediaServer.count({ where: { type: "PLEX", active: true } });
   const count = (type: "LOCAL" | "PLEX") =>
     Promise.all([
@@ -50,7 +52,8 @@ async function mediaSourceStatus() {
       folders: configuredLocalRoots(settings?.localMediaPaths),
       scanning: scan.running,
       lastScan: scan.finishedAt,
-      status: describeLocalStatus(scan, { enabled }),
+      mapped,
+      status: describeLocalStatus(scan, { enabled, mapped }),
       counts: await count("LOCAL"),
     },
     plex: { connected: plexServers > 0, counts: await count("PLEX") },
@@ -1653,6 +1656,38 @@ export const appRouter = {
           const { switchMediaSource } = await import('../lib/local-media/source-switch');
           const report = await switchMediaSource(input.source);
           return { ...report, status: await mediaSourceStatus() };
+        }),
+
+      /** Folder picker: one level of folders under /movies, /tv or /media (admin only). */
+      browse: adminProcedure
+        .input(z.object({ path: z.string().max(1024).optional() }))
+        .handler(async ({ input }) => {
+          const { listFolder } = await import('../lib/local-media/browse');
+          const listing = await listFolder(input.path || null);
+          if (!listing) throw new ORPCError("BAD_REQUEST", { message: "That folder can't be opened. Pick one from the list." });
+          return listing;
+        }),
+
+      /** "Find my videos": a quick, time-boxed look for Movies and TV folders. */
+      findVideos: adminProcedure.handler(async () => {
+        const { findVideoFolders } = await import('../lib/local-media/browse');
+        return findVideoFolders();
+      }),
+
+      /** Save the folders ticked in the picker, then scan them. */
+      setFolders: adminProcedure
+        .input(z.object({ folders: z.array(z.string().max(1024)).max(30) }))
+        .handler(async ({ input }) => {
+          const { cleanPickedFolders } = await import('../lib/local-media/browse');
+          const { kept, rejected } = cleanPickedFolders(input.folders);
+          if (rejected.length) {
+            throw new ORPCError("BAD_REQUEST", { message: `TwentyFourSeven can't use ${rejected[0]}. Pick folders from the list.` });
+          }
+          const data = { localMediaPaths: kept.join(", "), localMediaEnabled: true };
+          await prisma.settings.upsert({ where: { id: "singleton" }, create: { id: "singleton", ...data }, update: data });
+          const { scanLocalMedia } = await import('../lib/local-media/scanner');
+          await Promise.race([scanLocalMedia(), new Promise((r) => setTimeout(r, 3000))]);
+          return mediaSourceStatus();
         }),
 
       update: adminProcedure

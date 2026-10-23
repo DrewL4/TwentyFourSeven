@@ -45,8 +45,8 @@ Go to **Docker → Add Container** and pick the **TwentyFourSeven** template (`t
 | **Database Storage** | `/mnt/user/appdata/twentyfourseven/database`. **Don't leave it empty.** It holds your channels and settings, and the sign-in key. |
 | **Static Files Storage** | `/mnt/user/appdata/twentyfourseven/static`. Files placed here can be opened at `http://YOUR-UNRAID-IP:PORT/files/`. |
 | **Authentication Secret** | Leave empty. TFS makes one on first start and saves it in the Database Storage folder, so restarts and updates don't sign anyone out. |
-| **Movies Folder** | Your movies folder, for example `/mnt/user/Movies`. TFS only reads it. Leave empty if you only use Plex. |
-| **TV Shows Folder** | Your TV folder, for example `/mnt/user/TV`. Use the same folders Plex or ESPG use. |
+| **Media** | Leave it at `/mnt/user`. TFS can then look through your shares (read-only, it can't change anything) and you pick the movie and TV folders in Settings later. To let it see less, use your media share instead, for example `/mnt/user/Media`. |
+| **Movies Folder / TV Shows Folder** | Optional. Leave empty when **Media** already covers them. |
 | **Timezone** | For example `America/Chicago` (under **Show more settings**) |
 
 **Using your own domain** (for example through Nginx Proxy Manager)? At the bottom of the template, use **Add another Path, Port, Variable, Label or Device** to add the variables `EXTERNAL_DOMAIN` (for example `tv.example.com`) and `EXTERNAL_PROTOCOL` (`https`). TFS then builds its own addresses from them.
@@ -74,7 +74,12 @@ On the same page, sign in with your WatchTower email and password.
 
 Open **Settings**. The first card asks **Where should TwentyFourSeven get your videos?**
 
-- **Local files (recommended)**: TFS plays files straight from the folders you mapped. It's the fastest choice and nothing else has to be running. The status line tells you what it found, for example *Found 1,234 movies and 456 shows in /movies and /tv*, or what to fix.
+- **Local files (recommended)**: TFS plays files straight from your folders. It's the fastest choice and nothing else has to be running.
+  - Press **Find my videos**. TFS looks a few folders deep, shows the folders that look like movies or TV shows with how many videos each has, and you press **Use these folders**.
+  - Or press **Browse** to open folders yourself. Each folder shows its video count and a *Looks like Movies* / *Looks like TV shows* hint. Tick the ones you want and press **Save folders**.
+  - Unraid system shares (`appdata`, `system`, `domains`, `isos`) and hidden folders are never shown.
+  - If TFS says it **can't see your video folders yet**, the container has no media path. The card shows the Unraid steps: **Docker** tab → **TwentyFourSeven** → **Edit** → **Add another Path, Port, Variable, Label or Device** → Container Path `/media`, Host Path `/mnt/user/Media` (or `/mnt/user`), Access Mode **Read Only** → **Add** → **Apply**.
+  - The status line then tells you what it found, for example *Found 1,234 movies and 456 shows*, or what to fix.
 - **Plex**: connect Plex under **Settings → Plex** first, then pick Plex.
 
 You can switch any time. Channels keep their shows and movies: TFS finds the same title in the other source. Anything it can't find is listed and keeps playing from the old source.

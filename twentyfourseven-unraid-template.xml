@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/DrewL4/TwentyFourSeven</Support>
   <Project>https://github.com/DrewL4/TwentyFourSeven</Project>
-  <Overview>TwentyFourSeven turns your movie and TV folders (or your Plex library) into always-on TV channels with a program guide for any IPTV app. Point Movies Folder and TV Shows Folder at your media; TwentyFourSeven only reads them. Install WatchTower first: sign-in goes through WatchTower. A graphics card is optional.</Overview>
+  <Overview>TwentyFourSeven turns your movie and TV folders (or your Plex library) into always-on TV channels with a program guide for any IPTV app. The Media path shares your Unraid shares with TwentyFourSeven read-only; after install, press Find my videos in Settings to pick your movie and TV folders. TwentyFourSeven only reads them. Install WatchTower first: sign-in goes through WatchTower. A graphics card is optional.</Overview>
   <Category>Productivity: MediaApp:Other</Category>
   <WebUI>http://[IP]:[PORT:80]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/DrewL4/TwentyFourSeven/main/twentyfourseven-unraid-template.xml</TemplateURL>
@@ -38,8 +38,9 @@
   <Config Name="Static Files Storage" Target="/app/static" Default="/mnt/user/appdata/twentyfourseven/static" Mode="rw" Description="Path to store static files (.m3u, .xml, etc.). Files placed here will be accessible at http://[IP]:[PORT]/files/. If you see permission errors, run: chown -R 1001:100 /mnt/user/appdata/twentyfourseven/static in the Unraid terminal." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/twentyfourseven/static</Config>
   
   <!-- Your videos (read-only). Use the same folders Plex or ESPG use. Leave empty if you only use Plex. -->
-  <Config Name="Movies Folder" Target="/movies" Default="" Mode="ro" Description="Your movies folder, for example /mnt/user/Movies. TwentyFourSeven only reads it. Leave empty if you only use Plex." Type="Path" Display="always" Required="false" Mask="false"/>
-  <Config Name="TV Shows Folder" Target="/tv" Default="" Mode="ro" Description="Your TV shows folder, for example /mnt/user/TV. One folder per show works best (Show Name/Season 01/Show Name - S01E01.mkv). TwentyFourSeven only reads it." Type="Path" Display="always" Required="false" Mask="false"/>
+  <Config Name="Media" Target="/media" Default="/mnt/user" Mode="ro" Description="Lets TwentyFourSeven look at your shares, read-only, so you can pick your movie and TV folders in Settings (Find my videos or Browse). It can never change or delete anything here. Want it to see less? Change this to your media share, for example /mnt/user/Media." Type="Path" Display="always" Required="false" Mask="false">/mnt/user</Config>
+  <Config Name="Movies Folder" Target="/movies" Default="" Mode="ro" Description="Optional. Leave empty if the Media path above already covers your movies. Otherwise your movies folder, for example /mnt/user/Movies. TwentyFourSeven only reads it." Type="Path" Display="always" Required="false" Mask="false"/>
+  <Config Name="TV Shows Folder" Target="/tv" Default="" Mode="ro" Description="Optional. Leave empty if the Media path above already covers your TV shows. Otherwise your TV folder, for example /mnt/user/TV. One folder per show works best (Show Name/Season 01/Show Name - S01E01.mkv). TwentyFourSeven only reads it." Type="Path" Display="always" Required="false" Mask="false"/>
 
   <!-- Advanced Settings -->
   <Config Name="FFMPEG Auto-Detect" Target="FFMPEG_AUTO_DETECT" Default="true" Mode="" Description="Automatically detect FFMPEG installation path." Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>

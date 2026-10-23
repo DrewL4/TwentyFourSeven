@@ -3,13 +3,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FolderOpen, RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { FolderOpen, FolderSearch, RefreshCw, CheckCircle2, AlertTriangle, Loader2, Sparkles } from "lucide-react";
 import { orpc } from "@/utils/orpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { FindMyVideos, FolderBrowser, MapFoldersHelp } from "./local-folder-picker";
 
 type Source = "LOCAL" | "PLEX" | "JELLYFIN" | "EMBY";
 
@@ -30,7 +31,12 @@ export default function MediaSourceCard() {
     // Keep the count moving while a scan runs.
     refetchInterval: (q) => (q.state.data?.local.scanning ? 2000 : false),
   });
-  const [foldersOpen, setFoldersOpen] = useState(false);
+  const [panel, setPanel] = useState<null | "find" | "browse" | "advanced">(null);
+  const [pickerKey, setPickerKey] = useState(0);
+  const openPanel = (p: "find" | "browse" | "advanced") => {
+    setPickerKey((k) => k + 1);
+    setPanel((cur) => (cur === p ? null : p));
+  };
   const [paths, setPaths] = useState<string | null>(null);
   const [lastSwitch, setLastSwitch] = useState<null | {
     source: Source;
@@ -60,6 +66,17 @@ export default function MediaSourceCard() {
         refresh(data);
         setPaths(null);
         toast.success("Folders saved");
+      },
+      onError: (e: Error) => toast.error(e.message),
+    }),
+  );
+
+  const pickFolders = useMutation(
+    orpc.settings.media.setFolders.mutationOptions({
+      onSuccess: (data) => {
+        refresh(data);
+        setPanel(null);
+        toast.success("Folders saved. Looking for videos now.");
       },
       onError: (e: Error) => toast.error(e.message),
     }),
@@ -136,18 +153,47 @@ export default function MediaSourceCard() {
                 ))}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => scanNow.mutate({})} disabled={scanNow.isPending || local.scanning}>
-                <RefreshCw className={cn("mr-2 h-4 w-4", (scanNow.isPending || local.scanning) && "animate-spin")} />
-                Scan now
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setFoldersOpen((v) => !v)}>
-                {foldersOpen ? "Hide folders" : "Change folders"}
-              </Button>
-            </div>
-            {foldersOpen && (
+            {local.status.setup === "map-folders" && (
+              <MapFoldersHelp onCheckAgain={() => status.refetch()} checking={status.isFetching} />
+            )}
+            {local.status.setup !== "map-folders" && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant={local.status.setup === "pick-folders" ? "default" : "outline"} onClick={() => openPanel("find")}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Find my videos
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => openPanel("browse")}>
+                  <FolderSearch className="mr-2 h-4 w-4" />
+                  Browse
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => scanNow.mutate({})} disabled={scanNow.isPending || local.scanning || local.folders.length === 0}>
+                  <RefreshCw className={cn("mr-2 h-4 w-4", (scanNow.isPending || local.scanning) && "animate-spin")} />
+                  Scan now
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => openPanel("advanced")}>
+                  {panel === "advanced" ? "Hide advanced" : "Advanced"}
+                </Button>
+              </div>
+            )}
+            {local.folders.length > 0 && panel === null && (
+              <p className="text-xs text-muted-foreground" data-testid="current-folders">
+                Using: <span className="font-mono">{local.folders.join(", ")}</span>
+              </p>
+            )}
+            {panel === "find" && (
+              <FindMyVideos key={pickerKey} onSave={(folders) => pickFolders.mutate({ folders })} saving={pickFolders.isPending} onBrowse={() => openPanel("browse")} />
+            )}
+            {panel === "browse" && (
+              <FolderBrowser
+                key={pickerKey}
+                initial={local.paths ? local.folders : []}
+                onSave={(folders) => pickFolders.mutate({ folders })}
+                saving={pickFolders.isPending}
+              />
+            )}
+            {panel === "advanced" && (
               <div className="space-y-2 rounded-md border p-3">
-                <Label htmlFor="local-paths">Video folders</Label>
+                <Label htmlFor="local-paths">Video folders (typed)</Label>
                 <Input
                   id="local-paths"
                   value={paths ?? local.paths}
@@ -155,9 +201,8 @@ export default function MediaSourceCard() {
                   onChange={(e) => setPaths(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Leave empty to use /movies and /tv. These are folders inside the container: map your
-                  server&apos;s movie and TV folders to them in Docker or Unraid (read-only is fine).
-                  Use the same folders ESPG or Plex use.
+                  Folder paths as TwentyFourSeven sees them, separated by commas. Most people should use
+                  Find my videos or Browse instead.
                 </p>
                 <Button size="sm" onClick={() => saveFolders.mutate({ paths: paths ?? local.paths })} disabled={saveFolders.isPending || paths === null}>
                   Save folders
