@@ -33,7 +33,7 @@ export default function Providers({
           buttonPosition="bottom-right"
         />
       </QueryClientProvider>
-      <Toaster richColors />
+      <Toaster />
     </ThemeProvider>
   );
 }

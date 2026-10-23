@@ -36,7 +36,7 @@ export default function ViewersPage() {
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold">Viewer Tracking</h1>
+        <h1 className="text-2xl font-semibold tracking-[-0.03em]">Viewer Tracking</h1>
         <p className="text-muted-foreground mt-2 text-sm md:text-base">
           Monitor active viewers and manage IP address mappings
         </p>

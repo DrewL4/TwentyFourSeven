@@ -124,7 +124,7 @@ export function MultiSelect({
   return (
     <div ref={containerRef} className={cn("relative", className)}>
       <div className="relative">
-        <div className="min-h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+        <div className="min-h-8 w-full tfs-field rounded-lg border px-3 py-2 text-sm">
           <div className="flex flex-wrap gap-1">
             {value.map((item) => (
               <Badge
@@ -166,7 +166,7 @@ export function MultiSelect({
       </div>
 
       {open && (inputFocused || searchValue) && filteredOptions.length > 0 && (
-        <Card className="absolute top-full z-50 mt-1 w-full border bg-popover p-0 shadow-md">
+        <Card className="tfs-menu absolute top-full z-50 mt-1 w-full gap-0 rounded-xl p-1">
           <div className="max-h-[300px] overflow-y-auto">
             {loading ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -188,7 +188,7 @@ export function MultiSelect({
                   <div
                     key={option}
                     className={cn(
-                      "relative flex cursor-pointer select-none items-center px-3 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                      "relative flex cursor-pointer select-none items-center rounded-md px-3 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
                       maxItems && value.length >= maxItems && "opacity-50 cursor-not-allowed"
                     )}
                     onClick={() => {

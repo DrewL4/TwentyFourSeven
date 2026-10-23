@@ -38,7 +38,7 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <AppLogo size="md" />
           <div>
-            <h1 className="text-3xl font-bold">TwentyFour/Seven</h1>
+            <h1 className="text-2xl font-semibold tracking-[-0.03em]">TwentyFour/Seven</h1>
             <p className="text-muted-foreground">Live TV from your media library</p>
           </div>
         </div>
@@ -143,7 +143,7 @@ export default function Home() {
           <Link href="/settings">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <Settings className="w-5 h-5 text-orange-600" />
+                <Settings className="w-5 h-5 text-accent-text" />
                 <CardTitle className="text-lg">Settings</CardTitle>
               </div>
             </CardHeader>

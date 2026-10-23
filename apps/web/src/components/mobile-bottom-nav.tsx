@@ -32,11 +32,11 @@ export default function MobileBottomNav() {
 
   return (
     <nav 
-      className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t pb-safe"
+      className="tfs-tabbar fixed bottom-0 left-0 right-0 z-50 pb-safe"
       role="navigation"
       aria-label="Main navigation"
     >
-      <div className="flex items-center justify-around px-2 py-2 max-w-screen-sm mx-auto">
+      <div className="flex h-16 items-center justify-around px-2 max-w-screen-sm mx-auto">
         {navigationLinks.map(({ to, label, icon: Icon }) => {
           const isActive = pathname === to || (to !== "/" && pathname.startsWith(to));
           return (
@@ -44,19 +44,18 @@ export default function MobileBottomNav() {
               key={to}
               href={to}
               className={`
-                flex flex-col items-center justify-center min-h-[56px] min-w-[56px] px-2 py-2 rounded-lg
-                transition-all duration-200 text-xs font-medium touch-manipulation
-                hover:bg-accent/50 active:bg-accent active:scale-95
-                ${isActive 
-                  ? "text-primary bg-accent/30 shadow-sm" 
-                  : "text-muted-foreground"
+                flex flex-col items-center justify-center gap-1 min-h-[56px] min-w-[56px] px-2 py-1.5 rounded-xl
+                transition-colors duration-200 touch-manipulation active:scale-95
+                ${isActive
+                  ? "text-accent-text"
+                  : "text-muted-foreground hover:text-foreground"
                 }
               `}
               aria-label={label}
               aria-current={isActive ? "page" : undefined}
             >
-              <Icon className="w-5 h-5 mb-1" />
-              <span className="leading-none text-[10px] font-medium">{label}</span>
+              <Icon className="h-5 w-5" aria-hidden="true" />
+              <span className="leading-none text-[0.65rem] font-medium">{label}</span>
             </Link>
           );
         })}

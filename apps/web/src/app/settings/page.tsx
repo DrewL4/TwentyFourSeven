@@ -142,8 +142,8 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Settings className="w-8 h-8 text-orange-600" />
+          <h1 className="text-2xl font-semibold tracking-[-0.03em] flex items-center gap-2">
+            <Settings className="w-7 h-7 text-accent-text" />
             Settings
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -463,7 +463,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Server className="w-5 h-5 text-orange-600" />
+                <Server className="w-5 h-5 text-accent-text" />
                 Plex Integration
               </CardTitle>
               <CardDescription>
@@ -596,9 +596,9 @@ export default function SettingsPage() {
 
       {/* WatchTower Setup Modal */}
       {showWatchTowerSetup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-900 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white dark:bg-gray-900 p-4 border-b flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[6px] flex items-center justify-center p-4 z-50">
+          <div className="tfs-modal rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-[#f2f2f7] dark:bg-[#1c1c1e] p-4 border-b flex items-center justify-between">
               <h2 className="text-lg font-semibold">WatchTower Import</h2>
               <Button
                 variant="ghost"

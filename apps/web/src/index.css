@@ -3,18 +3,27 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Family theme: the same Apple-style "liquid glass" look as WatchTower Guide (ESPG)
+ * and WatchTower. Colors, radii and shadows are copied from ESPG's index.css and
+ * WatchTower's theme/liquidGlass.css so the three apps look and feel the same.
+ */
 @theme {
-  --font-sans: "Inter", "Geist", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  background-color: #f2f2f7;
+  color-scheme: light;
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
-  }
+html.dark,
+html.dark body {
+  background-color: #000000;
+  color-scheme: dark;
 }
 
 /* iOS Safe Area Support */
@@ -73,79 +82,93 @@ body {
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 12px;
+  --background: #f2f2f7;
+  --foreground: #1d1d1f;
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+  --popover: #f2f2f7;
+  --popover-foreground: #1d1d1f;
+  --primary: #90a8c0;
+  --primary-foreground: #1a1a1a;
+  --primary-hover: #7e96b3;
+  --secondary: rgba(60, 60, 67, 0.08);
+  --secondary-foreground: #1d1d1f;
+  --muted: rgba(118, 118, 128, 0.12);
+  --muted-foreground: #6e6e73;
+  --accent: rgba(0, 0, 0, 0.05);
+  --accent-foreground: #1d1d1f;
+  --accent-text: #6a86a4;
+  --destructive: #ff3b30;
+  --border: rgba(60, 60, 67, 0.12);
+  --input: rgba(60, 60, 67, 0.16);
+  --ring: rgba(144, 168, 192, 0.9);
+  --field: rgba(255, 255, 255, 0.72);
+  --field-hover: #ffffff;
+  --selected: rgba(144, 168, 192, 0.22);
+  --chart-1: #90a8c0;
+  --chart-2: #30d158;
+  --chart-3: #6a86a4;
+  --chart-4: #ff9f0a;
+  --chart-5: #ff453a;
+  --sidebar: #f2f2f7;
+  --sidebar-foreground: #1d1d1f;
+  --sidebar-primary: #90a8c0;
+  --sidebar-primary-foreground: #1a1a1a;
+  --sidebar-accent: rgba(255, 255, 255, 0.62);
+  --sidebar-accent-foreground: #1d1d1f;
+  --sidebar-border: rgba(60, 60, 67, 0.12);
+  --sidebar-ring: rgba(144, 168, 192, 0.9);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #000000;
+  --foreground: #f5f5f7;
+  --card: #1c1c1e;
+  --card-foreground: #f5f5f7;
+  --popover: #1c1c1e;
+  --popover-foreground: #f5f5f7;
+  --primary: #90a8c0;
+  --primary-foreground: #1a1a1a;
+  --primary-hover: #7e96b3;
+  --secondary: rgba(255, 255, 255, 0.1);
+  --secondary-foreground: #f5f5f7;
+  --muted: rgba(255, 255, 255, 0.08);
+  --muted-foreground: #a1a1a6;
+  --accent: rgba(255, 255, 255, 0.08);
+  --accent-foreground: #f5f5f7;
+  --accent-text: #90a8c0;
+  --destructive: #ff453a;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: rgba(144, 168, 192, 0.9);
+  --field: rgba(255, 255, 255, 0.08);
+  --field-hover: rgba(255, 255, 255, 0.12);
+  --selected: rgba(144, 168, 192, 0.36);
+  --chart-1: #90a8c0;
+  --chart-2: #30d158;
+  --chart-3: #b7c8da;
+  --chart-4: #ffd166;
+  --chart-5: #ff8a80;
+  --sidebar: #000000;
+  --sidebar-foreground: #f5f5f7;
+  --sidebar-primary: #90a8c0;
+  --sidebar-primary-foreground: #1a1a1a;
+  --sidebar-accent: rgba(255, 255, 255, 0.12);
+  --sidebar-accent-foreground: #f5f5f7;
+  --sidebar-border: rgba(255, 255, 255, 0.12);
+  --sidebar-ring: rgba(144, 168, 192, 0.9);
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* ESPG/WatchTower radius scale: 8 options, 10 small controls, 12 fields and
+     buttons, 16 menus, 20 panels and modals. */
+  --radius-sm: 8px;
+  --radius-md: 10px;
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -160,6 +183,11 @@ body {
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-text: var(--accent-text);
+  --color-primary-hover: var(--primary-hover);
+  --color-field: var(--field);
+  --color-field-hover: var(--field-hover);
+  --color-selected: var(--selected);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -184,6 +212,243 @@ body {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+  }
+  h1,
+  h2 {
+    letter-spacing: -0.03em;
+  }
+  h1 {
+    font-weight: 600;
+  }
+}
+
+@layer components {
+  /* ESPG .espg-liquid-panel: frosted card on the page gray (radius 20). */
+  .tfs-glass-panel {
+    background: rgba(255, 255, 255, 0.58);
+    -webkit-backdrop-filter: blur(28px) saturate(1.7);
+    backdrop-filter: blur(28px) saturate(1.7);
+    border: 1px solid rgba(255, 255, 255, 0.66);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.78),
+      0 10px 28px rgba(15, 23, 42, 0.07);
+  }
+
+  .dark .tfs-glass-panel {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0.04) 18%,
+      rgba(16, 18, 28, 0.42) 100%
+    );
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      0 16px 40px rgba(0, 0, 0, 0.32);
+  }
+
+  /* Glass panels inside glass panels stay clear so text does not double-frost. */
+  .tfs-glass-panel .tfs-glass-panel {
+    background: rgba(255, 255, 255, 0.55);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-color: rgba(60, 60, 67, 0.1);
+    box-shadow: none;
+  }
+
+  .dark .tfs-glass-panel .tfs-glass-panel {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* ESPG .espg-modal / WatchTower .wt-liquid-modal. */
+  .tfs-modal {
+    background-color: #f2f2f7;
+    color: #1d1d1f;
+    border: 1px solid rgba(60, 60, 67, 0.12);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+  }
+
+  .dark .tfs-modal {
+    background-color: #1c1c1e;
+    color: #f5f5f7;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  /* A Card used as the modal sheet itself. */
+  .tfs-glass-panel.tfs-modal {
+    background: #f2f2f7;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .dark .tfs-glass-panel.tfs-modal {
+    background: #1c1c1e;
+  }
+
+  /* Cards inside a modal are the soft ESPG .espg-modal-card, not a second glass sheet. */
+  .tfs-modal .tfs-glass-panel {
+    background: rgba(255, 255, 255, 0.55);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-color: rgba(60, 60, 67, 0.1);
+    box-shadow: none;
+  }
+
+  .dark .tfs-modal .tfs-glass-panel {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* ESPG/WatchTower menus (.espg-liquid-menu / .wt-liquid-menu). */
+  .tfs-menu,
+  .tfs-glass-panel.tfs-menu,
+  .tfs-modal .tfs-glass-panel.tfs-menu {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: #f2f2f7;
+    border: 1px solid rgba(60, 60, 67, 0.12);
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+  }
+
+  .dark .tfs-menu,
+  .dark .tfs-glass-panel.tfs-menu,
+  .dark .tfs-modal .tfs-glass-panel.tfs-menu {
+    background: #1c1c1e;
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Shared field look: inputs, selects, textareas. */
+  .tfs-field {
+    background-color: var(--field);
+    border-color: var(--input);
+  }
+
+  .tfs-field:hover:not(:disabled):not(:focus-visible) {
+    background-color: var(--field-hover);
+  }
+
+  .tfs-field:focus-visible,
+  .tfs-field:focus-within,
+  .tfs-field[data-state="open"] {
+    border-color: rgba(144, 168, 192, 0.9);
+    box-shadow: 0 0 0 3px rgba(144, 168, 192, 0.45);
+    outline: none;
+  }
+
+  /* ESPG .espg-modal-btn-secondary: the quiet white pill with a hairline. */
+  .tfs-btn-quiet {
+    background: rgba(255, 255, 255, 0.7);
+    color: #1d1d1f;
+    box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.14);
+  }
+
+  .tfs-btn-quiet:hover:not(:disabled) {
+    background: #ffffff;
+  }
+
+  .dark .tfs-btn-quiet {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f5f5f7;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  }
+
+  .dark .tfs-btn-quiet:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  /* Sidebar active row (ESPG .espg-liquid-sidebar a[aria-current="page"]). */
+  .tfs-sidebar a[aria-current="page"] {
+    background: rgba(255, 255, 255, 0.62);
+    color: #1d1d1f;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    border-radius: 12px;
+  }
+
+  .dark .tfs-sidebar a[aria-current="page"] {
+    background: rgba(255, 255, 255, 0.12);
+    color: #f5f5f7;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  }
+
+  /* WatchTower .wt-mobile-tabbar: clear blurred lens. */
+  .tfs-tabbar {
+    background: rgba(242, 242, 247, 0.72);
+    -webkit-backdrop-filter: blur(24px) saturate(1.8);
+    backdrop-filter: blur(24px) saturate(1.8);
+    border-top: 1px solid rgba(60, 60, 67, 0.12);
+  }
+
+  .dark .tfs-tabbar {
+    background: rgba(0, 0, 0, 0.72);
+    border-top-color: rgba(255, 255, 255, 0.12);
+  }
+
+  /* Mobile/tablet top bar: ESPG header on the page gray, hairline only. */
+  .tfs-topbar {
+    background: rgba(242, 242, 247, 0.72);
+    -webkit-backdrop-filter: blur(24px) saturate(1.8);
+    backdrop-filter: blur(24px) saturate(1.8);
+    border-bottom: 1px solid rgba(60, 60, 67, 0.12);
+  }
+
+  .dark .tfs-topbar {
+    background: rgba(0, 0, 0, 0.72);
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+  }
+
+  /* Table wrapper reads as a WatchTower admin card. */
+  .tfs-table thead {
+    background-color: var(--muted);
+  }
+
+  .tfs-table thead th {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+}
+
+/*
+ * Status tints: unlayered so they beat the Tailwind color utilities, the same way
+ * WatchTower's .wt-admin-active rules do.
+ */
+:is(.bg-amber-50, .bg-yellow-50, .bg-orange-50) {
+  background-color: rgba(255, 159, 10, 0.12);
+}
+.bg-red-50 {
+  background-color: rgba(255, 69, 58, 0.1);
+}
+:is(.bg-green-50, .bg-emerald-50) {
+  background-color: rgba(48, 209, 88, 0.12);
+}
+.bg-blue-50 {
+  background-color: rgba(144, 168, 192, 0.16);
+}
+.dark :is(.text-red-400, .text-red-500, .text-red-600, .text-red-700) {
+  color: #ff8a80;
+}
+.dark :is(.text-green-400, .text-green-500, .text-green-600, .text-green-700, .text-emerald-500, .text-emerald-600) {
+  color: #6fe29a;
+}
+.dark :is(.text-yellow-500, .text-yellow-600, .text-amber-500, .text-amber-600) {
+  color: #ffd166;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .tfs-glass-panel,
+  .tfs-tabbar {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: #ffffff;
+  }
+
+  .dark .tfs-glass-panel,
+  .dark .tfs-tabbar {
+    background: #1c1c1e;
   }
 }

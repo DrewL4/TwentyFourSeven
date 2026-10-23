@@ -657,7 +657,7 @@ export default function GuidePage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-semibold tracking-[-0.03em] flex items-center gap-2">
             <Tv className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
             TV Guide
           </h1>

@@ -219,7 +219,7 @@ export function FolderBrowser({
                   disabled={!e.hasFolders}
                   title={e.hasFolders ? "Open" : undefined}
                 >
-                  <Folder className="h-4 w-4 shrink-0 text-orange-600" />
+                  <Folder className="h-4 w-4 shrink-0 text-accent-text" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{e.name}</span>
                     <span className="text-xs text-muted-foreground">{videoCount(e.videos, e.more)}</span>

@@ -27,8 +27,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <>
         {/* Mobile Layout (< 768px) - Bottom Navigation */}
         <div className="md:hidden flex flex-col h-svh">
-          <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="flex items-center gap-2 font-bold text-lg">
+          <header className="tfs-topbar flex h-14 shrink-0 items-center justify-between px-4">
+            <div className="flex items-center gap-2 text-lg font-semibold tracking-[-0.03em]">
               <AppLogo size="sm" href="/" />
               <span>24/7</span>
               {/* Phones have no sidebar: show the version next to the name. */}
@@ -36,18 +36,18 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </div>
             <ModeToggle />
           </header>
-          <main className="flex-1 overflow-auto pb-16 px-4 py-4">
+          <main className="flex-1 overflow-auto px-4 pt-4 pb-24">
             {children}
           </main>
           <MobileBottomNav />
         </div>
 
         {/* Tablet Layout (768px - 1024px) - Compact Sidebar */}
-        <div className="hidden md:flex lg:hidden h-svh">
+        <div className="hidden md:flex lg:hidden h-svh bg-background">
           <Sidebar />
           <div className="flex-1 flex flex-col relative">
-            <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-              <h1 className="text-lg font-semibold text-foreground">
+            <header className="tfs-topbar flex h-14 shrink-0 items-center justify-between px-4">
+              <h1 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
                 {pathname === "/" && "Dashboard"}
                 {pathname === "/dashboard" && "Dashboard"}
                 {pathname === "/guide" && "TV Guide"}
@@ -57,7 +57,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 {pathname === "/settings" && "Settings"}
                 {pathname.startsWith("/channels/") && "Channel Details"}
               </h1>
-              <ModeToggle />
             </header>
             <main className="flex-1 overflow-auto p-4">
               {children}
@@ -66,13 +65,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         {/* Desktop Layout (> 1024px) - Full Sidebar */}
-        <div className="hidden lg:flex h-svh">
+        <div className="hidden lg:flex h-svh bg-background">
           <Sidebar />
           <div className="flex-1 flex flex-col relative">
-            <div className="absolute top-4 right-4 z-50">
-              <ModeToggle />
-            </div>
-            <main className="flex-1 overflow-auto p-6">
+            <main className="flex-1 overflow-auto px-6 py-8 lg:px-8">
               {children}
             </main>
           </div>

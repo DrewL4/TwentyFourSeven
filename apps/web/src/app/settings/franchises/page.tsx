@@ -205,7 +205,7 @@ export default function FranchisesSettingsPage() {
               <span className="sr-only sm:not-sr-only sm:inline">Settings</span>
             </Link>
           </Button>
-          <h1 className="text-lg md:text-xl font-bold truncate">Franchise watch order</h1>
+          <h1 className="text-lg md:text-xl font-semibold tracking-[-0.03em] truncate">Franchise watch order</h1>
         </div>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Link TMDB collections to a fixed movie order for channels; lists refresh daily and match your Plex library.

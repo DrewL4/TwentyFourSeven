@@ -622,7 +622,7 @@ export default function PlexSettingsPage() {
           <Server className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold">Plex Settings</h1>
+          <h1 className="text-2xl font-semibold tracking-[-0.03em]">Plex Settings</h1>
           <p className="text-muted-foreground">Manage your Plex server connections and settings</p>
         </div>
       </div>

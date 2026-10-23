@@ -91,7 +91,7 @@ export default function MediaSourceCard() {
     <Card data-testid="media-source-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FolderOpen className="w-5 h-5 text-orange-600" />
+          <FolderOpen className="w-5 h-5 text-accent-text" />
           Where should TwentyFourSeven get your videos?
         </CardTitle>
         <CardDescription>You can switch any time. Your channels stay the same.</CardDescription>
@@ -111,7 +111,7 @@ export default function MediaSourceCard() {
                 onClick={() => !selected && setSource.mutate({ source: c.id })}
                 className={cn(
                   "rounded-lg border p-3 text-left transition-colors",
-                  selected ? "border-orange-600 bg-orange-50 dark:bg-orange-950/30" : "hover:bg-muted",
+                  selected ? "border-primary bg-selected" : "hover:bg-muted",
                   c.soon && "opacity-60 cursor-not-allowed",
                 )}
               >
@@ -119,7 +119,7 @@ export default function MediaSourceCard() {
                   <span
                     className={cn(
                       "inline-block h-3.5 w-3.5 rounded-full border",
-                      selected ? "border-orange-600 bg-orange-600" : "border-muted-foreground",
+                      selected ? "border-primary bg-primary" : "border-muted-foreground",
                     )}
                     aria-hidden="true"
                   />

@@ -24,6 +24,7 @@ import { Skeleton } from "./ui/skeleton";
 import { useAdmin } from "@/hooks/use-admin";
 import { isAdminOnlyPath } from "@/lib/admin-routes";
 import { AppVersion } from "@/components/app-version";
+import { ModeToggle } from "@/components/mode-toggle";
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -52,80 +53,75 @@ export default function Sidebar() {
     });
   };
 
+  const initial = (session?.user?.name || session?.user?.email || "?").trim().charAt(0).toUpperCase();
+
+  // ESPG sidebar structure: h-12 brand row, p-3 rows with h-6 icons, a footer with
+  // the account row, the theme cycle button and Sign out, then the version.
   return (
-    <div 
-      className={`
-        flex flex-col h-full bg-background border-r transition-all duration-300 ease-in-out
-        ${isCollapsed ? "w-16" : "w-64"}
-        lg:${isCollapsed ? "w-16" : "w-64"}
-        md:${isCollapsed ? "w-16" : "w-56"}
-      `}
+    <div
+      className={`tfs-sidebar flex h-full shrink-0 flex-col gap-y-4 overflow-y-auto px-4 pb-4 transition-[width] duration-300 ease-in-out ${
+        isCollapsed ? "w-[72px] px-2" : "w-64"
+      }`}
     >
-      {/* Header with logo and collapse toggle */}
-      <div className={`flex items-center p-4 border-b ${isCollapsed ? "flex-col gap-2" : "justify-between"}`}>
-        {!isCollapsed ? (
-          <>
-            <Link href="/" className="flex items-center gap-2 font-bold text-lg">
-              <AppLogo size="sm" />
-              <span className="hidden lg:inline">TwentyFour/Seven</span>
-              <span className="lg:hidden">24/7</span>
-            </Link>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-2 shrink-0 hover:bg-accent touch-manipulation"
-              aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-          </>
-        ) : (
-          <>
-            <Link
-              href="/"
-              className="flex items-center justify-center touch-manipulation"
-              aria-label="Home"
-            >
-              <AppLogo size="sm" />
-            </Link>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-2 hover:bg-accent touch-manipulation"
-              aria-label="Expand sidebar"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </>
-        )}
+      {/* Brand row */}
+      <div className={`flex h-12 shrink-0 items-center pt-4 ${isCollapsed ? "flex-col gap-2 h-auto" : "justify-between gap-2"}`}>
+        <Link
+          href="/"
+          className={`flex min-w-0 items-center gap-x-3 touch-manipulation ${isCollapsed ? "justify-center" : ""}`}
+          aria-label={isCollapsed ? "Home" : undefined}
+        >
+          <AppLogo size="sm" />
+          {!isCollapsed && (
+            <span className="truncate text-sm font-semibold text-foreground">TwentyFour/Seven</span>
+          )}
+        </Link>
+        <button
+          type="button"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="shrink-0 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-accent hover:text-foreground dark:text-gray-500 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </button>
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 p-2" role="navigation" aria-label="Main navigation">
-        <ul className="space-y-1">
+      <nav className="flex flex-1 flex-col" role="navigation" aria-label="Main navigation">
+        <ul role="list" className="flex flex-col gap-y-1">
           {navigationLinks.map(({ to, label, icon: Icon }) => {
             const isActive = pathname === to || (to !== "/" && pathname.startsWith(to));
             return (
               <li key={to}>
                 <Link
                   href={to}
-                  className={`
-                    flex items-center gap-3 px-3 py-3 rounded-md text-sm font-medium transition-colors
-                    hover:bg-accent hover:text-accent-foreground touch-manipulation
-                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                    ${isActive 
-                      ? "bg-accent text-accent-foreground" 
-                      : "text-muted-foreground"
-                    }
-                    ${isCollapsed ? "justify-center" : ""}
-                  `}
+                  className={
+                    isCollapsed
+                      ? `group flex justify-center rounded-md p-2 text-sm font-medium leading-6 transition-colors touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          isActive ? "text-foreground" : "text-gray-700 hover:bg-accent hover:text-foreground dark:text-gray-300"
+                        }`
+                      : `group flex items-center gap-x-3 rounded-md p-3 text-sm font-medium leading-6 transition-colors touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          isActive ? "text-foreground" : "text-gray-700 hover:bg-accent hover:text-foreground dark:text-gray-300"
+                        }`
+                  }
                   title={isCollapsed ? label : undefined}
                   aria-current={isActive ? "page" : undefined}
                 >
-                  <Icon className="w-5 h-5 shrink-0" />
-                  {!isCollapsed && <span>{label}</span>}
+                  {isCollapsed ? (
+                    <span className="flex h-9 w-9 items-center justify-center">
+                      <Icon
+                        className={`h-6 w-6 shrink-0 ${isActive ? "text-foreground" : "text-gray-400 group-hover:text-foreground dark:text-gray-500"}`}
+                        aria-hidden="true"
+                      />
+                    </span>
+                  ) : (
+                    <>
+                      <Icon
+                        className={`h-6 w-6 shrink-0 ${isActive ? "text-foreground" : "text-gray-400 group-hover:text-foreground dark:text-gray-500"}`}
+                        aria-hidden="true"
+                      />
+                      <span>{label}</span>
+                    </>
+                  )}
                 </Link>
               </li>
             );
@@ -133,42 +129,41 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      {/* User Info and Sign Out */}
-      <div className="p-2 border-t">
+      {/* Account, theme, sign out */}
+      <div className="border-t pt-2">
         {isPending ? (
-          <div className="flex items-center gap-3 p-3">
-            <Skeleton className="w-8 h-8 rounded-full" />
+          <div className="flex items-center gap-x-3 p-2">
+            <Skeleton className="h-8 w-8 rounded-full" />
             {!isCollapsed && <Skeleton className="h-4 flex-1" />}
           </div>
         ) : session ? (
-          <div className={`space-y-2 ${isCollapsed ? "flex flex-col items-center" : ""}`}>
-            {/* User Info */}
-            <div className={`flex items-center gap-3 p-2 rounded-md bg-accent/50 ${isCollapsed ? "justify-center" : ""}`}>
-              <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-primary-foreground" />
-              </div>
+          <div className="flex flex-col gap-y-1">
+            <div
+              className={`flex items-center gap-x-3 rounded-md p-2 ${isCollapsed ? "justify-center" : ""}`}
+              title={isCollapsed ? session.user.name : undefined}
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blue-500 bg-blue-600 text-sm font-semibold text-white">
+                {initial}
+              </span>
               {!isCollapsed && (
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{session.user.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
-                </div>
+                <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" title={session.user.email}>
+                  {session.user.name}
+                </p>
               )}
             </div>
-            
-            {/* Sign Out Button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSignOut}
-              className={`w-full justify-start text-muted-foreground hover:text-foreground hover:bg-accent touch-manipulation ${
-                isCollapsed ? "px-2" : ""
-              }`}
-              title={isCollapsed ? "Sign Out" : undefined}
-              aria-label="Sign out"
-            >
-              <LogOut className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span className="ml-2">Sign Out</span>}
-            </Button>
+            <div className={`flex items-center ${isCollapsed ? "flex-col gap-1" : "justify-between"} px-1`}>
+              <ModeToggle showLabel={!isCollapsed} />
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="inline-flex items-center gap-1.5 rounded-md p-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-accent hover:text-foreground touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                title={isCollapsed ? "Sign out" : undefined}
+                aria-label="Sign out"
+              >
+                <LogOut className="h-5 w-5 shrink-0" aria-hidden="true" />
+                {!isCollapsed && <span>Sign out</span>}
+              </button>
+            </div>
           </div>
         ) : (
           <Button variant="outline" className="w-full touch-manipulation" asChild>
@@ -182,4 +177,4 @@ export default function Sidebar() {
       </div>
     </div>
   );
-} 
+}

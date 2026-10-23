@@ -132,7 +132,7 @@ export function Autocomplete({
       </div>
 
       {open && (inputFocused || searchValue) && (
-        <Card className="absolute top-full z-50 mt-1 w-full border bg-popover p-0 shadow-md">
+        <Card className="tfs-menu absolute top-full z-50 mt-1 w-full gap-0 rounded-xl p-1">
           <div className="max-h-[200px] overflow-y-auto">
             {loading ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -147,7 +147,7 @@ export function Autocomplete({
                 <div
                   key={option}
                   className={cn(
-                    "relative flex cursor-pointer select-none items-center px-3 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                    "relative flex cursor-pointer select-none items-center rounded-md px-3 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
                     value === option && "bg-accent text-accent-foreground"
                   )}
                   onClick={() => handleOptionSelect(option)}

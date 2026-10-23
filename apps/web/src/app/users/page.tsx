@@ -351,7 +351,7 @@ export default function UsersPage() {
       <div className="flex items-center space-x-2">
         <UsersIcon className="h-8 w-8" />
         <div>
-          <h1 className="text-3xl font-bold">Users Management</h1>
+          <h1 className="text-2xl font-semibold tracking-[-0.03em]">Users Management</h1>
           <p className="text-muted-foreground">Manage users and import from WatchTower</p>
         </div>
       </div>

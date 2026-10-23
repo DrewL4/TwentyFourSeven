@@ -858,14 +858,14 @@ function AddContentDialog({
   return (
     <TooltipProvider delayDuration={300}>
       <div 
-        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+        className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[6px] flex items-center justify-center z-50"
         onClick={(e) => {
           if (e.target === e.currentTarget) {
             handleClose();
           }
         }}
       >
-      <Card className="w-full max-w-6xl max-h-[90vh] overflow-hidden">
+      <Card className="tfs-modal w-full max-w-6xl max-h-[90vh] overflow-hidden">
         <CardHeader className="border-b">
           <div className="flex items-center justify-between">
             <div>
@@ -2768,7 +2768,7 @@ function ChannelsPageContent() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 flex-shrink-0">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-semibold tracking-[-0.03em] flex items-center gap-2">
             <Radio className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
             TV Channels
           </h1>

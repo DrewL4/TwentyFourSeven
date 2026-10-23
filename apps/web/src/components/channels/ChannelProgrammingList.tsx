@@ -258,7 +258,7 @@ export function ChannelProgrammingList({
                         </Button>
                       ) : (
                         <div className="w-8 flex-shrink-0 flex justify-center">
-                          <Film className="w-4 h-4 text-orange-500" />
+                          <Film className="w-4 h-4 text-accent-text" />
                         </div>
                       )}
 

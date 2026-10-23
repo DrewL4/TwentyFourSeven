@@ -446,8 +446,8 @@ export default function FfmpegSettingsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Video className="w-8 h-8 text-orange-600" />
+          <h1 className="text-2xl font-semibold tracking-[-0.03em] flex items-center gap-2">
+            <Video className="w-7 h-7 text-accent-text" />
             FFMPEG Settings
           </h1>
           <p className="text-muted-foreground mt-1">

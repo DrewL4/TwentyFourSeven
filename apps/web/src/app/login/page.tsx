@@ -58,8 +58,8 @@ export default function LoginPage() {
   }, []);
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/80 p-8 shadow-xl shadow-black/5 backdrop-blur-sm dark:shadow-black/20">
-      <AppBrandHeader className="mb-8" />
+    <div className="space-y-8">
+      <AppBrandHeader size="login" titleClassName="text-3xl font-extrabold tracking-[-0.03em]" />
 
       {status === null ? (
         <div className="flex flex-col items-center justify-center gap-3 py-10 text-muted-foreground">
@@ -68,7 +68,16 @@ export default function LoginPage() {
         </div>
       ) : (
         <>
-          <div className="mb-6 text-center">
+          <div className="relative" aria-hidden="true">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-black/10 dark:border-white/15" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-background px-3 text-muted-foreground">Account sign-in</span>
+            </div>
+          </div>
+
+          <div className="text-center">
             <h2 className="text-lg font-semibold text-foreground">Sign in with WatchTower</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Use the same email (or username) and password as your WatchTower account

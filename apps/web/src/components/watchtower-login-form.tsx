@@ -125,7 +125,7 @@ export default function WatchTowerLoginForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {showSetupFields && (
-        <div className="space-y-4 rounded-lg border border-border/60 bg-muted/30 p-4">
+        <div className="space-y-4 tfs-glass-panel rounded-2xl p-4">
           <div>
             <p className="text-sm font-medium text-foreground">First-time server setup</p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -251,7 +251,7 @@ export default function WatchTowerLoginForm({
         </Alert>
       )}
 
-      <Button type="submit" className="w-full" disabled={isLoading}>
+      <Button type="submit" className="h-11 w-full rounded-xl" disabled={isLoading}>
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

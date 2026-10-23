@@ -281,7 +281,7 @@ export default function LibraryPage() {
               <Library className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold">Media Library</h1>
+              <h1 className="text-2xl font-semibold tracking-[-0.03em]">Media Library</h1>
               <p className="text-muted-foreground">Browse your synced Plex libraries and content</p>
             </div>
           </div>
@@ -323,7 +323,7 @@ export default function LibraryPage() {
             <Library className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Media Library</h1>
+            <h1 className="text-2xl font-semibold tracking-[-0.03em]">Media Library</h1>
             <p className="text-muted-foreground">Browse your synced Plex libraries and content</p>
           </div>
         </div>
