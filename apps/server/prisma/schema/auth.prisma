@@ -1,6 +1,9 @@
 model User {
   id                    String    @id @map("_id")
   name                  String
+  /// First and last name kept apart (from WatchTower, or typed by an admin) for the playlist login rule.
+  firstName             String?
+  lastName              String?
   email                 String
   emailVerified         Boolean
   image                 String?

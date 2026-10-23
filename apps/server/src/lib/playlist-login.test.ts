@@ -1,7 +1,8 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
-import { createLoginChecker, clearLoginCache, newLocalLogin, LOGIN_CACHE_MS } from "./playlist-login";
+import { readFileSync } from "node:fs";
+import { createLoginChecker, clearLoginCache, newLocalLogin, LOGIN_CACHE_MS, defaultLogin, playlistSlug, resolveMode, LinkedWithoutTokenError, type ModeState } from "./playlist-login";
 import { sealLogin, openSealedLogin, isSealedLogin } from "./link-security";
 
 // Secrets are read when used, so setting it here is early enough.
@@ -27,9 +28,11 @@ beforeEach(() => {
   clock += 10 * LOGIN_CACHE_MS;
 });
 
-function checker(f: typeof fetch, espg = true, local: Record<string, { userId: string; passwordSealed: string }> = {}) {
+function checker(f: typeof fetch, espg: boolean | ModeState = true, local: Record<string, { userId: string; passwordSealed: string }> = {}) {
+  const state: ModeState =
+    typeof espg === "object" ? espg : espg ? { mode: "espg", url: "http://espg.test/", link: { url: "http://espg.test/", token: "service-token" } } : { mode: "tfs" };
   return createLoginChecker({
-    espg: async () => (espg ? { url: "http://espg.test/", token: "service-token" } : null),
+    mode: async () => state,
     fetch: f,
     findLocal: async (u) => local[u] ?? null,
     userIdByEmail: async (e) => (e === "viewer@example.test" ? "user-1" : null),
@@ -115,4 +118,60 @@ test("lookup lists the user's ESPG logins", async () => {
   const res = await checker(f).lookup("viewer@example.test");
   assert.deepEqual(res, { source: "espg", logins: [{ playlist: "Home", username: "HomeVi", password: "Ewer" }] });
   assert.deepEqual(calls[0].body, { action: "lookup", email: "viewer@example.test" });
+});
+
+// --- modes -------------------------------------------------------------------
+
+test("mode: an explicit choice wins; before a choice, an ESPG address means linked (upgrade keeps behaviour)", () => {
+  assert.equal(resolveMode("tfs", "http://espg"), "tfs");
+  assert.equal(resolveMode("espg", ""), "espg");
+  assert.equal(resolveMode("", "http://espg"), "espg");
+  assert.equal(resolveMode(null, "  "), "tfs");
+  assert.equal(resolveMode("bogus", ""), "tfs");
+});
+
+test("linked without a WatchTower token never falls back to local logins", async () => {
+  const mine = newLocalLogin("Drew L");
+  const { f, calls } = fakeEspg(() => ({ status: 200, json: { valid: true } }));
+  const c = checker(f, { mode: "espg", url: "http://espg.test", link: null }, { [mine.username]: { userId: "u9", passwordSealed: mine.passwordSealed } });
+  assert.deepEqual(await c.check({ username: mine.username, password: mine.password }), { ok: false, reason: "unavailable" });
+  await assert.rejects(c.lookup("viewer@example.test"), LinkedWithoutTokenError);
+  assert.equal(calls.length, 0);
+});
+
+test("on its own, ESPG is never asked even if an address is saved", async () => {
+  const { f, calls } = fakeEspg(() => ({ status: 200, json: { valid: true } }));
+  const c = checker(f, false);
+  assert.equal(await c.lookup("viewer@example.test"), null);
+  assert.deepEqual(await c.check(good), { ok: false, reason: "wrong" });
+  assert.equal(calls.length, 0);
+});
+
+test("login answers are cached for about a minute by default", () => {
+  assert.ok(LOGIN_CACHE_MS <= 60_000 || !!process.env.PLAYLIST_LOGIN_CACHE_SECONDS);
+});
+
+// --- default login: same answers as ESPG's model -------------------------------
+
+const fixture = JSON.parse(readFileSync(new URL("./__fixtures__/espg-default-login-cases.json", import.meta.url), "utf8"));
+
+for (const c of fixture.cases) {
+  test(`default login matches ESPG: ${c.name}`, async () => {
+    const taken = new Set<string>(c.taken);
+    const login = await defaultLogin({ firstName: c.first, lastName: c.last, email: c.email }, c.playlist, (u) => taken.has(u));
+    assert.deepEqual(login, { username: c.username, password: c.password });
+  });
+}
+
+test("playlist name cleaning is Python's [^\\w] (Unicode letters, digits, _)", () => {
+  assert.equal(playlistSlug("Café TV-24/7!"), "cafétv247");
+  assert.equal(playlistSlug("Ünïcode_Ok 9"), "ünïcode_ok9");
+  assert.equal(playlistSlug(""), "");
+});
+
+test("old-style logins still check out (existing rows are never rewritten)", async () => {
+  const old = newLocalLogin("Pearl Puffin");
+  const { f } = fakeEspg(() => ({ status: 500 }));
+  const c = checker(f, false, { [old.username]: { userId: "u3", passwordSealed: old.passwordSealed } });
+  assert.ok((await c.check({ username: old.username, password: old.password })).ok);
 });

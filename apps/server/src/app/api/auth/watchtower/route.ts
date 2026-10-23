@@ -238,6 +238,9 @@ export async function POST(request: NextRequest) {
         ? `${watchTowerUser.first_name} ${watchTowerUser.last_name}`.trim()
         : watchTowerUser.username || watchTowerUser.email || 'WatchTower User',
       email: watchTowerUser.email || '',
+      // Kept apart for the playlist login rule (playlist name + first name / last name).
+      firstName: String(watchTowerUser.first_name || '').trim() || null,
+      lastName: String(watchTowerUser.last_name || '').trim() || null,
       watchTowerUserId: watchTowerUser.id?.toString() || '',
       watchTowerUsername: watchTowerUser.username || '',
       role: isAdmin ? 'ADMIN' : 'USER',

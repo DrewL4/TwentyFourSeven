@@ -380,6 +380,10 @@ model Settings {
   allowLanWithoutKey Boolean @default(true)
   /// ESPG address for checking playlist logins (empty = ESPG_URL env, else off).
   espgUrl           String  @default("")
+  /// Playlist logins: "" = not chosen yet (decided from the ESPG address on upgrade), "tfs" = on its own, "espg" = linked to ESPG.
+  playlistLoginMode String  @default("")
+  /// First part of new default playlist usernames (like the ESPG playlist name). Only new and reset logins use it.
+  playlistName      String  @default("247")
   
   ffmpegSettings FfmpegSettings?
   plexSettings PlexSettings?

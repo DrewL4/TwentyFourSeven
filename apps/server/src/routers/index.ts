@@ -1748,57 +1748,113 @@ export const appRouter = {
     },
 
     /**
-     * Playlist login for TV apps: the same username/password as ESPG when ESPG
-     * is connected, otherwise a TwentyFourSeven login per user.
+     * Playlist logins for TV apps (Xtream Codes / M3U). Two modes: "tfs" (on its
+     * own, logins kept here, ESPG's default rule) or "espg" (linked: logins come
+     * from ESPG and are edited there). See lib/playlist-login.ts.
      */
     playlistLogin: {
       mine: protectedProcedure.handler(async ({ context }) => {
         const user = context.session?.user;
         if (!user?.id) throw new ORPCError("UNAUTHORIZED");
-        const { playlistLogins, espgConfigured, newLocalLogin } = await import('../lib/playlist-login');
+        const pl = await import('../lib/playlist-login');
         const { openSealedLogin } = await import('../lib/link-security');
-        const espg = await espgConfigured();
-        if (espg) {
-          if (!espg.hasToken) {
-            return { mode: "espg" as const, logins: [], problem: "TwentyFourSeven isn't connected to WatchTower yet, so it can't ask ESPG about playlist logins." };
-          }
+        const s = await pl.loginSettings();
+        if (s.mode === "espg") {
+          if (!s.espgUrl) return { mode: "espg" as const, logins: [], custom: false, problem: new pl.LinkedWithoutAddressError().message };
+          if (!s.hasToken) return { mode: "espg" as const, logins: [], custom: false, problem: new pl.LinkedWithoutTokenError().message };
           try {
-            const res = await playlistLogins.lookup(user.email);
+            const res = await pl.playlistLogins.lookup(user.email);
             return {
               mode: "espg" as const,
               logins: res?.logins ?? [],
+              custom: false,
               problem: res && res.logins.length === 0 ? "You don't have playlist access in ESPG yet. Ask your admin to give you a playlist in ESPG." : null,
             };
-          } catch {
-            return { mode: "espg" as const, logins: [], problem: "Couldn't reach ESPG. Check the ESPG address below." };
+          } catch (e) {
+            return { mode: "espg" as const, logins: [], custom: false, problem: e instanceof pl.LinkedWithoutTokenError || e instanceof pl.LinkedWithoutAddressError ? e.message : "Couldn't reach ESPG. Check the ESPG address in Settings." };
           }
         }
         let row = await prisma.playlistLogin.findUnique({ where: { userId: user.id } });
         if (!row) {
-          const fresh = newLocalLogin(user.name || user.email.split("@")[0]);
-          row = await prisma.playlistLogin.create({ data: { userId: user.id, username: fresh.username, passwordSealed: fresh.passwordSealed } });
+          await pl.makeDefaultLoginFor(user.id);
+          row = await prisma.playlistLogin.findUnique({ where: { userId: user.id } });
         }
-        const opened = openSealedLogin(row.passwordSealed);
+        const opened = row ? openSealedLogin(row.passwordSealed) : null;
         return {
           mode: "tfs" as const,
           logins: opened ? [{ playlist: "TwentyFourSeven", username: opened.username, password: opened.password }] : [],
+          custom: !!row?.custom,
           problem: opened ? null : "Your playlist login needs a reset (the app secret changed).",
         };
       }),
 
+      /** A person resets their own login back to the default (standalone only; not if an admin set it). */
       resetMine: protectedProcedure.handler(async ({ context }) => {
         const user = context.session?.user;
         if (!user?.id) throw new ORPCError("UNAUTHORIZED");
-        const { newLocalLogin, clearLoginCache } = await import('../lib/playlist-login');
-        const fresh = newLocalLogin(user.name || user.email.split("@")[0]);
-        await prisma.playlistLogin.upsert({
-          where: { userId: user.id },
-          create: { userId: user.id, username: fresh.username, passwordSealed: fresh.passwordSealed },
-          update: { username: fresh.username, passwordSealed: fresh.passwordSealed },
-        });
-        clearLoginCache();
+        const pl = await import('../lib/playlist-login');
+        const s = await pl.loginSettings();
+        if (s.mode !== "tfs") throw new ORPCError("BAD_REQUEST", { message: "Playlist logins come from ESPG. Change yours in ESPG." });
+        const row = await prisma.playlistLogin.findUnique({ where: { userId: user.id }, select: { custom: true } });
+        if (row?.custom) throw new ORPCError("BAD_REQUEST", { message: "Your admin set this login. Ask them to change it." });
+        await pl.makeDefaultLoginFor(user.id);
         return { ok: true };
       }),
+
+      /** Admin: mode, playlist name, ESPG address and what a switch would stop. */
+      settings: adminProcedure.handler(async () => {
+        const pl = await import('../lib/playlist-login');
+        const s = await pl.loginSettings();
+        const [localLogins, users] = await Promise.all([prisma.playlistLogin.count(), prisma.user.count()]);
+        let problem: string | null = null;
+        if (s.mode === "espg" && !s.espgUrl) problem = new pl.LinkedWithoutAddressError().message;
+        else if (s.mode === "espg" && !s.hasToken) problem = new pl.LinkedWithoutTokenError().message;
+        return {
+          mode: s.mode,
+          chosen: s.savedMode === "tfs" || s.savedMode === "espg",
+          playlistName: s.playlistName,
+          espgUrl: s.espgUrl,
+          fromEnv: s.fromEnv,
+          hasWatchTowerToken: s.hasToken,
+          localLogins,
+          users,
+          problem,
+        };
+      }),
+
+      setMode: adminProcedure
+        .input(z.object({ mode: z.enum(["tfs", "espg"]) }))
+        .handler(async ({ input, context }) => {
+          await prisma.settings.upsert({
+            where: { id: "singleton" },
+            create: { id: "singleton", playlistLoginMode: input.mode },
+            update: { playlistLoginMode: input.mode },
+          });
+          const pl = await import('../lib/playlist-login');
+          pl.clearEspgLinkCache();
+          pl.clearLoginCache();
+          const s = await pl.loginSettings();
+          if (input.mode === "tfs") return { ok: true, message: "Playlist logins are now kept by TwentyFourSeven. ESPG logins no longer work here." };
+          if (!s.espgUrl) return { ok: false, message: new pl.LinkedWithoutAddressError().message };
+          if (!s.hasToken) return { ok: false, message: new pl.LinkedWithoutTokenError().message };
+          try {
+            await pl.playlistLogins.lookup(context.session?.user?.email ?? "");
+            return { ok: true, message: "Linked. ESPG playlist logins now work here; TwentyFourSeven's own logins are kept but stop working." };
+          } catch {
+            return { ok: false, message: "Saved, but ESPG didn't answer. Check the address and that ESPG is up to date." };
+          }
+        }),
+
+      setPlaylistName: adminProcedure
+        .input(z.object({ playlistName: z.string().trim().min(1).max(40) }))
+        .handler(async ({ input }) => {
+          await prisma.settings.upsert({
+            where: { id: "singleton" },
+            create: { id: "singleton", playlistName: input.playlistName },
+            update: { playlistName: input.playlistName },
+          });
+          return { ok: true, message: "Saved. Only new and reset logins use the new name." };
+        }),
 
       espg: adminProcedure.handler(async () => {
         const settings = await prisma.settings.findUnique({ where: { id: "singleton" }, select: { espgUrl: true } });
@@ -1819,19 +1875,105 @@ export const appRouter = {
           if (url && !/^https?:\/\/[^\s/]+/i.test(url)) {
             throw new ORPCError("BAD_REQUEST", { message: "Enter the ESPG address, like http://192.168.1.10:9191" });
           }
-          await prisma.settings.upsert({ where: { id: "singleton" }, create: { id: "singleton", espgUrl: url }, update: { espgUrl: url } });
-          const { clearEspgLinkCache, clearLoginCache, playlistLogins, espgConfigured } = await import('../lib/playlist-login');
-          clearEspgLinkCache();
-          clearLoginCache();
-          const current = await espgConfigured();
-          if (!current) return { ok: true, message: "Using TwentyFourSeven's own playlist logins." };
-          if (!current.hasToken) return { ok: false, message: "Saved. Connect TwentyFourSeven to WatchTower so it can ask ESPG." };
+          const pl = await import('../lib/playlist-login');
+          const before = await pl.loginSettings();
+          // Saving an address must not quietly change the mode. Before anyone chose a mode,
+          // pin the one in use now so the upgrade guess can't flip.
+          const pin = before.savedMode === "tfs" || before.savedMode === "espg" ? {} : { playlistLoginMode: before.mode };
+          await prisma.settings.upsert({ where: { id: "singleton" }, create: { id: "singleton", espgUrl: url, ...pin }, update: { espgUrl: url, ...pin } });
+          pl.clearEspgLinkCache();
+          pl.clearLoginCache();
+          const s = await pl.loginSettings();
+          if (s.mode !== "espg") return { ok: true, message: "ESPG address saved. Playlist logins are kept by TwentyFourSeven (switch to “Linked to ESPG” to use ESPG logins)." };
+          if (!s.espgUrl) return { ok: false, message: new pl.LinkedWithoutAddressError().message };
+          if (!s.hasToken) return { ok: false, message: new pl.LinkedWithoutTokenError().message };
           try {
-            await playlistLogins.lookup(context.session?.user?.email ?? "");
+            await pl.playlistLogins.lookup(context.session?.user?.email ?? "");
             return { ok: true, message: "Connected. ESPG playlist logins now work here." };
           } catch {
             return { ok: false, message: "Saved, but ESPG didn't answer. Check the address and that ESPG is up to date." };
           }
+        }),
+
+      /** Admin: everyone's playlist login. Editable only when on its own. */
+      list: adminProcedure.handler(async () => {
+        const pl = await import('../lib/playlist-login');
+        const { openSealedLogin } = await import('../lib/link-security');
+        const s = await pl.loginSettings();
+        const users = await prisma.user.findMany({
+          select: { id: true, name: true, email: true, firstName: true, lastName: true, role: true },
+          orderBy: { name: "asc" },
+        });
+        const rows = await prisma.playlistLogin.findMany();
+        const byUser = new Map(rows.map((r) => [r.userId, r]));
+        return {
+          mode: s.mode,
+          readOnly: s.mode !== "tfs",
+          playlistName: s.playlistName,
+          users: users.map((u) => {
+            const r = byUser.get(u.id);
+            const opened = r ? openSealedLogin(r.passwordSealed) : null;
+            return {
+              userId: u.id,
+              name: u.name,
+              email: u.email,
+              firstName: u.firstName ?? "",
+              lastName: u.lastName ?? "",
+              login: r
+                ? { username: opened?.username ?? r.username, password: opened?.password ?? null, custom: r.custom, origin: r.origin, updatedAt: r.updatedAt }
+                : null,
+            };
+          }),
+        };
+      }),
+
+      adminSet: adminProcedure
+        .input(
+          z.object({
+            userId: z.string().min(1),
+            username: z.string().trim().min(3).max(50).regex(/^[^\s/:@?#&%]+$/, "No spaces or / : @ ? # & %"),
+            password: z.string().min(4).max(100).regex(/^[^\s/:@?#&%]+$/, "No spaces or / : @ ? # & %"),
+          }),
+        )
+        .handler(async ({ input }) => {
+          const pl = await import('../lib/playlist-login');
+          const { sealLogin } = await import('../lib/link-security');
+          const s = await pl.loginSettings();
+          if (s.mode !== "tfs") throw new ORPCError("BAD_REQUEST", { message: "Playlist logins come from ESPG. Edit them in ESPG (Users → playlist login)." });
+          const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { id: true } });
+          if (!user) throw new ORPCError("NOT_FOUND", { message: "No such user." });
+          const others = await prisma.playlistLogin.findMany({ where: { NOT: { userId: input.userId } }, select: { username: true } });
+          if (others.some((o) => o.username.toLowerCase() === input.username.toLowerCase())) {
+            throw new ORPCError("CONFLICT", { message: "Someone else already uses that username." });
+          }
+          const passwordSealed = sealLogin({ username: input.username, password: input.password });
+          await prisma.playlistLogin.upsert({
+            where: { userId: input.userId },
+            create: { userId: input.userId, username: input.username, passwordSealed, custom: true, origin: "custom" },
+            update: { username: input.username, passwordSealed, custom: true, origin: "custom" },
+          });
+          pl.clearLoginCache();
+          return { ok: true };
+        }),
+
+      adminReset: adminProcedure
+        .input(z.object({ userId: z.string().min(1) }))
+        .handler(async ({ input }) => {
+          const pl = await import('../lib/playlist-login');
+          const s = await pl.loginSettings();
+          if (s.mode !== "tfs") throw new ORPCError("BAD_REQUEST", { message: "Playlist logins come from ESPG. Reset them in ESPG." });
+          const login = await pl.makeDefaultLoginFor(input.userId);
+          return { ok: true, username: login.username };
+        }),
+
+      adminSetNames: adminProcedure
+        .input(z.object({ userId: z.string().min(1), firstName: z.string().trim().max(60), lastName: z.string().trim().max(60) }))
+        .handler(async ({ input }) => {
+          await prisma.user.update({
+            where: { id: input.userId },
+            data: { firstName: input.firstName || null, lastName: input.lastName || null },
+          });
+          return { ok: true, message: "Names saved. Reset the login to use them." };
         }),
     },
 

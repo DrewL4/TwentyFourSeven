@@ -1,0 +1,17 @@
+{
+  "about": "ESPG's default playlist login rule (backend/apps/users/models.py UserPlaylist.save). The same table is checked against the real ESPG model (ESPG core/tests/test_playlist_login_rule.py) and against the TwentyFourSeven port (apps/server/src/lib/playlist-login.test.ts). Keep both copies identical.",
+  "cases": [
+    { "name": "basic", "playlist": "Home Viewing", "first": "Vi", "last": "Ewer", "email": "vi@example.test", "taken": [], "username": "homeviewingvi", "password": "ewer" },
+    { "name": "TwentyFourSeven default playlist name", "playlist": "247", "first": "Drew", "last": "Lindstrom", "email": "drew@example.test", "taken": [], "username": "247drew", "password": "lindstrom" },
+    { "name": "taken: add one letter of the last name", "playlist": "247", "first": "Drew", "last": "Lindstrom", "email": "drew@example.test", "taken": ["247drew"], "username": "247drewl", "password": "lindstrom" },
+    { "name": "taken twice: two letters", "playlist": "247", "first": "Drew", "last": "Lindstrom", "email": "drew@example.test", "taken": ["247drew", "247drewl"], "username": "247drewli", "password": "lindstrom" },
+    { "name": "all last-name prefixes taken: numbers", "playlist": "247", "first": "Drew", "last": "Li", "email": "drew@example.test", "taken": ["247drew", "247drewl", "247drewli"], "username": "247drew2", "password": "li" },
+    { "name": "numbers keep counting", "playlist": "247", "first": "Drew", "last": "Li", "email": "drew@example.test", "taken": ["247drew", "247drewl", "247drewli", "247drew2"], "username": "247drew3", "password": "li" },
+    { "name": "no names: e-mail part and 'password'", "playlist": "247", "first": "", "last": "", "email": "Pearl.Puffin@Test.local", "taken": [], "username": "247pearl.puffin", "password": "password" },
+    { "name": "names are trimmed and lowercased, inner spaces kept", "playlist": "247", "first": "  Mary Ann ", "last": " Van Dyke ", "email": "mary@example.test", "taken": [], "username": "247mary ann", "password": "van dyke" },
+    { "name": "only the playlist name is cleaned (Unicode letters kept)", "playlist": "Café TV-24/7!", "first": "José", "last": "Núñez", "email": "jose@example.test", "taken": [], "username": "cafétv247josé", "password": "núñez" },
+    { "name": "no last name: collisions use the e-mail part", "playlist": "247", "first": "Gus", "last": "", "email": "gus.gale@example.test", "taken": ["247gus"], "username": "247gusg", "password": "password" },
+    { "name": "taken check is exact (case matters)", "playlist": "247", "first": "Drew", "last": "Lindstrom", "email": "drew@example.test", "taken": ["247Drew"], "username": "247drew", "password": "lindstrom" },
+    { "name": "underscores stay in the playlist name", "playlist": "Family_TV 2", "first": "Foggy", "last": "Frank", "email": "foggy@example.test", "taken": [], "username": "family_tv2foggy", "password": "frank" }
+  ]
+}

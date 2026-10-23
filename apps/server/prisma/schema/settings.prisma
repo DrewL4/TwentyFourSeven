@@ -15,7 +15,12 @@ model PlaylistLogin {
   username       String   @unique
   /// Sealed with the app secret so it can be shown again to its owner.
   passwordSealed String
+  /// true once an admin typed this username/password; a reset or sync never overwrites it.
+  custom         Boolean  @default(false)
+  /// "legacy" = made before the ESPG-style rule (tfs<name><hex>), "default" = the ESPG rule, "custom" = typed by an admin.
+  origin         String   @default("legacy")
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
 
   @@map("playlist_login")
 }

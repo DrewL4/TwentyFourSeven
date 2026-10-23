@@ -216,6 +216,8 @@ export async function POST(request: NextRequest) {
           name: watchTowerUser.first_name && watchTowerUser.last_name 
             ? `${watchTowerUser.first_name} ${watchTowerUser.last_name}`.trim()
             : watchTowerUser.username || watchTowerUser.email,
+          firstName: String(watchTowerUser.first_name || '').trim() || null,
+          lastName: String(watchTowerUser.last_name || '').trim() || null,
           watchTowerUserId: watchTowerUser.id?.toString(),
           watchTowerUsername: watchTowerUser.username,
           role: isAdmin ? 'ADMIN' : 'USER',

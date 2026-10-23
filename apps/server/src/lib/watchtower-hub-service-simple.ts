@@ -434,6 +434,8 @@ export class WatchTowerHubService {
             name: wtUser.first_name && wtUser.last_name 
               ? `${wtUser.first_name} ${wtUser.last_name}`.trim()
               : wtUser.username || wtUser.email,
+            firstName: String(wtUser.first_name || '').trim() || null,
+            lastName: String(wtUser.last_name || '').trim() || null,
             role: wtUser.is_admin ? 'ADMIN' : 'USER',
             isActive: hasAccess, // Set to false if expired (will block login)
             watchTowerUserId: wtUser.id?.toString(),

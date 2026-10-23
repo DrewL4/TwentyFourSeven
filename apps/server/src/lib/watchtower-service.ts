@@ -154,6 +154,8 @@ export class WatchTowerService {
         const userData = {
           name: `${wtUser.first_name} ${wtUser.last_name}`.trim() || wtUser.username,
           email: wtUser.email,
+          firstName: wtUser.first_name || '',
+          lastName: wtUser.last_name || '',
           emailVerified: false,
           source: 'watchtower_sync',
           originalJoinDate: wtUser.date_joined // Pass the WatchTower join date

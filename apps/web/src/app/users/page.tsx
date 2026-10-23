@@ -11,6 +11,7 @@ import { Download, Users as UsersIcon, Loader2, AlertCircle, CheckCircle, LogIn 
 import { toast } from "sonner";
 import { useSocketContext } from "@/contexts/socket-context";
 import { TFS_USER_UPDATES_EVENT } from "@/constants/userRealtime";
+import PlaylistLoginsAdmin from "@/components/settings/playlist-logins-admin";
 
 interface User {
   _id: string;
@@ -460,6 +461,8 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      <PlaylistLoginsAdmin />
     </div>
   );
 } 

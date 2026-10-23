@@ -11,6 +11,8 @@ export async function POST(request: NextRequest) {
     
     const body = await request.json();
     const { name, email, emailVerified, source, originalJoinDate } = body;
+    const firstName = typeof body.firstName === 'string' && body.firstName.trim() ? body.firstName.trim() : null;
+    const lastName = typeof body.lastName === 'string' && body.lastName.trim() ? body.lastName.trim() : null;
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -24,6 +26,8 @@ export async function POST(request: NextRequest) {
       // Update existing user with new information from WatchTower
       const updateData: any = {
         name: name || existingUser.name, // Keep existing name if new one is empty
+        ...(firstName ? { firstName } : {}),
+        ...(lastName ? { lastName } : {}),
         emailVerified: emailVerified || existingUser.emailVerified,
         updatedAt: now,
         // Note: Don't update createdAt - preserve original creation date
@@ -48,6 +52,8 @@ export async function POST(request: NextRequest) {
           id: randomUUID(),
           name,
           email,
+          firstName,
+          lastName,
           emailVerified: emailVerified || false,
           createdAt: joinDate, // Use WatchTower join date
           updatedAt: now,
