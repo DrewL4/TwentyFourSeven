@@ -19,6 +19,8 @@ export async function decidePlexImageAccess(input: {
   searchParams: URLSearchParams;
   servers: ServerRow[];
   hasSession: () => Promise<boolean>;
+  /** Old never-expiring `sig` links. The route turns these off; links now carry a short-lived `t`. */
+  acceptSignature?: boolean;
 }): Promise<PlexImageDecision> {
   const { searchParams } = input;
   let target: PlexImageTarget | null = null;
@@ -44,7 +46,7 @@ export async function decidePlexImageAccess(input: {
     : undefined;
 
   let via: "signature" | "session" | null = null;
-  if (target && server?.token && verifyPlexImageSignature(target, server.token, searchParams.get("sig"))) {
+  if (input.acceptSignature !== false && target && server?.token && verifyPlexImageSignature(target, server.token, searchParams.get("sig"))) {
     via = "signature";
   } else if (await input.hasSession()) {
     via = "session";

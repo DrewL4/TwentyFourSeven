@@ -1,6 +1,6 @@
 # TwentyFour/Seven (TFS)
 
-TwentyFour/Seven turns your Plex library into always-on TV channels, with a program guide, that any IPTV app can play. It is a sister app of **WatchTower**. Everyone signs in with their WatchTower account.
+TwentyFour/Seven turns your movie and TV folders (or your Plex library) into always-on TV channels, with a program guide, that any IPTV app can play. It is a sister app of **WatchTower**. Everyone signs in with their WatchTower account.
 
 **Install WatchTower first.** TFS sign-in only works through WatchTower, so set WatchTower up and create your WatchTower admin account before this. See the WatchTower README.
 
@@ -45,6 +45,8 @@ Go to **Docker → Add Container** and pick the **TwentyFourSeven** template (`t
 | **Database Storage** | `/mnt/user/appdata/twentyfourseven/database`. **Don't leave it empty.** It holds your channels and settings, and the sign-in key. |
 | **Static Files Storage** | `/mnt/user/appdata/twentyfourseven/static`. Files placed here can be opened at `http://YOUR-UNRAID-IP:PORT/files/`. |
 | **Authentication Secret** | Leave empty. TFS makes one on first start and saves it in the Database Storage folder, so restarts and updates don't sign anyone out. |
+| **Movies Folder** | Your movies folder, for example `/mnt/user/Movies`. TFS only reads it. Leave empty if you only use Plex. |
+| **TV Shows Folder** | Your TV folder, for example `/mnt/user/TV`. Use the same folders Plex or ESPG use. |
 | **Timezone** | For example `America/Chicago` (under **Show more settings**) |
 
 **Using your own domain** (for example through Nginx Proxy Manager)? At the bottom of the template, use **Add another Path, Port, Variable, Label or Device** to add the variables `EXTERNAL_DOMAIN` (for example `tv.example.com`) and `EXTERNAL_PROTOCOL` (`https`). TFS then builds its own addresses from them.
@@ -68,11 +70,30 @@ Click **Apply**.
 
 On the same page, sign in with your WatchTower email and password.
 
+### Step 4: Choose where your videos come from
+
+Open **Settings**. The first card asks **Where should TwentyFourSeven get your videos?**
+
+- **Local files (recommended)**: TFS plays files straight from the folders you mapped. It's the fastest choice and nothing else has to be running. The status line tells you what it found, for example *Found 1,234 movies and 456 shows in /movies and /tv*, or what to fix.
+- **Plex**: connect Plex under **Settings → Plex** first, then pick Plex.
+
+You can switch any time. Channels keep their shows and movies: TFS finds the same title in the other source. Anything it can't find is listed and keeps playing from the old source.
+
+**Folder layout that works best:** `TV/Show Name/Season 01/Show Name - S01E01.mkv` and `Movies/Movie Name (2010)/Movie Name (2010).mkv`. `.nfo` files and `poster.jpg`/`folder.jpg` next to the videos are used for titles, summaries and posters. New files are picked up automatically, and only changed files are re-read.
+
+**Why not read ESPG's database?** TFS reads the same folders ESPG does, but keeps its own small index. That way TFS works without ESPG, an ESPG update can't break TFS, and TFS never needs write access to your media.
+
+### Step 5: Links for TV apps
+
+Under **Settings → Links for TV apps**, add each TV app or DVR (TiviMate, Plex DVR, Channels…) by name and copy its playlist (M3U), guide (XMLTV) or HDHomeRun address. Each device gets its own link; **Turn off** stops just that device. Links never contain file paths or Plex passwords. Devices on your home network can still use the plain `/media.m3u` address unless you turn that off.
+
 ---
 
 ## Good to know
 
 - **Updates:** updating the container is enough. Your channels and the sign-in key are kept in the Database Storage folder.
+- **Playback:** files that TV apps can already play are sent as-is (no re-encoding), so they start fast and use almost no CPU. Others are converted on the fly, using the graphics card when there is one.
+- **Reverse proxy:** if you put TFS behind Nginx Proxy Manager or similar, make sure it sends `X-Forwarded-For` (NPM does by default). Without it, outside visitors look like they're on your home network.
 - **Health check:** `http://YOUR-UNRAID-IP:PORT/api/health` should answer with `"status":"ok"`.
 - **Docker Hub image:** pushing to `main` builds and pushes `drew4/twentyfourseven:latest` on GitHub's own servers (`.github/workflows/docker-build.yml`).
 

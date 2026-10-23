@@ -152,6 +152,8 @@ export function buildCopyFfmpegArgs(
   options?: {
     discontinuity?: boolean;
     logLevel?: string | null;
+    /** Local files whose audio is already stereo AAC: copy it too (no encode at all). */
+    copyAudio?: boolean;
   },
 ): string[] {
   const args = [
@@ -182,12 +184,7 @@ export function buildCopyFfmpegArgs(
     "-dn",
     "-c:v",
     "copy",
-    "-c:a",
-    "aac",
-    "-ac",
-    "2",
-    "-b:a",
-    "160k",
+    ...(options?.copyAudio ? ["-c:a", "copy"] : ["-c:a", "aac", "-ac", "2", "-b:a", "160k"]),
     "-max_interleave_delta",
     "0",
     "-f",
@@ -220,6 +217,12 @@ export function buildLiveFfmpegArgs(
     copy?: boolean;
     /** In-browser playback. H.264, paced, no low-latency encoder tune. */
     browser?: boolean;
+    /**
+     * Read at 1x after a short burst. Used for local files: a disk read has no
+     * network to slow it, so an unpaced encode runs flat out and burns CPU
+     * for video nobody is watching yet.
+     */
+    pace?: boolean;
   },
   env: LiveFfmpegEnv = {},
 ): string[] {
@@ -296,6 +299,9 @@ export function buildLiveFfmpegArgs(
   // Short analyze so the first TS packets leave quickly. 128KB is enough
   // for typical Plex MP4/MKV headers without a multi-megabyte probe.
   args.push("-ss", `${seekSeconds}`);
+  if (options.pace) {
+    args.push("-readrate", "1", "-readrate_initial_burst", "2");
+  }
   args.push("-probesize", "131072");
   args.push("-analyzeduration", "200000");
   args.push(

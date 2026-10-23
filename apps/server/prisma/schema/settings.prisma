@@ -7,3 +7,15 @@ model Setting {
 
   @@map("setting")
 } 
+
+/// TwentyFourSeven's own playlist login, used when ESPG is not connected.
+model PlaylistLogin {
+  id             String   @id @default(cuid()) @map("_id")
+  userId         String   @unique
+  username       String   @unique
+  /// Sealed with the app secret so it can be shown again to its owner.
+  passwordSealed String
+  createdAt      DateTime @default(now())
+
+  @@map("playlist_login")
+}

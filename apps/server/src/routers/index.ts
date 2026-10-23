@@ -29,6 +29,34 @@ async function loadPlexCredentials(input: z.infer<typeof plexCheckInput>) {
   return resolvePlexCredentials(input, stored);
 }
 
+async function mediaSourceStatus() {
+  const { getLocalScanState } = await import('../lib/local-media/scanner');
+  const { describeLocalStatus } = await import('../lib/local-media/status-text');
+  const { configuredLocalRoots } = await import('../lib/local-media/paths');
+  const settings = await prisma.settings.findUnique({ where: { id: "singleton" } });
+  const enabled = settings?.localMediaEnabled ?? true;
+  const scan = getLocalScanState();
+  const plexServers = await prisma.mediaServer.count({ where: { type: "PLEX", active: true } });
+  const count = (type: "LOCAL" | "PLEX") =>
+    Promise.all([
+      prisma.mediaMovie.count({ where: { library: { server: { type, active: true } } } }),
+      prisma.mediaShow.count({ where: { library: { server: { type, active: true } } } }),
+    ]).then(([movies, shows]) => ({ movies, shows }));
+  return {
+    source: (settings?.mediaSource || (plexServers ? "PLEX" : "LOCAL")) as "LOCAL" | "PLEX" | "JELLYFIN" | "EMBY",
+    local: {
+      enabled,
+      paths: settings?.localMediaPaths ?? "",
+      folders: configuredLocalRoots(settings?.localMediaPaths),
+      scanning: scan.running,
+      lastScan: scan.finishedAt,
+      status: describeLocalStatus(scan, { enabled }),
+      counts: await count("LOCAL"),
+    },
+    plex: { connected: plexServers > 0, counts: await count("PLEX") },
+  };
+}
+
 export const appRouter = {
   healthCheck: publicProcedure.handler(() => {
     return "OK";
@@ -1180,7 +1208,7 @@ export const appRouter = {
       }))
       .handler(async ({ input }) => {
         return toPublicServer(await prisma.mediaServer.create({
-          data: input
+          data: { ...input, token: tokenUpdate(input.token) }
         }));
       }),
 
@@ -1259,7 +1287,17 @@ export const appRouter = {
         const { ORPCError } = await import('@orpc/server');
         
         try {
-          return await PlexService.login(input.username, input.password);
+          // plex.tv tokens stay on the server; the browser gets short-lived handles.
+          const { issuePlexTokenHandle } = await import('../lib/plex-login-handles');
+          const result = await PlexService.login(input.username, input.password);
+          return {
+            ...result,
+            accessToken: issuePlexTokenHandle(result.accessToken),
+            servers: result.servers.map((server) => ({
+              ...server,
+              accessToken: issuePlexTokenHandle(server.accessToken),
+            })),
+          };
         } catch (error: any) {
           console.error('[plexLogin] Error:', error);
           
@@ -1307,7 +1345,11 @@ export const appRouter = {
       }))
       .handler(async ({ input }) => {
         const { PlexService } = await import('../lib/plex-service');
-        return toPublicServer(await PlexService.addPlexServer(input));
+        const accessToken = tokenUpdate(input.accessToken);
+        if (!accessToken) {
+          throw new ORPCError("BAD_REQUEST", { message: "Plex sign-in expired. Sign in to Plex again." });
+        }
+        return toPublicServer(await PlexService.addPlexServer({ ...input, accessToken }));
       }),
 
     getServerInfo: adminProcedure
@@ -1548,6 +1590,7 @@ export const appRouter = {
         catchupEnabled: z.boolean().optional(),
         catchupDefaultWindow: z.number().min(1).max(48).optional(),
         tmdbApiKey: z.string().optional(),
+        allowLanWithoutKey: z.boolean().optional(),
       }))
       .handler(async ({ input }) => {
         const data = { ...input };
@@ -1575,6 +1618,187 @@ export const appRouter = {
           update: data
         });
       }),
+
+    /** Where videos come from: local folders or a media server. */
+    media: {
+      status: adminProcedure.handler(async () => mediaSourceStatus()),
+
+      scanNow: adminProcedure.handler(async () => {
+        const { scanLocalMedia } = await import('../lib/local-media/scanner');
+        const scan = scanLocalMedia();
+        // Small folders finish right away; big ones keep going and the page polls.
+        await Promise.race([scan, new Promise((r) => setTimeout(r, 3000))]);
+        return mediaSourceStatus();
+      }),
+
+      setSource: adminProcedure
+        .input(z.object({ source: z.enum(["LOCAL", "PLEX", "JELLYFIN", "EMBY"]) }))
+        .handler(async ({ input }) => {
+          if (input.source === "JELLYFIN" || input.source === "EMBY") {
+            throw new ORPCError("BAD_REQUEST", { message: `${input.source === "EMBY" ? "Emby" : "Jellyfin"} is coming soon.` });
+          }
+          if (input.source === "PLEX") {
+            const plex = await prisma.mediaServer.count({ where: { type: "PLEX", active: true } });
+            if (!plex) throw new ORPCError("BAD_REQUEST", { message: "Connect your Plex server first, then choose Plex here." });
+          }
+          if (input.source === "LOCAL") {
+            await prisma.settings.upsert({
+              where: { id: "singleton" },
+              create: { id: "singleton", localMediaEnabled: true },
+              update: { localMediaEnabled: true },
+            });
+            const { scanLocalMedia, getLocalScanState } = await import('../lib/local-media/scanner');
+            if (!getLocalScanState().finishedAt) await scanLocalMedia();
+          }
+          const { switchMediaSource } = await import('../lib/local-media/source-switch');
+          const report = await switchMediaSource(input.source);
+          return { ...report, status: await mediaSourceStatus() };
+        }),
+
+      update: adminProcedure
+        .input(z.object({ paths: z.string().max(2000).optional(), enabled: z.boolean().optional() }))
+        .handler(async ({ input }) => {
+          const data: { localMediaPaths?: string; localMediaEnabled?: boolean } = {};
+          if (input.paths !== undefined) {
+            const { configuredLocalRoots } = await import('../lib/local-media/paths');
+            const parts = input.paths.split(/[,;\n]/).map((p) => p.trim()).filter(Boolean);
+            const kept = configuredLocalRoots(parts.join(","), {});
+            if (parts.length && kept.length !== parts.length) {
+              throw new ORPCError("BAD_REQUEST", { message: "Use folder paths inside the container that start with /, like /movies or /tv." });
+            }
+            data.localMediaPaths = kept.join(", ");
+          }
+          if (input.enabled !== undefined) data.localMediaEnabled = input.enabled;
+          await prisma.settings.upsert({ where: { id: "singleton" }, create: { id: "singleton", ...data }, update: data });
+          const { scanLocalMedia } = await import('../lib/local-media/scanner');
+          await Promise.race([scanLocalMedia(), new Promise((r) => setTimeout(r, 3000))]);
+          return mediaSourceStatus();
+        }),
+    },
+
+    /** Links for IPTV apps and HDHomeRun clients, one revocable key per device. */
+    playerKeys: {
+      list: adminProcedure.handler(async () => {
+        const { playerKeySecret } = await import('../lib/link-security');
+        const keys = await prisma.playerKey.findMany({ where: { revokedAt: null }, orderBy: { createdAt: "asc" } });
+        const settings = await prisma.settings.findUnique({ where: { id: "singleton" }, select: { allowLanWithoutKey: true } });
+        return {
+          allowLanWithoutKey: settings?.allowLanWithoutKey ?? true,
+          keys: keys.map((key) => ({
+            id: key.id,
+            name: key.name,
+            createdAt: key.createdAt,
+            lastUsedAt: key.lastUsedAt,
+            key: playerKeySecret(key.id),
+          })),
+        };
+      }),
+
+      create: adminProcedure
+        .input(z.object({ name: z.string().trim().min(1).max(60) }))
+        .handler(async ({ input, context }) => {
+          const { playerKeySecret } = await import('../lib/link-security');
+          const key = await prisma.playerKey.create({ data: { name: input.name, userId: context.session?.user?.id ?? null } });
+          return { id: key.id, name: key.name, createdAt: key.createdAt, lastUsedAt: null, key: playerKeySecret(key.id) };
+        }),
+
+      revoke: adminProcedure
+        .input(z.object({ id: z.string() }))
+        .handler(async ({ input }) => {
+          const { clearPlayerAccessCache } = await import('../lib/player-access');
+          await prisma.playerKey.update({ where: { id: input.id }, data: { revokedAt: new Date() } });
+          clearPlayerAccessCache();
+          return { ok: true };
+        }),
+    },
+
+    /**
+     * Playlist login for TV apps: the same username/password as ESPG when ESPG
+     * is connected, otherwise a TwentyFourSeven login per user.
+     */
+    playlistLogin: {
+      mine: protectedProcedure.handler(async ({ context }) => {
+        const user = context.session?.user;
+        if (!user?.id) throw new ORPCError("UNAUTHORIZED");
+        const { playlistLogins, espgConfigured, newLocalLogin } = await import('../lib/playlist-login');
+        const { openSealedLogin } = await import('../lib/link-security');
+        const espg = await espgConfigured();
+        if (espg) {
+          if (!espg.hasToken) {
+            return { mode: "espg" as const, logins: [], problem: "TwentyFourSeven isn't connected to WatchTower yet, so it can't ask ESPG about playlist logins." };
+          }
+          try {
+            const res = await playlistLogins.lookup(user.email);
+            return {
+              mode: "espg" as const,
+              logins: res?.logins ?? [],
+              problem: res && res.logins.length === 0 ? "You don't have playlist access in ESPG yet. Ask your admin to give you a playlist in ESPG." : null,
+            };
+          } catch {
+            return { mode: "espg" as const, logins: [], problem: "Couldn't reach ESPG. Check the ESPG address below." };
+          }
+        }
+        let row = await prisma.playlistLogin.findUnique({ where: { userId: user.id } });
+        if (!row) {
+          const fresh = newLocalLogin(user.name || user.email.split("@")[0]);
+          row = await prisma.playlistLogin.create({ data: { userId: user.id, username: fresh.username, passwordSealed: fresh.passwordSealed } });
+        }
+        const opened = openSealedLogin(row.passwordSealed);
+        return {
+          mode: "tfs" as const,
+          logins: opened ? [{ playlist: "TwentyFourSeven", username: opened.username, password: opened.password }] : [],
+          problem: opened ? null : "Your playlist login needs a reset (the app secret changed).",
+        };
+      }),
+
+      resetMine: protectedProcedure.handler(async ({ context }) => {
+        const user = context.session?.user;
+        if (!user?.id) throw new ORPCError("UNAUTHORIZED");
+        const { newLocalLogin, clearLoginCache } = await import('../lib/playlist-login');
+        const fresh = newLocalLogin(user.name || user.email.split("@")[0]);
+        await prisma.playlistLogin.upsert({
+          where: { userId: user.id },
+          create: { userId: user.id, username: fresh.username, passwordSealed: fresh.passwordSealed },
+          update: { username: fresh.username, passwordSealed: fresh.passwordSealed },
+        });
+        clearLoginCache();
+        return { ok: true };
+      }),
+
+      espg: adminProcedure.handler(async () => {
+        const settings = await prisma.settings.findUnique({ where: { id: "singleton" }, select: { espgUrl: true } });
+        const { espgConfigured } = await import('../lib/playlist-login');
+        const current = await espgConfigured();
+        return {
+          espgUrl: settings?.espgUrl ?? "",
+          fromEnv: !settings?.espgUrl && !!process.env.ESPG_URL,
+          active: !!current,
+          hasWatchTowerToken: current?.hasToken ?? false,
+        };
+      }),
+
+      setEspg: adminProcedure
+        .input(z.object({ espgUrl: z.string().trim().max(300) }))
+        .handler(async ({ input, context }) => {
+          const url = input.espgUrl.replace(/\/+$/, "");
+          if (url && !/^https?:\/\/[^\s/]+/i.test(url)) {
+            throw new ORPCError("BAD_REQUEST", { message: "Enter the ESPG address, like http://192.168.1.10:9191" });
+          }
+          await prisma.settings.upsert({ where: { id: "singleton" }, create: { id: "singleton", espgUrl: url }, update: { espgUrl: url } });
+          const { clearEspgLinkCache, clearLoginCache, playlistLogins, espgConfigured } = await import('../lib/playlist-login');
+          clearEspgLinkCache();
+          clearLoginCache();
+          const current = await espgConfigured();
+          if (!current) return { ok: true, message: "Using TwentyFourSeven's own playlist logins." };
+          if (!current.hasToken) return { ok: false, message: "Saved. Connect TwentyFourSeven to WatchTower so it can ask ESPG." };
+          try {
+            await playlistLogins.lookup(context.session?.user?.email ?? "");
+            return { ok: true, message: "Connected. ESPG playlist logins now work here." };
+          } catch {
+            return { ok: false, message: "Saved, but ESPG didn't answer. Check the address and that ESPG is up to date." };
+          }
+        }),
+    },
 
     ffmpeg: {
       get: adminProcedure.handler(async () => {

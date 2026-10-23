@@ -92,6 +92,10 @@ export async function invalidateXmlTvCache(): Promise<void> {
  * with this placeholder and the real address is filled in per request.
  */
 export const XMLTV_BASE_URL_PLACEHOLDER = "@@TFS_PUBLIC_BASE_URL@@";
+/** The caller's device key (`k=`), filled in per request so the shared cache holds no secrets. */
+export const XMLTV_LINK_KEY_PLACEHOLDER = "@@TFS_LINK_KEY@@";
+/** The caller's short-lived image pass (`t=`). */
+export const XMLTV_IMAGE_PASS_PLACEHOLDER = "@@TFS_IMAGE_PASS@@";
 
 /** Old builds stored collection artwork with a hard-coded public domain. */
 const LEGACY_ICON_BASE = "https://247.midweststreams.us";
@@ -109,7 +113,14 @@ export function toPlaceholderIconUrl(icon: string): string {
  * Stream transform that swaps the placeholder for the caller's base URL.
  * Works line by line so a placeholder split across chunks is still replaced.
  */
-export function replaceBaseUrlPlaceholder(source: Readable, replacement: string): Readable {
+export function replaceBaseUrlPlaceholder(
+  source: Readable,
+  replacement: string,
+  /** Per-client values: the device key and image pass (see XMLTV_*_PLACEHOLDER). */
+  extra: Record<string, string> = {},
+): Readable {
+  const pairs: Array<[string, string]> = [[XMLTV_BASE_URL_PLACEHOLDER, replacement], ...Object.entries(extra)];
+  const fill = (text: string) => pairs.reduce((acc, [from, to]) => acc.split(from).join(to), text);
   async function* run() {
     let pending = "";
     for await (const chunk of source) {
@@ -118,9 +129,9 @@ export function replaceBaseUrlPlaceholder(source: Readable, replacement: string)
       if (lastNewline === -1) continue;
       const complete = pending.slice(0, lastNewline + 1);
       pending = pending.slice(lastNewline + 1);
-      yield complete.split(XMLTV_BASE_URL_PLACEHOLDER).join(replacement);
+      yield fill(complete);
     }
-    if (pending) yield pending.split(XMLTV_BASE_URL_PLACEHOLDER).join(replacement);
+    if (pending) yield fill(pending);
   }
   return Readable.from(run());
 }

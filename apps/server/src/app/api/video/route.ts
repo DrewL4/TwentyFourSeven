@@ -16,7 +16,11 @@ import {
   type SharedLiveHub,
 } from '@/lib/shared-live-transcode';
 import { loadLiveProgramForChannel } from '@/lib/resolve-live-program';
+import { authorizePlayer } from '@/lib/player-access';
+import { resolveLocalStream } from '@/lib/local-media/resolve';
+import { chooseLocalPlayback, type LocalProbe } from '@/lib/local-media/playback';
 import {
+  buildCopyFfmpegArgs,
   buildLiveFfmpegArgs,
   initialEncodeMode,
   nextLiveEncodeMode,
@@ -128,9 +132,20 @@ async function buildFfmpegArgs(
     fallback?: boolean;
     copy?: boolean;
     browser?: boolean;
+    /** Local file that can be copied as-is (no video encode). */
+    localCopy?: { copyAudio: boolean };
+    /** Local file being transcoded: read at 1x. */
+    pace?: boolean;
   },
 ): Promise<string[]> {
   const ffmpegSettings = await loadFfmpegSettings();
+  if (options?.localCopy) {
+    return buildCopyFfmpegArgs(streamUrl, seekSeconds, {
+      discontinuity: options.discontinuity,
+      logLevel: ffmpegSettings?.logLevel,
+      copyAudio: options.localCopy.copyAudio,
+    });
+  }
   const mode: LiveEncodeMode = options?.forceSoftware
     ? 'software'
     : options?.mode ?? 'hardware';
@@ -144,6 +159,7 @@ async function buildFfmpegArgs(
       fallback: options?.forceSoftware === true || options?.fallback === true,
       copy: options?.copy === true,
       browser: options?.browser === true,
+      pace: options?.pace === true,
     },
     {
       hwaccelMethod: process.env.FFMPEG_HWACCEL_METHOD,
@@ -176,6 +192,12 @@ export async function GET(request: NextRequest) {
   const lutcParam = request.nextUrl.searchParams.get('lutc');
   const programIdParam = request.nextUrl.searchParams.get('programId');
 
+  // Signed-in browser, a signed link, a device key, or (if allowed) the home network.
+  const access = await authorizePlayer(request, { scope: 'video', resource: `ch:${channelNumber}` });
+  if (!access.ok) {
+    return access.response;
+  }
+
   try {
     let programInfo: any;
     let server: any;
@@ -186,6 +208,7 @@ export async function GET(request: NextRequest) {
     let liveProgramId: string | undefined;
     let resolvedStreamUrl: string | undefined;
     let resolvedSeekSeconds: number | undefined;
+    let localProbe: LocalProbe | null | undefined;
     const streamSettingsPromise = prisma.settings.findUnique({
       where: { id: 'singleton' },
       select: { concurrentStreams: true },
@@ -229,8 +252,17 @@ export async function GET(request: NextRequest) {
         program.movie?.library?.server ??
         program.episode?.show?.library?.server;
 
-      if (!media || !srv?.token) {
-        return new NextResponse('Catchup program or Plex server unavailable', { status: 500 });
+      if (!media || !srv || (srv.type === 'LOCAL' ? false : !srv.token)) {
+        return new NextResponse('Catchup program or media source unavailable', { status: 500 });
+      }
+      if (srv.type === 'LOCAL') {
+        const lib = program.movie?.library ?? program.episode?.show?.library;
+        const found = lib ? await resolveLocalStream({ id: lib.id, key: lib.key }, media.ratingKey) : null;
+        if (!found) {
+          return new NextResponse('This file is no longer in your media folders', { status: 404 });
+        }
+        resolvedStreamUrl = found.filePath;
+        localProbe = found.probe;
       }
 
       programInfo = media;
@@ -250,18 +282,20 @@ export async function GET(request: NextRequest) {
       liveProgramId = liveInfo.programId;
       resolvedStreamUrl = liveInfo.streamUrl;
       resolvedSeekSeconds = liveInfo.seekSeconds;
+      localProbe = liveInfo.local?.probe;
       liveProgramTitle = liveInfo.programTitle;
       channelName = liveInfo.channelName;
     }
 
     // ── From here, the rest of the pipeline is shared between live and catchup ──
     
-    if (!server.token) {
+    const isLocal = server.type === 'LOCAL';
+    if (!isLocal && !server.token) {
       return new NextResponse('Plex server token is missing.', { status: 500 });
     }
 
     let streamUrl = resolvedStreamUrl;
-    if (!streamUrl) {
+    if (!streamUrl && !isLocal) {
       const plex = new PlexAPI({ uri: server.url });
       const mediaParts = await plex.getMediaParts(server.url, server.token, programInfo.ratingKey);
 
@@ -272,7 +306,7 @@ export async function GET(request: NextRequest) {
       streamUrl = `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`;
     }
     if (!streamUrl) {
-      return new NextResponse('Could not get media parts from Plex', { status: 500 });
+      return new NextResponse(isLocal ? 'Local file not found' : 'Could not get media parts from Plex', { status: 500 });
     }
     let seekSeconds =
       resolvedSeekSeconds ??
@@ -317,6 +351,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Local files: copy compatible video as-is (no encode); otherwise transcode.
+    const localAuto = isLocal && !useCopyRemux;
+    const initialLocalCopy =
+      localAuto && chooseLocalPlayback(localProbe ?? null, { browser: useBrowser }).copyVideo;
+    const countsAsCopy = (useCopyRemux && !useBrowser) || initialLocalCopy;
+
     streamMonitorService.cleanupStaleSessions();
     const streamSettings = await streamSettingsPromise;
     const streamLimit = streamSettings?.concurrentStreams ?? 1;
@@ -327,7 +367,7 @@ export async function GET(request: NextRequest) {
         programInfo.ratingKey,
         streamLimit,
         !isCatchup,
-        useCopyRemux && !useBrowser,
+        countsAsCopy,
       )
     ) {
       return NextResponse.json(
@@ -343,7 +383,7 @@ export async function GET(request: NextRequest) {
       channelNumber,
       { ratingKey: programInfo.ratingKey },
       clientIp,
-      { sharedLive: !isCatchup, copyRemux: useCopyRemux && !useBrowser },
+      { sharedLive: !isCatchup, copyRemux: countsAsCopy },
     );
 
     // Update session metadata
@@ -390,7 +430,7 @@ export async function GET(request: NextRequest) {
 
     // Shared passthrough for the lifetime of the HTTP response
     const passthrough = new PassThrough({
-      highWaterMark: useCopyRemux ? 1024 * 256 : 1024 * 64,
+      highWaterMark: countsAsCopy ? 1024 * 256 : 1024 * 64,
     });
     const useSharedLive = !isCatchup;
 
@@ -499,6 +539,36 @@ export async function GET(request: NextRequest) {
     let sessionFinalized = false;
     let mpegtsDiscontinuity = false;
     const ignoredClosePids = new Set<number>();
+    /** A local file is being copied right now (no encode). */
+    let autoCopyActive = false;
+    /** Local files that failed to copy this session; transcode them instead. */
+    const copyFailedKeys = new Set<string>();
+
+    /**
+     * Copy failed. Explicit copy=1 keeps the old behaviour (end the stream so
+     * the client falls back). A local auto-copy switches to transcoding.
+     * Returns true when handled.
+     */
+    const handleCopyFailure = (reason: string): boolean => {
+      if (autoCopyActive && !isAborted) {
+        autoCopyActive = false;
+        copyFailedKeys.add(String(programInfo.ratingKey));
+        streamMonitorService.addError(sessionId, `${reason}; transcoding this file instead`);
+        mpegtsDiscontinuity = true;
+        beginLiveEncoderGap();
+        startFfmpeg(preferredMode).catch((err) => {
+          streamMonitorService.addError(sessionId, `Transcode fallback failed: ${err.message}`);
+          failOpenStream();
+        });
+        return true;
+      }
+      if (useCopyRemux) {
+        streamMonitorService.addError(sessionId, reason);
+        failOpenStream();
+        return true;
+      }
+      return false;
+    };
 
     const syncFfmpegToSessions = (child: ChildProcess | null) => {
       if (liveHub) {
@@ -538,9 +608,7 @@ export async function GET(request: NextRequest) {
      * when NVENC itself is fine and only CUDA decode failed.
      */
     const stepDownEncoder = (reason: string) => {
-      if (useCopyRemux) {
-        streamMonitorService.addError(sessionId, reason);
-        failOpenStream();
+      if (handleCopyFailure(reason)) {
         return;
       }
       if (encoderStepInFlight || isAborted) {
@@ -567,9 +635,7 @@ export async function GET(request: NextRequest) {
     };
 
     const fallBackToSoftware = (reason: string) => {
-      if (useCopyRemux) {
-        streamMonitorService.addError(sessionId, reason);
-        failOpenStream();
+      if (handleCopyFailure(reason)) {
         return;
       }
       if (encoderStepInFlight || isAborted || encodeMode === 'software') {
@@ -621,7 +687,7 @@ export async function GET(request: NextRequest) {
 
       child.stderr?.on('data', (data) => {
         const text = data.toString();
-        if (useCopyRemux) {
+        if (useCopyRemux || autoCopyActive) {
           const line = text.replace(/\s+/g, ' ').trim().slice(0, 400);
           if (line) {
             console.warn(`[Video] copy ffmpeg channel=${channelNumber}: ${line}`);
@@ -663,8 +729,7 @@ export async function GET(request: NextRequest) {
           } catch {
             // ignore
           }
-          if (useCopyRemux) {
-            failOpenStream();
+          if (handleCopyFailure(errorMessage)) {
             return;
           }
           beginLiveEncoderGap();
@@ -690,8 +755,7 @@ export async function GET(request: NextRequest) {
           return;
         }
         ignoreClose(child);
-        if (useCopyRemux) {
-          failOpenStream();
+        if (handleCopyFailure(`Process error: ${error.message}`)) {
           return;
         }
         beginLiveEncoderGap();
@@ -715,9 +779,8 @@ export async function GET(request: NextRequest) {
           return;
         }
 
-        if (code !== 0 && !isAborted && useCopyRemux) {
-          streamMonitorService.addError(sessionId, `FFmpeg remux exited with code ${code}`);
-          failOpenStream();
+        if (code !== 0 && !isAborted && (useCopyRemux || autoCopyActive)) {
+          handleCopyFailure(`FFmpeg remux exited with code ${code}`);
           return;
         }
 
@@ -831,6 +894,7 @@ export async function GET(request: NextRequest) {
         programInfo = next.programInfo;
         streamUrl = next.streamUrl;
         seekSeconds = next.seekSeconds;
+        localProbe = next.local?.probe;
         const metadata = {
           programInfo: next.programInfo,
           streamUrl: next.streamUrl,
@@ -874,13 +938,26 @@ export async function GET(request: NextRequest) {
       encodeMode = mode;
       encoderStepInFlight = false;
       const fallingBack = !useCopyRemux && mode === 'software' && preferredMode !== 'software';
+      // Decided per file: a channel can mix files that copy and files that need encoding.
+      const localChoice =
+        localAuto && !copyFailedKeys.has(String(programInfo.ratingKey))
+          ? chooseLocalPlayback(localProbe ?? null, { browser: useBrowser })
+          : null;
+      autoCopyActive = !!localChoice?.copyVideo;
       const ffmpegArgs = await buildFfmpegArgs(activeStreamUrl, activeSeekSeconds, {
         mode,
         fallback: fallingBack,
         discontinuity: mpegtsDiscontinuity,
         copy: useCopyRemux && !useBrowser,
         browser: useBrowser,
+        localCopy: autoCopyActive ? { copyAudio: !!localChoice?.copyAudio } : undefined,
+        pace: isLocal && !autoCopyActive,
       });
+      if (localAuto) {
+        console.log(
+          `[Video] local channel=${channelNumber} file=${autoCopyActive ? 'copy' : 'transcode'}${autoCopyActive && localChoice?.copyAudio ? '+audio-copy' : ''} reason=${localChoice?.reason ?? 'copy-failed-earlier'}`,
+        );
+      }
 
       const child = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
       if (liveHub && fallingBack) {
@@ -899,7 +976,7 @@ export async function GET(request: NextRequest) {
     encodeMode = preferredMode;
     await startFfmpeg(encodeMode);
     console.log(
-      `[Video] start channel=${channelNumber} mode=${useBrowser ? 'browser' : useCopyRemux ? 'copy' : 'transcode'} encode=${encodeMode} session=${sessionId}${isCatchup ? ' catchup' : ''}`,
+      `[Video] start channel=${channelNumber} mode=${useBrowser ? 'browser' : useCopyRemux ? 'copy' : 'transcode'}${isLocal ? ' source=local' : ''} encode=${autoCopyActive ? 'copy' : encodeMode} session=${sessionId}${isCatchup ? ' catchup' : ''}`,
     );
 
     // Handle client abort / stream close (IPTV clients often drop without a

@@ -233,10 +233,10 @@ export function LibraryStatsRow({
         )}
       </StatPopover>
 
-      <StatPopover icon={Server} value={stats.serverCount} label="Active Plex servers">
-        <PopoverTitle>Active Plex servers</PopoverTitle>
+      <StatPopover icon={Server} value={stats.serverCount} label="Video sources">
+        <PopoverTitle>Video sources</PopoverTitle>
         {servers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No Plex servers connected.</p>
+          <p className="text-sm text-muted-foreground">No video sources yet. Pick one in Settings.</p>
         ) : (
           <div className="space-y-2">
             {servers.map((server) => (

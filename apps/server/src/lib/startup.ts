@@ -46,6 +46,9 @@ export class StartupService {
       // Initialize automatic Plex library sync
       await this.initializeAutomaticPlexSync();
 
+      // Local files: remember the source once, then index the mapped folders
+      await this.initializeLocalMedia();
+
       // Initialize WatchTower sync scheduler
       await this.initializeWatchTowerSync();
 
@@ -67,6 +70,24 @@ export class StartupService {
     } catch (error) {
       console.error('❌ Error during server initialization:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Existing installs keep Plex as their source; new installs start on local files.
+   * Indexing runs in the background and only re-probes files that changed.
+   */
+  private static async initializeLocalMedia() {
+    try {
+      const settings = await prisma.settings.upsert({ where: { id: 'singleton' }, create: { id: 'singleton' }, update: {} });
+      if (!settings.mediaSource) {
+        const plex = await prisma.mediaServer.count({ where: { type: 'PLEX' } });
+        await prisma.settings.update({ where: { id: 'singleton' }, data: { mediaSource: plex ? 'PLEX' : 'LOCAL' } });
+      }
+      const { startLocalMediaScheduler } = await import('./local-media/scanner');
+      startLocalMediaScheduler();
+    } catch (error) {
+      console.error('Local files setup failed:', (error as Error).message);
     }
   }
 

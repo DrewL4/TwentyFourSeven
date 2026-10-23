@@ -7,9 +7,15 @@ import {
   toPlaceholderIconUrl,
   writeXmlTvCacheStreaming,
   XMLTV_BASE_URL_PLACEHOLDER,
+  XMLTV_IMAGE_PASS_PLACEHOLDER,
+  XMLTV_LINK_KEY_PLACEHOLDER,
 } from "@/lib/xmltv-static-cache";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { createPlayerImageLinker, parsePlexImageReference } from "@/lib/plex-image";
+import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
+
+/** Guides cached by an older build lack the per-client link placeholders; rebuild once per boot. */
+let rebuiltSinceBoot = false;
 import { createReadStream } from "fs";
 import { Readable } from "stream";
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -55,20 +61,27 @@ function formatXmltvTime(date: Date): string {
 }
 
 export async function GET(request: NextRequest) {
+  const access = await authorizePlayer(request, { scope: "guide", resource: "xmltv" });
+  if (!access.ok) return access.response;
   try {
     const { searchParams } = new URL(request.url);
-    const bypassCache = searchParams.get('bypass-cache') === 'true';
+    const bypassCache = searchParams.get('bypass-cache') === 'true' || !rebuiltSinceBoot;
+    const links = (await linkParamsFor(access.auth));
+    const perClient = {
+      [XMLTV_LINK_KEY_PLACEHOLDER]: links.k,
+      [XMLTV_IMAGE_PASS_PLACEHOLDER]: links.imagePass,
+    };
     // Links use the address this client actually used (scheme, host and port).
     const publicBaseUrl = escapeXml(getPublicBaseUrl(request.headers, request.url));
 
     if (!bypassCache) {
       const cachedStream = await openXmlTvCacheStreamIfFresh(CACHE_DURATION);
       if (cachedStream) {
-        return new NextResponse(Readable.toWeb(replaceBaseUrlPlaceholder(cachedStream, publicBaseUrl)) as any, {
+        return new NextResponse(Readable.toWeb(replaceBaseUrlPlaceholder(cachedStream, publicBaseUrl, perClient)) as any, {
           headers: {
             "Content-Type": "application/xml; charset=utf-8",
             "Content-Disposition": 'attachment; filename="twentyfourseven.xml"',
-            "Cache-Control": "public, max-age=300",
+            "Cache-Control": "private, max-age=300",
             "X-Cache": "HIT-DISK",
           },
         });
@@ -85,10 +98,12 @@ export async function GET(request: NextRequest) {
     const channels = await prisma.channel.findMany({ where: { stealth: false }, orderBy: { number: 'asc' } });
 
     // Helper to ensure absolute URLs
-    const isAbsolute = (url?: string | null) => !!url && /^(https?:)?\/\//i.test(url);
+    const isAbsolute = (url?: string | null) =>
+      !!url && (/^(https?:)?\/\//i.test(url) || url.startsWith("/images/local/"));
     // Players load artwork without a session, so Plex artwork links are signed.
     const playerImage = createPlayerImageLinker(
-      await prisma.mediaServer.findMany({ where: { type: 'PLEX' }, select: { url: true, token: true } })
+      await prisma.mediaServer.findMany({ where: { type: 'PLEX' }, select: { url: true, token: true } }),
+      { pass: XMLTV_IMAGE_PASS_PLACEHOLDER },
     );
     const toPlexProxy = (baseUrl: string, url: string): string => playerImage(url, baseUrl);
 
@@ -240,7 +255,7 @@ export async function GET(request: NextRequest) {
       }
 
       if (channelCatchup) {
-        xmltvParts.push(`    <url catchup="vod" catchup-days="${Math.ceil(channel.catchupWindowHours / 24)}">${escapeXml(baseUrl)}/api/video?channel=${channel.number}&amp;catchup=true&amp;utc={start}&amp;lutc={timestamp}</url>`);
+        xmltvParts.push(`    <url catchup="vod" catchup-days="${Math.ceil(channel.catchupWindowHours / 24)}">${escapeXml(baseUrl)}/api/video?channel=${channel.number}&amp;catchup=true&amp;utc={start}&amp;lutc={timestamp}&amp;k=${XMLTV_LINK_KEY_PLACEHOLDER}</url>`);
       }
 
       xmltvParts.push('  </channel>');
@@ -486,15 +501,16 @@ export async function GET(request: NextRequest) {
         write(part);
       }
     });
+    rebuiltSinceBoot = true;
 
     const xmltvStream = createReadStream(getXmlTvCachePath(), {
       encoding: "utf8",
     });
-    return new NextResponse(Readable.toWeb(replaceBaseUrlPlaceholder(xmltvStream, publicBaseUrl)) as any, {
+    return new NextResponse(Readable.toWeb(replaceBaseUrlPlaceholder(xmltvStream, publicBaseUrl, perClient)) as any, {
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',
         'Content-Disposition': 'attachment; filename="twentyfourseven.xml"',
-        'Cache-Control': 'public, max-age=300',
+        'Cache-Control': 'private, max-age=300',
         'X-Cache': 'MISS',
       },
     });

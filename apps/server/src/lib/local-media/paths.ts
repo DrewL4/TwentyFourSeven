@@ -1,0 +1,64 @@
+import { existsSync, realpathSync, statSync } from "node:fs";
+import path from "node:path";
+
+export const DEFAULT_LOCAL_ROOTS = ["/movies", "/tv", "/media"];
+
+const SYSTEM_FOLDERS = ["/app", "/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/proc", "/root", "/run", "/sbin", "/sys", "/usr", "/var"];
+
+/** The container's own folders (and "/") can never be media folders. */
+export function isSystemFolder(p: string): boolean {
+  const norm = path.resolve(p);
+  return norm === "/" || SYSTEM_FOLDERS.some((s) => norm === s || norm.startsWith(s + "/"));
+}
+
+/** Folders to scan: settings first, then LOCAL_MEDIA_PATHS, then the usual mounts. */
+export function configuredLocalRoots(
+  settingValue?: string | null,
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  const raw = (settingValue || "").trim() || (env.LOCAL_MEDIA_PATHS || "").trim();
+  const list = raw
+    ? raw.split(/[,;\n]/).map((p) => p.trim()).filter(Boolean)
+    : DEFAULT_LOCAL_ROOTS.filter((p) => existsSync(p));
+  const out: string[] = [];
+  for (const p of list) {
+    if (!path.isAbsolute(p)) continue;
+    const norm = path.resolve(p);
+    if (isSystemFolder(norm)) continue;
+    if (!out.includes(norm)) out.push(norm);
+  }
+  return out;
+}
+
+/**
+ * Turn a library-relative path into a real file inside `root`, or null.
+ * Rejects absolute paths, `..`, NUL bytes, and symlinks that point outside.
+ */
+export function resolveInsideRoot(root: string, relPath: string): string | null {
+  if (!root || typeof relPath !== "string" || !relPath) return null;
+  if (relPath.includes("\0") || relPath.includes("\\")) return null;
+  if (path.isAbsolute(relPath)) return null;
+  const parts = relPath.split("/");
+  if (parts.some((p) => p === ".." || p === ".")) return null;
+  let realRoot: string;
+  try {
+    realRoot = realpathSync(root);
+  } catch {
+    return null;
+  }
+  const joined = path.resolve(realRoot, relPath);
+  if (joined !== realRoot && !joined.startsWith(realRoot + path.sep)) return null;
+  let real: string;
+  try {
+    real = realpathSync(joined);
+  } catch {
+    return null;
+  }
+  if (!real.startsWith(realRoot + path.sep)) return null;
+  try {
+    if (!statSync(real).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return real;
+}

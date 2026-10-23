@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { authorizePlayer } from "@/lib/player-access";
 import { decidePlexImageAccess } from "@/lib/plex-image-access";
 
 /**
@@ -10,11 +10,14 @@ import { decidePlexImageAccess } from "@/lib/plex-image-access";
  * Only Plex artwork paths are fetched (/library/metadata/<id>/thumb|art, collection
  * artwork, /photo/:/transcode of those), and only from a configured Plex server.
  *
- * Access: a signed-in session (cookies; <img> tags send them) or a valid `sig`
- * (links in /media.m3u and /media.xml, which IPTV players load without a session).
+ * Access: a signed-in session (cookies; <img> tags send them), a short-lived
+ * image pass `t` (links in /media.m3u and /media.xml, which IPTV players load
+ * without a session), a device key, or the home network when that is allowed.
  */
 export async function GET(request: NextRequest) {
   try {
+    const access = await authorizePlayer(request, { scope: "image", resource: "*" });
+    if (!access.ok) return access.response;
     const { searchParams } = new URL(request.url);
     const servers = await prisma.mediaServer.findMany({
       where: { type: "PLEX" },
@@ -24,10 +27,8 @@ export async function GET(request: NextRequest) {
     const decision = await decidePlexImageAccess({
       searchParams,
       servers,
-      hasSession: async () => {
-        const session = await auth.api.getSession({ headers: request.headers });
-        return Boolean(session?.user?.id);
-      },
+      hasSession: async () => true,
+      acceptSignature: false,
     });
 
     if (!decision.ok) {
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
       headers: {
         "Content-Type": contentType,
         // Session-authorized images must not be stored by shared caches/CDNs.
-        "Cache-Control": decision.via === "signature" ? "public, max-age=86400" : "private, max-age=86400",
+        "Cache-Control": access.auth.via === "session" ? "private, max-age=86400" : "public, max-age=86400",
         "X-Content-Type-Options": "nosniff",
         Vary: "Cookie",
       },

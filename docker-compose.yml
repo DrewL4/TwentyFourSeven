@@ -8,6 +8,10 @@ services:
     volumes:
       - ./database:/app/database
       - ./static:/app/static
+      # Your videos, read-only. Use the same folders Plex or ESPG use.
+      # Remove these two lines if you only use Plex.
+      - /path/to/Movies:/movies:ro
+      - /path/to/TV:/tv:ro
     environment:
       # External domain configuration (set these if you use a reverse proxy / your own domain)
       # - EXTERNAL_DOMAIN=tv.example.com
@@ -21,6 +25,9 @@ services:
       # saved in ./database (kept across restarts). Set it yourself to override.
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-}
       
+      # Video folders inside the container (optional; /movies and /tv are used by default)
+      # - LOCAL_MEDIA_PATHS=/movies,/tv
+
       # GPU settings (optional)
       - GPU_DETECTION_ENABLED=true
       - ENABLE_HARDWARE_ACCEL=true

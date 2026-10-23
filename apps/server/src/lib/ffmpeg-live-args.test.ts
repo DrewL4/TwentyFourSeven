@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, test } from "node:test";
 import {
+  buildCopyFfmpegArgs,
   buildLiveFfmpegArgs,
   initialEncodeMode,
   nextLiveEncodeMode,
@@ -124,4 +125,15 @@ describe("nvenc live args", () => {
     assert.ok(args.includes("+resend_headers"));
     assert.equal(args.includes("dump_extra=freq=keyframe"), false);
   });
+});
+
+test("local files: copy can keep AAC audio, transcodes can be paced", () => {
+  const copy = buildCopyFfmpegArgs("/movies/a.mkv", 0, { copyAudio: true });
+  const ca = copy.indexOf("-c:a");
+  assert.equal(copy[ca + 1], "copy");
+  assert.ok(!copy.includes("160k"));
+  const paced = buildLiveFfmpegArgs("/movies/a.mkv", 5, null, { mode: "software", pace: true });
+  assert.ok(paced.indexOf("-readrate") > -1 && paced.indexOf("-readrate") < paced.indexOf("-i"));
+  const unpaced = buildLiveFfmpegArgs("http://plex/x", 5, null, { mode: "software" });
+  assert.equal(unpaced.indexOf("-readrate"), -1);
 });

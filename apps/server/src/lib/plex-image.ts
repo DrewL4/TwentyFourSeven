@@ -158,10 +158,21 @@ type PlexServerLike = { url: string; token: string | null };
  * artwork URL or an /images/plex link into a signed /images/plex link. Values that
  * aren't Plex artwork are returned unchanged, except that any token is removed.
  */
-export function createPlayerImageLinker(servers: PlexServerLike[]) {
+export const LOCAL_IMAGE_ROUTE = "/images/local/";
+
+/**
+ * Links for players (M3U/XMLTV). With `pass` (a short-lived signed image pass
+ * tied to the device key) links carry `t=`; without it they fall back to the
+ * old per-image `sig`.
+ */
+export function createPlayerImageLinker(servers: PlexServerLike[], options: { pass?: string } = {}) {
+  const withPass = (link: string) =>
+    options.pass ? `${link}${link.includes("?") ? "&" : "?"}t=${options.pass}` : link;
   return (value: string, baseUrl: string): string => {
+    if (value.startsWith(LOCAL_IMAGE_ROUTE)) return withPass(`${baseUrl}${value}`);
     const target = parsePlexImageReference(value);
     if (!target) return stripPlexToken(value);
+    if (options.pass) return withPass(buildPlexImageLink(target, { baseUrl }));
     const server = servers.find((s) => s.token && sameOrigin(s.url, target.origin));
     if (!server?.token) return buildPlexImageLink(target, { baseUrl });
     return buildPlexImageLink(target, { baseUrl, sig: signPlexImageTarget(target, server.token) });

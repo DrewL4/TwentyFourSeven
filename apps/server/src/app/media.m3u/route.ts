@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { createPlayerImageLinker } from "@/lib/plex-image";
+import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
 
 export async function GET(request: NextRequest) {
+  const access = await authorizePlayer(request, { scope: "guide", resource: "m3u" });
+  if (!access.ok) return access.response;
   try {
+    // Every link in the playlist carries this device's key (revocable in Settings)
+    // and artwork carries a short-lived image pass.
+    const links = (await linkParamsFor(access.auth));
     const channels = await prisma.channel.findMany({
       where: { stealth: false },
       orderBy: { number: 'asc' }
@@ -22,10 +28,12 @@ export async function GET(request: NextRequest) {
 
 
     // Helpers
-    const isAbsolute = (url?: string | null) => !!url && /^(https?:)?\/\//i.test(url);
+    const isAbsolute = (url?: string | null) =>
+      !!url && (/^(https?:)?\/\//i.test(url) || url.startsWith("/images/local/"));
     // Players load logos without a session, so Plex artwork links are signed.
     const playerImage = createPlayerImageLinker(
-      await prisma.mediaServer.findMany({ where: { type: 'PLEX' }, select: { url: true, token: true } })
+      await prisma.mediaServer.findMany({ where: { type: 'PLEX' }, select: { url: true, token: true } }),
+      { pass: links.imagePass },
     );
     const toPlexProxy = (url: string): string => playerImage(url, baseUrl);
 
@@ -107,7 +115,8 @@ export async function GET(request: NextRequest) {
     );
     
     // Include EPG URL hints for players that support different keys
-    let m3u = `#EXTM3U url-tvg="${baseUrl}/media.xml" x-tvg-url="${baseUrl}/media.xml"\n`;
+    const guideUrl = `${baseUrl}/media.xml?k=${links.k}`;
+    let m3u = `#EXTM3U url-tvg="${guideUrl}" x-tvg-url="${guideUrl}"\n`;
     
     for (const channel of channels) {
       // Align tvg-id with XMLTV channel id: use the exact channel name
@@ -136,20 +145,21 @@ export async function GET(request: NextRequest) {
         extinf += ` catchup="vod"`;
         extinf += ` catchup-days="${catchupDays}"`;
         // {start} = programme start (Unix s); {timestamp} = player wall clock — matches XMLTV template
-        extinf += ` catchup-source="${baseUrl}/api/video?channel=${channel.number}&catchup=true&utc={start}&lutc={timestamp}"`;
+        extinf += ` catchup-source="${baseUrl}/api/video?channel=${channel.number}&catchup=true&utc={start}&lutc={timestamp}&k=${links.k}"`;
       }
       
       extinf += `,${channel.name}\n`;
       m3u += extinf;
       
       // Use a single video endpoint that will handle the streaming
-      m3u += `${baseUrl}/api/video?channel=${channel.number}\n`;
+      m3u += `${baseUrl}/api/video?channel=${channel.number}&k=${links.k}\n`;
     }
 
     return new NextResponse(m3u, {
       headers: {
         'Content-Type': 'application/vnd.apple.mpegurl',
-        'Content-Disposition': 'attachment; filename="twentyfourseven.m3u"'
+        'Content-Disposition': 'attachment; filename="twentyfourseven.m3u"',
+        'Cache-Control': 'private, no-store',
       }
     });
   } catch (error) {

@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PlexService } from "@/lib/plex-service";
 import { TimingService } from "@/lib/timing-service";
+import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
+import { getPublicBaseUrl } from "@/lib/public-base-url";
 
 export async function GET(request: NextRequest) {
+  const access = await authorizePlayer(request, { scope: "guide", resource: "m3u" });
+  if (!access.ok) return access.response;
   try {
+    const links = (await linkParamsFor(access.auth));
+    const publicBase = process.env.BASE_URL || getPublicBaseUrl(request.headers, request.url);
     const { searchParams } = new URL(request.url);
     const channelParam = searchParams.get('channel');
     const debug = searchParams.get('debug') === 'true';
@@ -101,20 +107,16 @@ export async function GET(request: NextRequest) {
           const server = episode.show.library.server;
           title = `${episode.show.title} - ${episode.title}`;
           
-          if (server.type === 'PLEX' && server.token) {
-            // Use IP address for IPTV compatibility
-            const baseUrl = process.env.BASE_URL || `http://192.168.1.20:3000`;
-            videoUrl = `${baseUrl}/api/video?channel=${channelNumber}`;
+          if (server.type === 'LOCAL' || (server.type === 'PLEX' && server.token)) {
+            videoUrl = `${publicBase}/api/video?channel=${channelNumber}&k=${links.k}`;
           }
         } else if (program.movie) {
           const movie = program.movie;
           const server = movie.library.server;
           title = movie.title;
           
-          if (server.type === 'PLEX' && server.token) {
-            // Use IP address for IPTV compatibility
-            const baseUrl = process.env.BASE_URL || `http://192.168.1.20:3000`;
-            videoUrl = `${baseUrl}/api/video?channel=${channelNumber}`;
+          if (server.type === 'LOCAL' || (server.type === 'PLEX' && server.token)) {
+            videoUrl = `${publicBase}/api/video?channel=${channelNumber}&k=${links.k}`;
           }
         }
         

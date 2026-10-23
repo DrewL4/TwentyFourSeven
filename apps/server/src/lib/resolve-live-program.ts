@@ -1,6 +1,7 @@
-import { prisma } from "@/lib/prisma";
-import { PlexAPI } from "@/lib/plex";
-import { TimingService } from "@/lib/timing-service";
+import { prisma } from "./prisma";
+import { PlexAPI } from "./plex";
+import { TimingService } from "./timing-service";
+import { resolveLocalStream, type LocalStream } from "./local-media/resolve";
 
 export type ScheduledProgramRow = {
   id: string;
@@ -9,14 +10,14 @@ export type ScheduledProgramRow = {
   movie?: {
     title?: string | null;
     ratingKey: string;
-    library: { server: LivePlexServer | null };
+    library: { id?: string; key?: string; server: LivePlexServer | null };
   } | null;
   episode?: {
     title?: string | null;
     ratingKey: string;
     show: {
       title: string;
-      library: { server: LivePlexServer | null };
+      library: { id?: string; key?: string; server: LivePlexServer | null };
     };
   } | null;
 };
@@ -38,6 +39,8 @@ export type ResolvedLiveProgram = {
   };
   streamUrl: string;
   seekSeconds: number;
+  /** Set for local files: ffmpeg reads the file directly. */
+  local?: LocalStream;
   programTitle?: string;
   channelName?: string;
 };
@@ -177,18 +180,32 @@ export async function loadLiveProgramForChannel(
   const programInfo = picked.movie ?? picked.episode;
   const server =
     picked.movie?.library.server ?? picked.episode?.show.library.server ?? null;
-  if (!programInfo || !server || server.type !== "PLEX" || !server.token) {
+  if (!programInfo || !server) {
     return null;
   }
-
-  const plex = new PlexAPI({ uri: server.url });
-  const mediaParts = await plex.getMediaParts(
-    server.url,
-    server.token,
-    programInfo.ratingKey,
-  );
-  if (!mediaParts?.partKey) {
-    return null;
+  const library = picked.movie?.library ?? picked.episode?.show.library;
+  let streamUrl: string;
+  let local: LocalStream | undefined;
+  if (server.type === "LOCAL") {
+    if (!library?.id || !library.key) return null;
+    const found = await resolveLocalStream({ id: library.id, key: library.key }, programInfo.ratingKey);
+    if (!found) return null;
+    local = found;
+    streamUrl = found.filePath;
+  } else {
+    if (server.type !== "PLEX" || !server.token) {
+      return null;
+    }
+    const plex = new PlexAPI({ uri: server.url });
+    const mediaParts = await plex.getMediaParts(
+      server.url,
+      server.token,
+      programInfo.ratingKey,
+    );
+    if (!mediaParts?.partKey) {
+      return null;
+    }
+    streamUrl = `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`;
   }
 
   const timing = TimingService.calculateSeekOffset(
@@ -209,8 +226,9 @@ export async function loadLiveProgramForChannel(
       ...timing,
       seekOffsetMs: seekSeconds * 1000,
     },
-    streamUrl: `${server.url}${mediaParts.partKey}?X-Plex-Token=${server.token}`,
+    streamUrl,
     seekSeconds,
+    local,
     programTitle: liveProgramTitle(picked),
     channelName: schedule.channelName,
   };

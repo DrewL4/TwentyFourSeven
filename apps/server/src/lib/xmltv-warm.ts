@@ -1,3 +1,5 @@
+import { signLink } from "./link-security";
+
 let warmInFlight: Promise<void> | null = null;
 let warmDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -25,7 +27,7 @@ export function scheduleXmlTvWarm(baseUrl?: string): void {
       process.env.NEXT_PUBLIC_SERVER_URL ||
       `http://127.0.0.1:${process.env.PORT || process.env.SERVER_PORT || "3000"}`;
 
-    warmInFlight = fetch(`${origin.replace(/\/$/, "")}/media.xml?bypass-cache=true`, {
+    warmInFlight = fetch(`${origin.replace(/\/$/, "")}/media.xml?bypass-cache=true&t=${signLink("guide", "xmltv", "system:warm", 120)}`, {
       headers: { Accept: "application/xml" },
     })
       .then(() => undefined)

@@ -9,6 +9,7 @@ import { AppLogo } from "@/components/app-logo";
 import { Library, Settings, Play, Radio, FileText, Tv } from "lucide-react";
 import { getServerUrl } from "@/utils/server-url";
 import { useAdmin } from "@/hooks/use-admin";
+import PlaylistLoginCard from "@/components/settings/playlist-login-card";
 
 // Type for channel data from the API
 type Channel = {
@@ -24,7 +25,7 @@ export default function Home() {
   const healthCheck = useQuery(orpc.healthCheck.queryOptions());
   const channelsQuery = useQuery(orpc.channels.listSummary.queryOptions());
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
-  const { isAdmin } = useAdmin();
+  const { isAdmin, isLoading: roleLoading } = useAdmin();
   // Media servers (and their tokens) are admin-only.
   const serversQuery = useQuery({ ...orpc.servers.list.queryOptions(), enabled: isAdmin });
   const serverUrl = getServerUrl();
@@ -74,11 +75,11 @@ export default function Home() {
         <Card className="mb-8 border-amber-500/50 bg-amber-500/5" data-testid="next-step-plex">
           <CardContent className="flex flex-col gap-3 py-4 md:flex-row md:items-center md:justify-between">
             <p className="text-sm">
-              <span className="font-semibold">Next step:</span> connect Plex in Settings → Plex.
-              Channels, the guide, and the M3U/XMLTV feeds stay empty until a media server is added.
+              <span className="font-semibold">Next step:</span> tell TwentyFourSeven where your videos are
+              (your movie and TV folders, or Plex). Channels and the guide stay empty until then.
             </p>
             <Button size="sm" asChild>
-              <Link href="/settings/plex">Open Plex settings</Link>
+              <Link href="/settings">Choose your videos</Link>
             </Button>
           </CardContent>
         </Card>
@@ -216,11 +217,11 @@ export default function Home() {
               <div className="animate-pulse bg-muted h-8 rounded"></div>
             ) : (
               <div className="text-2xl font-bold">
-                {serversQuery.data?.filter(server => server.active && server.type === 'PLEX').length || 0}
+                {serversQuery.data?.filter(server => server.active).length || 0}
               </div>
             )}
             <p className="text-sm text-muted-foreground mt-1">
-              Connected Plex servers
+              Video sources
             </p>
           </CardContent>
         </Card>
@@ -254,6 +255,13 @@ export default function Home() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Viewers can't open Settings, so their TV app login lives here. */}
+      {!isAdmin && !roleLoading && (
+        <div className="mt-6">
+          <PlaylistLoginCard showHdhr={!!settingsQuery.data?.hdhrActive} />
+        </div>
       )}
     </div>
   );

@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/DrewL4/TwentyFourSeven</Support>
   <Project>https://github.com/DrewL4/TwentyFourSeven</Project>
-  <Overview>TwentyFourSeven - A modern full-stack TypeScript application with Next.js frontend and API backend. Features include user authentication, real-time updates, beautiful modern UI, and optional NVIDIA/Intel/AMD hardware acceleration. Install WatchTower first: sign-in goes through WatchTower. A graphics card is optional.</Overview>
+  <Overview>TwentyFourSeven turns your movie and TV folders (or your Plex library) into always-on TV channels with a program guide for any IPTV app. Point Movies Folder and TV Shows Folder at your media; TwentyFourSeven only reads them. Install WatchTower first: sign-in goes through WatchTower. A graphics card is optional.</Overview>
   <Category>Productivity: MediaApp:Other</Category>
   <WebUI>http://[IP]:[PORT:80]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/DrewL4/TwentyFourSeven/main/twentyfourseven-unraid-template.xml</TemplateURL>
@@ -37,6 +37,10 @@
   <Config Name="Database Storage" Target="/app/database" Default="/mnt/user/appdata/twentyfourseven/database" Mode="rw" Description="Keeps your channels, settings and the sign-in key. Do not leave empty, or everything is lost on update. If you see database permission errors, run: chown -R 1001:100 /mnt/user/appdata/twentyfourseven/database in the Unraid terminal." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/twentyfourseven/database</Config>
   <Config Name="Static Files Storage" Target="/app/static" Default="/mnt/user/appdata/twentyfourseven/static" Mode="rw" Description="Path to store static files (.m3u, .xml, etc.). Files placed here will be accessible at http://[IP]:[PORT]/files/. If you see permission errors, run: chown -R 1001:100 /mnt/user/appdata/twentyfourseven/static in the Unraid terminal." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/twentyfourseven/static</Config>
   
+  <!-- Your videos (read-only). Use the same folders Plex or ESPG use. Leave empty if you only use Plex. -->
+  <Config Name="Movies Folder" Target="/movies" Default="" Mode="ro" Description="Your movies folder, for example /mnt/user/Movies. TwentyFourSeven only reads it. Leave empty if you only use Plex." Type="Path" Display="always" Required="false" Mask="false"/>
+  <Config Name="TV Shows Folder" Target="/tv" Default="" Mode="ro" Description="Your TV shows folder, for example /mnt/user/TV. One folder per show works best (Show Name/Season 01/Show Name - S01E01.mkv). TwentyFourSeven only reads it." Type="Path" Display="always" Required="false" Mask="false"/>
+
   <!-- Advanced Settings -->
   <Config Name="FFMPEG Auto-Detect" Target="FFMPEG_AUTO_DETECT" Default="true" Mode="" Description="Automatically detect FFMPEG installation path." Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
   <Config Name="Hardware Acceleration Device" Target="HARDWARE_ACCEL_DEVICE" Default="/dev/nvidia0" Mode="" Description="Hardware acceleration device path. For NVIDIA use /dev/nvidia0, for Intel/AMD use /dev/dri/renderD128." Type="Variable" Display="advanced" Required="false" Mask="false">/dev/nvidia0</Config>

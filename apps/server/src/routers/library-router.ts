@@ -9,6 +9,7 @@ import {
   writeCollectionsCache,
 } from "../lib/collections-cache";
 import {
+  activeSourceType,
   buildMovieWhere,
   buildShowWhere,
   getCollectionCount,
@@ -28,8 +29,9 @@ export const libraryRouter = {
   stats: publicProcedure
     .input(statsInputSchema)
     .handler(async ({ input }) => {
-      const showWhere = buildShowWhere(input);
-      const movieWhere = buildMovieWhere(input);
+      const sourceType = await activeSourceType();
+      const showWhere = buildShowWhere({ ...input, sourceType });
+      const movieWhere = buildMovieWhere({ ...input, sourceType });
 
       const [showCount, movieCount, episodeCount, libraryCount, serverCount, collectionCount] =
         await Promise.all([
@@ -40,7 +42,7 @@ export const libraryRouter = {
           }),
           prisma.mediaLibrary.count(),
           prisma.mediaServer.count({
-            where: { type: "PLEX", active: true },
+            where: { active: true },
           }),
           getCollectionCount(),
         ]);
@@ -110,7 +112,7 @@ export const libraryRouter = {
       }),
     )
     .handler(async ({ input }) => {
-      const where = buildShowWhere(input);
+      const where = buildShowWhere({ ...input, sourceType: await activeSourceType() });
       const limit = Math.min(Math.max(input.limit, 1), 200);
       const skip = Math.max(input.offset, 0);
 
@@ -163,7 +165,7 @@ export const libraryRouter = {
       }),
     )
     .handler(async ({ input }) => {
-      const where = buildMovieWhere(input);
+      const where = buildMovieWhere({ ...input, sourceType: await activeSourceType() });
       const limit = Math.min(Math.max(input.limit, 1), 200);
       const skip = Math.max(input.offset, 0);
 
@@ -198,13 +200,16 @@ export const libraryRouter = {
       if (!q.length) {
         return { shows: [], movies: [], limit: lim };
       }
+      const sourceType = await activeSourceType();
       const showWhere = buildShowWhere({
+        sourceType,
         libraryId: input.libraryId,
         search: q,
         collection: input.collection,
         searchSummary: input.filterFields,
       });
       const movieWhere = buildMovieWhere({
+        sourceType,
         libraryId: input.libraryId,
         search: q,
         collection: input.collection,

@@ -29,6 +29,9 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import WatchTowerConnectionSetup from "@/components/watchtower-connection-setup";
+import MediaSourceCard from "@/components/settings/media-source-card";
+import PlayerLinksCard from "@/components/settings/player-links-card";
+import PlaylistLoginCard from "@/components/settings/playlist-login-card";
 
 // The web UI and API are served by nginx on this port inside the container
 // (Dockerfile EXPOSE / Unraid webui label). The host port is set by the port mapping.
@@ -183,6 +186,8 @@ export default function SettingsPage() {
         </div>
       ) : (
         <div className="space-y-6">
+          <MediaSourceCard />
+
           {/* Server Settings */}
           <Card>
             <CardHeader>
@@ -583,74 +588,9 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* URLs and Integration */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Integration URLs</CardTitle>
-              <CardDescription>
-                Use these URLs to integrate with Plex, Emby, and other applications
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-sm font-medium">M3U Playlist</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Input
-                      value={`${window.location.origin}/media.m3u`}
-                      readOnly
-                      className="font-mono text-sm"
-                    />
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => navigator.clipboard.writeText(`${window.location.origin}/media.m3u`)}
-                    >
-                      Copy
-                    </Button>
-                  </div>
-                </div>
-                
-                <div>
-                  <Label className="text-sm font-medium">XMLTV Guide</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Input
-                      value={`${window.location.origin}/media.xml`}
-                      readOnly
-                      className="font-mono text-sm"
-                    />
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => navigator.clipboard.writeText(`${window.location.origin}/media.xml`)}
-                    >
-                      Copy
-                    </Button>
-                  </div>
-                </div>
-                
-                {settings.hdhrActive && (
-                  <div>
-                    <Label className="text-sm font-medium">HDHomeRun Discovery URL</Label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Input
-                        value={`${window.location.origin}/discover.json`}
-                        readOnly
-                        className="font-mono text-sm"
-                      />
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => navigator.clipboard.writeText(`${window.location.origin}/discover.json`)}
-                      >
-                        Copy
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Links for IPTV apps and HDHomeRun clients */}
+          <PlaylistLoginCard showHdhr={settings.hdhrActive} admin />
+          <PlayerLinksCard showHdhr={settings.hdhrActive} />
         </div>
       )}
 

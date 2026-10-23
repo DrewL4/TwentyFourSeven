@@ -152,3 +152,20 @@ test("parsePlexImageReference reads direct URLs and proxy links", () => {
   assert.equal(parsePlexImageReference("/placeholder.svg"), null);
   assert.equal(parsePlexImageReference("not a url"), null);
 });
+
+test("with an image pass, links carry t= (no sig, no token); old sig links can be turned off", async () => {
+  const link = createPlayerImageLinker(servers, { pass: "@@PASS@@" });
+  const out = link(`${ORIGIN}/library/metadata/16/thumb/1?X-Plex-Token=${TOKEN}`, "https://tv.example");
+  const sp = new URL(out).searchParams;
+  assert.equal(sp.get("t"), "@@PASS@@");
+  assert.equal(sp.get("sig"), null);
+  assert.ok(!out.includes(TOKEN));
+
+  // Local artwork uses an opaque id, never a file path.
+  assert.equal(link("/images/local/abc123/poster", "https://tv.example"), "https://tv.example/images/local/abc123/poster?t=@@PASS@@");
+
+  const target = normalizePlexImageTarget(ORIGIN, "/library/metadata/7/thumb/1")!;
+  const legacy = params({ origin: ORIGIN, path: target.path, sig: signPlexImageTarget(target, TOKEN) });
+  const refused = await decidePlexImageAccess({ searchParams: legacy, servers, hasSession: signedOut, acceptSignature: false });
+  assert.equal(refused.ok, false);
+});

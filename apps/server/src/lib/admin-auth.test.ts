@@ -79,6 +79,8 @@ const VIEWER_PROCEDURES = new Set([
   'catchup.isAvailable',
   'programming.status',
   'settings.get',
+  'settings.playlistLogin.mine',
+  'settings.playlistLogin.resetMine',
   'stream.channel',
   'stream.m3u',
   'stream.xmltv',

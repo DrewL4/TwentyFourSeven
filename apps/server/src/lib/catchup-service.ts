@@ -1,6 +1,6 @@
 import type { Prisma } from "../../prisma/generated/client";
-import { prisma } from "@/lib/prisma";
-import { TimingService } from "@/lib/timing-service";
+import { prisma } from "./prisma";
+import { TimingService } from "./timing-service";
 
 const programWithMediaInclude = {
   episode: {
@@ -199,8 +199,8 @@ export const CatchupService = {
         );
 
     const server = getPlexServerFromProgram(program);
-    if (!server?.token || server.type !== "PLEX") {
-      throw new Error(`No Plex server found for program ${program.id}`);
+    if (!server || (server.type === "PLEX" ? !server.token : server.type !== "LOCAL")) {
+      throw new Error(`No media source found for program ${program.id}`);
     }
 
     return {

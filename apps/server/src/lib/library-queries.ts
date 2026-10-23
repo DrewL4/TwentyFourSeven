@@ -6,9 +6,12 @@ export function buildShowWhere(input: {
   collection?: string;
   /** Also match the summary, not just the title. */
   searchSummary?: boolean;
+  /** Only items from this kind of source (ignored when libraryId is set). */
+  sourceType?: "LOCAL" | "PLEX";
 }): Prisma.MediaShowWhereInput {
   const where: Prisma.MediaShowWhereInput = {};
   if (input.libraryId) where.libraryId = input.libraryId;
+  else if (input.sourceType) where.library = { server: { type: input.sourceType } };
   if (input.search) {
     if (input.searchSummary) {
       where.OR = [{ title: { contains: input.search } }, { summary: { contains: input.search } }];
@@ -28,9 +31,12 @@ export function buildMovieWhere(input: {
   collection?: string;
   /** Also match the summary, not just the title. */
   searchSummary?: boolean;
+  /** Only items from this kind of source (ignored when libraryId is set). */
+  sourceType?: "LOCAL" | "PLEX";
 }): Prisma.MediaMovieWhereInput {
   const where: Prisma.MediaMovieWhereInput = {};
   if (input.libraryId) where.libraryId = input.libraryId;
+  else if (input.sourceType) where.library = { server: { type: input.sourceType } };
   if (input.search) {
     if (input.searchSummary) {
       where.OR = [{ title: { contains: input.search } }, { summary: { contains: input.search } }];
@@ -98,4 +104,14 @@ export async function getCollectionCount(): Promise<number> {
   const built = await buildCollectionsFromDb();
   await writeCollectionsCache(built);
   return built.length;
+}
+
+/**
+ * The source picked in Settings, so browsing and Add Content only show videos
+ * that will actually play from it. Undefined means "show everything".
+ */
+export async function activeSourceType(): Promise<"LOCAL" | "PLEX" | undefined> {
+  const { prisma } = await import("./prisma");
+  const row = await prisma.settings.findUnique({ where: { id: "singleton" }, select: { mediaSource: true } });
+  return row?.mediaSource === "LOCAL" || row?.mediaSource === "PLEX" ? row.mediaSource : undefined;
 }

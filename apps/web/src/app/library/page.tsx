@@ -351,10 +351,10 @@ export default function LibraryPage() {
             <Library className="w-16 h-16 text-muted-foreground mb-4" />
             <h3 className="text-xl font-semibold mb-2">No Libraries Found</h3>
             <p className="text-muted-foreground text-center mb-6 max-w-md">
-              Connect a Plex server and sync libraries to see your content here. Go to Settings → Plex to get started.
+              Tell TwentyFourSeven where your videos are (your movie and TV folders, or Plex) in Settings to see them here.
             </p>
             <Button asChild>
-              <a href="/settings/plex">
+              <a href="/settings">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Plex Server
               </a>
@@ -548,7 +548,7 @@ export default function LibraryPage() {
                   <p className="text-muted-foreground text-center mb-6 max-w-md">
                     {searchQuery || selectedLibrary || selectedCollection || contentView !== "all"
                       ? "No shows or movies match your current filters. Try adjusting or clearing them."
-                      : "Your libraries are connected but no content has been synced yet. Check your Plex server settings."}
+                      : "Your video source is set up but nothing has been found yet. Check Settings for a status message."}
                   </p>
                   {(searchQuery ||
                     selectedLibrary ||

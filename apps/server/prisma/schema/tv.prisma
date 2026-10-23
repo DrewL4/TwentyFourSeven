@@ -366,6 +366,18 @@ model Settings {
   
   // Optional TMDB API key for franchise collection import
   tmdbApiKey String @default("")
+
+  // Local files: play videos straight from folders mapped into the container.
+  localMediaEnabled Boolean @default(true)
+  /// Comma-separated folders. Empty = LOCAL_MEDIA_PATHS env, else /movies, /tv, /media.
+  localMediaPaths   String  @default("")
+  /// Where new channel content comes from: "LOCAL" | "PLEX" | "JELLYFIN" | "EMBY".
+  /// Empty = decide once at startup (PLEX if a Plex server is set up, else LOCAL).
+  mediaSource       String  @default("")
+  /// Devices on the home network may use unsigned links (old M3U/HDHomeRun setups).
+  allowLanWithoutKey Boolean @default(true)
+  /// ESPG address for checking playlist logins (empty = ESPG_URL env, else off).
+  espgUrl           String  @default("")
   
   ffmpegSettings FfmpegSettings?
   plexSettings PlexSettings?
@@ -496,6 +508,46 @@ enum ServerType {
   PLEX
   JELLYFIN
   EMBY
+  LOCAL
+}
+
+/// One video file or show folder TwentyFourSeven found in a local media folder.
+/// size + mtime let a rescan skip files that did not change (no re-probe).
+model LocalMediaItem {
+  id          String @id @default(cuid()) @map("_id")
+  libraryId   String
+  relPath     String // path relative to the library folder, never sent to clients
+  kind        String // "movie" | "episode" | "show"
+  size        Float  @default(0)
+  mtimeMs     Float  @default(0)
+  videoCodec  String?
+  audioCodec  String?
+  audioChannels Int?
+  width       Int?
+  height      Int?
+  pixFmt      String?
+  durationMs  Int?
+  probeError  String?
+  posterRel   String?
+  backdropRel String?
+  scannedAt   DateTime @default(now())
+
+  @@unique([libraryId, relPath])
+  @@index([libraryId, kind])
+  @@map("local_media_item")
+}
+
+/// A revocable key for one player or device (IPTV app, HDHomeRun client).
+/// The secret is derived from the server secret, so only the id is stored.
+model PlayerKey {
+  id         String @id @default(cuid()) @map("_id")
+  name       String
+  userId     String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  @@map("player_key")
 }
 
 enum LibraryType {

@@ -1,3 +1,5 @@
+import { isPlexTokenHandle, redeemPlexTokenHandle } from "./plex-login-handles";
+
 /**
  * A media server row as the browser may see it: everything except the access token.
  * `hasToken` tells the settings page whether a token is stored, so it can offer
@@ -10,10 +12,15 @@ export function toPublicServer<T extends { token?: string | null }>(
   return { ...rest, hasToken: Boolean(token) };
 }
 
-/** Turns "" (an untouched token field) into "keep the stored token". */
+/**
+ * Turns "" (an untouched token field) into "keep the stored token". A Plex sign-in
+ * handle is swapped for the token it stands for (an expired one counts as untouched).
+ */
 export function tokenUpdate(token: string | undefined): string | undefined {
   const trimmed = token?.trim();
-  return trimmed ? trimmed : undefined;
+  if (!trimmed) return undefined;
+  if (isPlexTokenHandle(trimmed)) return redeemPlexTokenHandle(trimmed) ?? undefined;
+  return trimmed;
 }
 
 /**
