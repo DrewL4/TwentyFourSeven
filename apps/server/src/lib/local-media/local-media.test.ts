@@ -87,7 +87,7 @@ test("copy when compatible, convert otherwise", () => {
 });
 
 describe("describeLocalStatus", () => {
-  const base = { running: false, startedAt: "x", finishedAt: "y", lastError: null, probed: 0, skippedUnchanged: 0, removed: 0 };
+  const base = { running: false, startedAt: "x", finishedAt: "y", lastError: null, probed: 0, skippedUnchanged: 0, removed: 0, unavailable: [] };
   test("counts in plain words", () => {
     const s = describeLocalStatus(
       { ...base, folders: [
@@ -116,6 +116,16 @@ describe("describeLocalStatus", () => {
     assert.equal(s.tone, "problem");
     assert.equal(s.setup, "map-folders");
     assert.doesNotMatch(s.message + s.fixes.join(" "), /container|mount|\/movies/);
+  });
+  test("titles left in a folder that is no longer selected are named", () => {
+    const s = describeLocalStatus(
+      { ...base, folders: [{ path: "/media/Media/Movies", ok: true, kind: "movies", movies: 9, shows: 0, episodes: 0 }],
+        unavailable: [{ path: "/movies", kind: "movies", titles: ["Only Old"] }] },
+      { enabled: true },
+    );
+    assert.equal(s.message, "Found 9 movies in /media/Media/Movies");
+    assert.equal(s.tone, "problem");
+    assert.match(s.fixes[0], /1 movie from \/movies \(no longer selected\) is still in your channels: Only Old/);
   });
   test("a folder is mapped but none picked: offer Find my videos", () => {
     const s = describeLocalStatus({ ...base, folders: [] }, { enabled: true, mapped: ["/media"] });

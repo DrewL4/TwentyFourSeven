@@ -19,6 +19,8 @@ model MediaLibrary {
   name     String
   key      String // Plex library key
   type     LibraryType
+  /** False for a local folder that is no longer selected (kept only for channels that still use its titles). */
+  available Boolean @default(true)
   
   serverId String
   server   MediaServer @relation(fields: [serverId], references: [id], onDelete: Cascade)

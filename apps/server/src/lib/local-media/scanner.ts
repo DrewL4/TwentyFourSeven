@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { prisma } from "../prisma";
 import { configuredLocalRoots } from "./paths";
+import { reconcileLocalLibraries, type UnavailableFolder } from "./reconcile";
 import {
   VIDEO_EXTENSIONS,
   isSampleFile,
@@ -47,6 +48,8 @@ export type LocalScanState = {
   skippedUnchanged: number;
   removed: number;
   folders: FolderStatus[];
+  /** Folders no longer selected whose titles some channel still uses. */
+  unavailable: UnavailableFolder[];
 };
 
 /*
@@ -67,6 +70,7 @@ const shared: Shared = (g.__tfsLocalScan ??= {
     skippedUnchanged: 0,
     removed: 0,
     folders: [],
+    unavailable: [],
   },
   inFlight: null,
   timer: null,
@@ -74,7 +78,11 @@ const shared: Shared = (g.__tfsLocalScan ??= {
 const state = shared.state;
 
 export function getLocalScanState(): LocalScanState {
-  return { ...state, folders: state.folders.map((f) => ({ ...f })) };
+  return {
+    ...state,
+    folders: state.folders.map((f) => ({ ...f })),
+    unavailable: (state.unavailable ?? []).map((f) => ({ ...f, titles: [...f.titles] })),
+  };
 }
 
 type ProbeResult = {
@@ -479,6 +487,17 @@ export async function scanLocalMedia(): Promise<LocalScanState> {
         folders.push(await scanLibrary(root, server.id, counters));
       }
       state.folders = folders;
+      // Only folders the admin picked can retire old ones. With the built-in
+      // defaults, a share that is briefly unmounted must never look "unselected".
+      const picked = Boolean((settings?.localMediaPaths || "").trim() || (process.env.LOCAL_MEDIA_PATHS || "").trim());
+      const readable = folders.filter((f) => f.ok).map((f) => f.path);
+      if (picked && readable.length > 0) {
+        const report = await reconcileLocalLibraries(server.id, roots, readable);
+        state.unavailable = report.unavailable;
+        counters.removed += report.dropped;
+      } else {
+        state.unavailable = [];
+      }
     } catch (e) {
       state.lastError = (e as Error).message;
       console.error("[LocalMedia] scan failed:", (e as Error).message);

@@ -41,8 +41,8 @@ async function mediaSourceStatus() {
   const plexServers = await prisma.mediaServer.count({ where: { type: "PLEX", active: true } });
   const count = (type: "LOCAL" | "PLEX") =>
     Promise.all([
-      prisma.mediaMovie.count({ where: { library: { server: { type, active: true } } } }),
-      prisma.mediaShow.count({ where: { library: { server: { type, active: true } } } }),
+      prisma.mediaMovie.count({ where: { library: { available: true, server: { type, active: true } } } }),
+      prisma.mediaShow.count({ where: { library: { available: true, server: { type, active: true } } } }),
     ]).then(([movies, shows]) => ({ movies, shows }));
   return {
     source: (settings?.mediaSource || (plexServers ? "PLEX" : "LOCAL")) as "LOCAL" | "PLEX" | "JELLYFIN" | "EMBY",

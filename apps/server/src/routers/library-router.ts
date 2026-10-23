@@ -76,6 +76,7 @@ export const libraryRouter = {
     });
 
     const allLibraries = await prisma.mediaLibrary.findMany({
+      where: { available: true },
       include: {
         shows: true,
         movies: true,

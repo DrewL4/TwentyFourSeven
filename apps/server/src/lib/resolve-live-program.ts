@@ -10,14 +10,14 @@ export type ScheduledProgramRow = {
   movie?: {
     title?: string | null;
     ratingKey: string;
-    library: { id?: string; key?: string; server: LivePlexServer | null };
+    library: { id?: string; key?: string; available?: boolean; server: LivePlexServer | null };
   } | null;
   episode?: {
     title?: string | null;
     ratingKey: string;
     show: {
       title: string;
-      library: { id?: string; key?: string; server: LivePlexServer | null };
+      library: { id?: string; key?: string; available?: boolean; server: LivePlexServer | null };
     };
   } | null;
 };
@@ -189,7 +189,12 @@ export async function loadLiveProgramForChannel(
   if (server.type === "LOCAL") {
     if (!library?.id || !library.key) return null;
     const found = await resolveLocalStream({ id: library.id, key: library.key }, programInfo.ratingKey);
-    if (!found) return null;
+    if (!found) {
+      console.warn(
+        `[Video] channel=${channelNumber} local file not reachable: folder=${library.key} file=${programInfo.ratingKey}${library.available === false ? " (folder no longer selected)" : ""}`,
+      );
+      return null;
+    }
     local = found;
     streamUrl = found.filePath;
   } else {

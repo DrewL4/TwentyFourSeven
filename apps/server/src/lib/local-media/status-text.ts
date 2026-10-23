@@ -52,6 +52,12 @@ export function describeLocalStatus(
     else if (f.problem === "not-a-folder") fixes.push(`${f.path} is a file, not a folder.`);
     else if (f.problem === "empty") fixes.push(`${f.path} has no videos. Check that it points at the right folder on your server.`);
   }
+  for (const f of state.unavailable ?? []) {
+    const what = plural(f.titles.length, f.kind === "movies" ? "movie" : "show", f.kind === "movies" ? "movies" : "shows");
+    fixes.push(
+      `${what} from ${f.path} (no longer selected) ${f.titles.length === 1 ? "is" : "are"} still in your channels: ${f.titles.slice(0, 3).join(", ")}${f.titles.length > 3 ? "…" : ""}. Select that folder again, or replace ${f.titles.length === 1 ? "it" : "them"} in the channel.`,
+    );
+  }
   const good = state.folders.filter((f) => f.ok && !f.problem);
   const movies = good.reduce((a, f) => a + f.movies, 0);
   const shows = good.reduce((a, f) => a + f.shows, 0);

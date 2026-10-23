@@ -11,7 +11,7 @@ export function buildShowWhere(input: {
 }): Prisma.MediaShowWhereInput {
   const where: Prisma.MediaShowWhereInput = {};
   if (input.libraryId) where.libraryId = input.libraryId;
-  else if (input.sourceType) where.library = { server: { type: input.sourceType } };
+  else where.library = { available: true, ...(input.sourceType ? { server: { type: input.sourceType } } : {}) };
   if (input.search) {
     if (input.searchSummary) {
       where.OR = [{ title: { contains: input.search } }, { summary: { contains: input.search } }];
@@ -36,7 +36,7 @@ export function buildMovieWhere(input: {
 }): Prisma.MediaMovieWhereInput {
   const where: Prisma.MediaMovieWhereInput = {};
   if (input.libraryId) where.libraryId = input.libraryId;
-  else if (input.sourceType) where.library = { server: { type: input.sourceType } };
+  else where.library = { available: true, ...(input.sourceType ? { server: { type: input.sourceType } } : {}) };
   if (input.search) {
     if (input.searchSummary) {
       where.OR = [{ title: { contains: input.search } }, { summary: { contains: input.search } }];
