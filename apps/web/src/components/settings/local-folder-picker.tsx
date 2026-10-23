@@ -116,10 +116,13 @@ export function FindMyVideos({ onSave, saving, onBrowse }: { onSave: (folders: s
                     aria-label={s.path}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-mono text-sm">{s.path}</span>
-                    <span className="text-xs text-muted-foreground">{videoCount(s.videos, s.more)}</span>
+                    <span className="block break-all font-mono text-sm">{s.path}</span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                      {videoCount(s.videos, s.more)}
+                      <span className="sm:hidden"><GuessTag guess={s.kind} /></span>
+                    </span>
                   </span>
-                  <GuessTag guess={s.kind} />
+                  <span className="hidden sm:inline-flex"><GuessTag guess={s.kind} /></span>
                 </label>
               </li>
             ))}
@@ -176,7 +179,7 @@ export function FolderBrowser({
   return (
     <div className="space-y-3 rounded-md border p-3" data-testid="folder-browser">
       <div className="flex flex-wrap items-center gap-1 text-sm">
-        <button type="button" className="rounded px-1 hover:bg-muted" onClick={() => setAt("")}>
+        <button type="button" className="tfs-tap inline-flex items-center rounded px-1 hover:bg-muted" onClick={() => setAt("")}>
           All folders
         </button>
         {crumbs.map((c, i) => {
@@ -184,7 +187,7 @@ export function FolderBrowser({
           return (
             <span key={p} className="flex items-center gap-1">
               <ChevronRight className="h-3 w-3 text-muted-foreground" />
-              <button type="button" className="rounded px-1 font-mono hover:bg-muted" onClick={() => setAt(p)}>
+              <button type="button" className="tfs-tap inline-flex items-center rounded px-1 font-mono hover:bg-muted" onClick={() => setAt(p)}>
                 {c}
               </button>
             </span>
@@ -211,21 +214,26 @@ export function FolderBrowser({
             const on = picked.includes(e.path);
             return (
               <li key={e.path} className="flex items-center gap-3 rounded-md border p-2" data-testid="folder-row">
-                <Checkbox checked={on} onCheckedChange={(v) => toggle(e.path, !!v)} aria-label={`Use ${e.path}`} />
+                <span className="tfs-tap -m-2 inline-flex items-center justify-center p-2 md:m-0 md:p-0">
+                  <Checkbox checked={on} onCheckedChange={(v) => toggle(e.path, !!v)} aria-label={`Use ${e.path}`} />
+                </span>
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
+                  className="tfs-tap flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
                   onClick={() => e.hasFolders && setAt(e.path)}
                   disabled={!e.hasFolders}
                   title={e.hasFolders ? "Open" : undefined}
                 >
                   <Folder className="h-4 w-4 shrink-0 text-accent-text" />
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">{e.name}</span>
-                    <span className="text-xs text-muted-foreground">{videoCount(e.videos, e.more)}</span>
+                    <span className="block break-words text-sm font-medium">{e.name}</span>
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                      {videoCount(e.videos, e.more)}
+                      <span className="sm:hidden"><GuessTag guess={e.guess} /></span>
+                    </span>
                   </span>
                 </button>
-                <GuessTag guess={e.guess} />
+                <span className="hidden sm:inline-flex"><GuessTag guess={e.guess} /></span>
                 {e.hasFolders && (
                   <Button size="sm" variant="ghost" onClick={() => setAt(e.path)} aria-label={`Open ${e.name}`}>
                     Open <ChevronRight className="ml-1 h-4 w-4" />
@@ -244,7 +252,7 @@ export function FolderBrowser({
             {picked.map((p) => (
               <li key={p} className="flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs">
                 {p}
-                <button type="button" onClick={() => toggle(p, false)} aria-label={`Remove ${p}`}>
+                <button type="button" className="tfs-tap -my-3 -mr-3 inline-flex items-center justify-center md:my-0 md:mr-0" onClick={() => toggle(p, false)} aria-label={`Remove ${p}`}>
                   <X className="h-3 w-3" />
                 </button>
               </li>

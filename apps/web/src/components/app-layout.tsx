@@ -27,14 +27,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <>
         {/* Mobile Layout (< 768px) - Bottom Navigation */}
         <div className="md:hidden flex flex-col h-svh">
-          <header className="tfs-topbar flex h-14 shrink-0 items-center justify-between px-4">
-            <div className="flex items-center gap-2 text-lg font-semibold tracking-[-0.03em]">
-              <AppLogo size="sm" href="/" />
+          <header className="tfs-topbar flex h-14 shrink-0 items-center justify-between px-2">
+            <div className="flex items-center gap-1 text-lg font-semibold tracking-[-0.03em]">
+              <AppLogo size="sm" href="/" linkClassName="tfs-tap inline-flex items-center justify-center" />
               <span>24/7</span>
               {/* Phones have no sidebar: show the version next to the name. */}
               <AppVersion className="self-end pb-0.5 font-normal" />
             </div>
-            <ModeToggle />
+            <ModeToggle className="tfs-tap justify-center" />
           </header>
           <main className="flex-1 overflow-auto px-4 pt-4 pb-24">
             {children}

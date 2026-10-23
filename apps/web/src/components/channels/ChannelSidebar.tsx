@@ -151,7 +151,7 @@ export function ChannelSidebar({
                   className="touch-manipulation flex-shrink-0"
                 >
                   <Plus className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline">Add Channel</span>
+                  <span>Add Channel</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>

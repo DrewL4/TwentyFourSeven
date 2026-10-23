@@ -527,6 +527,7 @@ export default function GuidePage() {
                         size="sm"
                         className="h-8 w-8 p-0"
                         title="Regenerate guide"
+                        aria-label={`Regenerate guide for ${channel.name}`}
                         onClick={() => generateForChannelMutation.mutate({ channelId: channel.id, hours: 24 })}
                         disabled={generateForChannelMutation.isPending}
                       >
@@ -676,7 +677,7 @@ export default function GuidePage() {
             size="sm"
           >
             <RefreshCw className={`w-4 h-4 mr-1 ${maintainProgramsMutation.isPending ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
+            <span>Refresh</span>
           </Button>
           <Button 
             onClick={() => generateProgramsMutation.mutate({})}

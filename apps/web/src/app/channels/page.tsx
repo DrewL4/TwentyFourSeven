@@ -45,7 +45,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, X, ChevronDown, ChevronRight, Filter, User, Calendar, Tag, Rewind } from "lucide-react";
+import { Search, X, ChevronDown, ChevronRight, Filter, User, Calendar, Tag, Rewind, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useDebounce } from "use-debounce";
 import { Autocomplete } from "@/components/ui/combobox"
@@ -858,14 +858,14 @@ function AddContentDialog({
   return (
     <TooltipProvider delayDuration={300}>
       <div 
-        className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[6px] flex items-center justify-center z-50"
+        className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[6px] flex items-center justify-center z-[60]"
         onClick={(e) => {
           if (e.target === e.currentTarget) {
             handleClose();
           }
         }}
       >
-      <Card className="tfs-modal w-full max-w-6xl max-h-[90vh] overflow-hidden">
+      <Card className="tfs-modal w-full max-w-6xl max-h-[90dvh] overflow-hidden">
         <CardHeader className="border-b">
           <div className="flex items-center justify-between">
             <div>
@@ -886,8 +886,8 @@ function AddContentDialog({
           
                      {/* Search and Filters */}
            <div className="space-y-4 pt-4">
-             <div className="flex items-center gap-4">
-               <div className="relative flex-1">
+             <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap sm:gap-4">
+               <div className="relative w-full min-w-0 sm:w-auto sm:flex-1">
                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                  <Input
                    placeholder="Search titles, summaries..."
@@ -904,7 +904,7 @@ function AddContentDialog({
                      className="flex items-center gap-2"
                    >
                      <Filter className="w-4 h-4 md:mr-1" />
-                     <span className="hidden md:inline">Advanced Filters</span>
+                     <span>Advanced Filters</span>
                      {showFilters ? <ChevronDown className="w-4 h-4 md:ml-1" /> : <ChevronRight className="w-4 h-4 md:ml-1" />}
                    </Button>
                  </TooltipTrigger>
@@ -919,7 +919,7 @@ function AddContentDialog({
                      onClick={clearSelection}
                      disabled={selectedShows.size === 0 && selectedMovies.size === 0}
                    >
-                     <span className="hidden md:inline">Clear Selection</span>
+                     <span>Clear Selection</span>
                    </Button>
                  </TooltipTrigger>
                  <TooltipContent>
@@ -1168,7 +1168,7 @@ function AddContentDialog({
                    <Tooltip>
                      <TooltipTrigger asChild>
                        <Button variant="outline" size="sm" onClick={clearAllFilters}>
-                         <span className="hidden md:inline">Clear All Filters</span>
+                         <span>Clear All Filters</span>
                        </Button>
                      </TooltipTrigger>
                      <TooltipContent>
@@ -1227,7 +1227,7 @@ function AddContentDialog({
                         onClick={selectAllShows}
                         disabled={filteredShows.length === 0}
                       >
-                        <span className="hidden md:inline">Select All ({filteredShows.length})</span>
+                        <span>Select All ({filteredShows.length})</span>
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -1238,7 +1238,7 @@ function AddContentDialog({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button onClick={handleBulkAddShows}>
-                          <span className="hidden md:inline">Add {selectedShows.size} Show{selectedShows.size > 1 ? 's' : ''}</span>
+                          <span>Add {selectedShows.size} Show{selectedShows.size > 1 ? 's' : ''}</span>
                           {autoFilterEnabled && (
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -1277,6 +1277,7 @@ function AddContentDialog({
                          <Checkbox
                            checked={selectedShows.has(show.id)}
                            onCheckedChange={() => toggleShowSelection(show.id)}
+                           aria-label={`Select ${show.title}`}
                          />
                          <img 
                            src={mediaImageSrc(show.poster) || "/placeholder.svg"} 
@@ -1305,7 +1306,7 @@ function AddContentDialog({
                                 onClick={() => toggleShowExpansion(show.id)}
                               >
                                 {isExpanded ? <ChevronDown className="w-4 h-4 md:mr-1" /> : <ChevronRight className="w-4 h-4 md:mr-1" />}
-                                <span className="hidden md:inline">Episodes</span>
+                                <span>Episodes</span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -1327,7 +1328,7 @@ function AddContentDialog({
                                   variant="outline"
                                   onClick={() => selectAllSeasonsForShow(show.id, seasons)}
                                 >
-                                  <span className="hidden md:inline">Select All Seasons</span>
+                                  <span>Select All Seasons</span>
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>
@@ -1414,7 +1415,7 @@ function AddContentDialog({
                                       });
                                     }}
                                   >
-                                    <span className="hidden md:inline">Add Selected ({selectedShowSeasons.size} seasons, {selectedShowEpisodes.size} episodes)</span>
+                                    <span>Add Selected ({selectedShowSeasons.size} seasons, {selectedShowEpisodes.size} episodes)</span>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <Info className="w-4 h-4 md:ml-2 text-muted-foreground" />
@@ -1459,7 +1460,7 @@ function AddContentDialog({
                         onClick={selectAllMovies}
                         disabled={filteredMovies.length === 0}
                       >
-                        <span className="hidden md:inline">Select All ({filteredMovies.length})</span>
+                        <span>Select All ({filteredMovies.length})</span>
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -1470,7 +1471,7 @@ function AddContentDialog({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button onClick={handleBulkAddMovies}>
-                          <span className="hidden md:inline">Add {selectedMovies.size} Movies</span>
+                          <span>Add {selectedMovies.size} Movies</span>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -1492,6 +1493,7 @@ function AddContentDialog({
                     <Checkbox
                       checked={selectedMovies.has(movie.id)}
                       onCheckedChange={() => toggleMovieSelection(movie.id)}
+                      aria-label={`Select ${movie.title}`}
                     />
                     <img 
                       src={mediaImageSrc(movie.poster) || "/placeholder.svg"} 
@@ -1514,7 +1516,7 @@ function AddContentDialog({
                             toggleMovieSelection(movie.id);
                           }}
                         >
-                          <span className="hidden md:inline">Add</span>
+                          <span>Add</span>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -1546,7 +1548,7 @@ function AddContentDialog({
                         onClick={selectAllCollections}
                         disabled={filteredCollections.length === 0 || addingCollections}
                       >
-                        <span className="hidden md:inline">Select All ({filteredCollections.length})</span>
+                        <span>Select All ({filteredCollections.length})</span>
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -1558,9 +1560,9 @@ function AddContentDialog({
                       <TooltipTrigger asChild>
                         <Button onClick={handleBulkAddCollections} disabled={addingCollections}>
                           {addingCollections ? (
-                            <span className="hidden md:inline">Adding...</span>
+                            <span>Adding...</span>
                           ) : (
-                            <span className="hidden md:inline">Add {selectedCollections.size} Collections</span>
+                            <span>Add {selectedCollections.size} Collections</span>
                           )}
                         </Button>
                       </TooltipTrigger>
@@ -1599,7 +1601,7 @@ function AddContentDialog({
                           onClick={() => toggleCollectionSelection(col.name)}
                           disabled={addingCollections}
                         >
-                          <span className="hidden md:inline">Add</span>
+                          <span>Add</span>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -1635,7 +1637,7 @@ function AddContentDialog({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="outline" onClick={handleClose}>
-                    <span className="hidden md:inline">Cancel</span>
+                    <span>Cancel</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -1653,7 +1655,7 @@ function AddContentDialog({
                     }}
                     disabled={selectedShows.size === 0 && selectedMovies.size === 0}
                   >
-                    <span className="hidden md:inline">Add Selected ({selectedShows.size + selectedMovies.size + selectedCollections.size})</span>
+                    <span>Add Selected ({selectedShows.size + selectedMovies.size + selectedCollections.size})</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -2782,7 +2784,8 @@ function ChannelsPageContent() {
             <TooltipTrigger asChild>
               <Button variant="outline" size="sm" asChild>
                 <a href="/media.m3u" download="twentyfourseven.m3u">
-                  <span className="hidden md:inline">Export M3U</span>
+                  <Download className="w-4 h-4" aria-hidden="true" />
+                  <span>Export M3U</span>
                 </a>
               </Button>
             </TooltipTrigger>
@@ -2810,7 +2813,7 @@ function ChannelsPageContent() {
                       }}
                     >
                       <Plus className="w-4 h-4 md:mr-1" />
-                      <span className="hidden md:inline">Add</span>
+                      <span>Add</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -2896,7 +2899,7 @@ function ChannelsPageContent() {
                     }}
                   >
                     <Plus className="w-4 h-4 md:mr-2" />
-                    <span className="hidden md:inline">Create Channel</span>
+                    <span>Create Channel</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -3010,7 +3013,7 @@ function ChannelsPageContent() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="outline" onClick={() => setShowCreateForm(false)} className="touch-manipulation">
-                    <span className="hidden md:inline">Cancel</span>
+                    <span>Cancel</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -3025,10 +3028,10 @@ function ChannelsPageContent() {
                     className="touch-manipulation"
                   >
                     {createChannelMutation.isPending ? (
-                      <span className="hidden md:inline">Creating...</span>
+                      <span>Creating...</span>
                     ) : (
                       <>
-                        <span className="hidden md:inline">Create Channel</span>
+                        <span>Create Channel</span>
                       </>
                     )}
                   </Button>
@@ -3176,7 +3179,7 @@ function ChannelsPageContent() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="outline" onClick={() => setEditingChannelId(null)} className="touch-manipulation">
-                    <span className="hidden md:inline">Cancel</span>
+                    <span>Cancel</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -3191,9 +3194,9 @@ function ChannelsPageContent() {
                     className="touch-manipulation"
                   >
                     {updateChannelMutation.isPending ? (
-                      <span className="hidden md:inline">Updating...</span>
+                      <span>Updating...</span>
                     ) : (
-                      <span className="hidden md:inline">Update Channel</span>
+                      <span>Update Channel</span>
                     )}
                   </Button>
                 </TooltipTrigger>
@@ -3322,7 +3325,7 @@ function ChannelsPageContent() {
                           <Button variant="ghost" size="sm" asChild className="touch-manipulation">
                             <Link href={`/guide/?play=${selectedSummary!.number}`}>
                               <Play className="w-4 h-4 md:mr-1" />
-                              <span className="hidden md:inline">Watch</span>
+                              <span>Watch</span>
                             </Link>
                           </Button>
                         </TooltipTrigger>
@@ -3340,7 +3343,7 @@ function ChannelsPageContent() {
                             className="touch-manipulation"
                           >
                             <Trash2 className="w-4 h-4 md:mr-1" />
-                            <span className="hidden md:inline">Delete</span>
+                            <span>Delete</span>
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
@@ -3379,7 +3382,7 @@ function ChannelsPageContent() {
                                 className="touch-manipulation"
                               >
                                 <Shuffle className="w-4 h-4 md:mr-1" />
-                                <span className="hidden md:inline">Shuffle All</span>
+                                <span>Shuffle All</span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -3393,7 +3396,7 @@ function ChannelsPageContent() {
                                 className="touch-manipulation"
                               >
                                 <Plus className="w-4 h-4 md:mr-2" />
-                                <span className="hidden md:inline">Add Content</span>
+                                <span>Add Content</span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -3499,7 +3502,7 @@ function ChannelsPageContent() {
                           <TooltipTrigger asChild>
                             <Button variant="outline" disabled className="touch-manipulation">
                               <RotateCcw className="w-4 h-4 md:mr-2" />
-                              <span className="hidden md:inline">Generate Schedule</span>
+                              <span>Generate Schedule</span>
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
@@ -3524,7 +3527,7 @@ function ChannelsPageContent() {
                           <TooltipTrigger asChild>
                             <Button variant="outline" disabled className="touch-manipulation">
                               <Plus className="w-4 h-4 md:mr-2" />
-                              <span className="hidden md:inline">Add Filler</span>
+                              <span>Add Filler</span>
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
@@ -3544,7 +3547,7 @@ function ChannelsPageContent() {
                           <TooltipTrigger asChild>
                             <Button variant="outline" disabled className="touch-manipulation">
                               <Plus className="w-4 h-4 md:mr-2" />
-                              <span className="hidden md:inline">Add Filler Content</span>
+                              <span>Add Filler Content</span>
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
@@ -3937,12 +3940,12 @@ function InlineBulkCreateFromCollections() {
               {open ? (
                 <>
                   <X className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline">Close</span>
+                  <span>Close</span>
                 </>
               ) : (
                 <>
                   <Folder className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline">Create from Collections</span>
+                  <span>Create from Collections</span>
                 </>
               )}
             </Button>
@@ -4043,7 +4046,7 @@ function BulkCreateFromCollections() {
               <TooltipTrigger asChild>
                 <Button variant="outline" size="sm" onClick={() => setSelected((collectionsQuery.data || []).map((c:any)=> c.name))}>
                   <CheckSquare className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline">Select All</span>
+                  <span>Select All</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -4054,7 +4057,7 @@ function BulkCreateFromCollections() {
               <TooltipTrigger asChild>
                 <Button variant="outline" size="sm" onClick={() => setSelected([])}>
                   <Square className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline">Select None</span>
+                  <span>Select None</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>

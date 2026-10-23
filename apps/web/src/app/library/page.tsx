@@ -282,7 +282,7 @@ export default function LibraryPage() {
             </div>
             <div>
               <h1 className="text-2xl font-semibold tracking-[-0.03em]">Media Library</h1>
-              <p className="text-muted-foreground">Browse your synced Plex libraries and content</p>
+              <p className="text-muted-foreground">Browse the movies and TV shows TwentyFour/Seven can play</p>
             </div>
           </div>
         </div>
@@ -324,7 +324,7 @@ export default function LibraryPage() {
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-[-0.03em]">Media Library</h1>
-            <p className="text-muted-foreground">Browse your synced Plex libraries and content</p>
+            <p className="text-muted-foreground">Browse the movies and TV shows TwentyFour/Seven can play</p>
           </div>
         </div>
       </div>
@@ -373,7 +373,7 @@ export default function LibraryPage() {
             onClearAll={clearAllFilters}
           />
 
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -391,7 +391,8 @@ export default function LibraryPage() {
               onChange={(e) => {
                 handleLibrarySelect(e.target.value);
               }}
-              className="px-3 py-2 border rounded-md bg-background"
+              className="tfs-field h-10 min-h-11 w-full rounded-lg border px-3 text-sm sm:w-auto md:min-h-0"
+              aria-label="Library"
               disabled={serversQuery.isLoading}
             >
               <option value="">All Libraries</option>

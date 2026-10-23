@@ -78,17 +78,18 @@ function StatPopover({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="inline-flex shrink-0 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:text-foreground"
+            className="tfs-tap inline-flex shrink-0 items-center gap-2 rounded-md px-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:text-foreground"
             aria-label={`${label}: ${formatted}. Click to filter.`}
+            title={label}
           >
             <Icon className="w-5 h-5" aria-hidden />
+            <span className="text-xl font-bold tabular-nums text-foreground">{formatted}</span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-72 p-3 max-h-[min(24rem,70vh)] overflow-y-auto">
           {children}
         </DropdownMenuContent>
       </DropdownMenu>
-      <span className="text-xl font-bold tabular-nums">{formatted}</span>
     </div>
   );
 }

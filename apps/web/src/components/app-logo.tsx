@@ -18,6 +18,7 @@ interface AppLogoProps {
   size?: AppLogoSize;
   className?: string;
   href?: string;
+  linkClassName?: string;
   priority?: boolean;
 }
 
@@ -25,6 +26,7 @@ export function AppLogo({
   size = "sm",
   className,
   href,
+  linkClassName,
   priority = false,
 }: AppLogoProps) {
   const config = sizeConfig[size];
@@ -45,7 +47,7 @@ export function AppLogo({
 
   if (href) {
     return (
-      <Link href={href} className="shrink-0" aria-label="TwentyFour/Seven home">
+      <Link href={href} className={cn("shrink-0", linkClassName)} aria-label="TwentyFour/Seven home">
         {image}
       </Link>
     );

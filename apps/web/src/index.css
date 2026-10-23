@@ -486,3 +486,23 @@ html.dark body {
 .dark .tfs-login .tfs-login-field:focus {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 2px #90a8c0;
 }
+
+/* Phones: 44px touch targets, same rule ESPG uses (min-h-[44px] below sm/md). */
+@media (max-width: 767px) {
+  [data-slot="button"],
+  [data-slot="input"],
+  [data-slot="select-trigger"],
+  button[role="combobox"],
+  button[role="tab"],
+  .tfs-tap {
+    min-height: 44px;
+  }
+  [data-slot="button"],
+  .tfs-tap {
+    min-width: 44px;
+  }
+}
+
+@media (max-width: 767px) {
+  [role="tablist"] { height: auto; }
+}
