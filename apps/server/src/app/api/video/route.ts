@@ -1,3 +1,4 @@
+import { ffmpegSupportsReadrateInitialBurst } from '@/lib/ffmpeg-capabilities';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { TimingService } from '@/lib/timing-service';
@@ -13,6 +14,7 @@ import { finalizeStreamSession } from '@/lib/finalize-stream-session';
 import {
   sharedLiveTranscodePool,
   createMpegTsNullBurst,
+  liveIdleGraceMs,
   type SharedLiveHub,
 } from '@/lib/shared-live-transcode';
 import { loadLiveProgramForChannel } from '@/lib/resolve-live-program';
@@ -144,6 +146,7 @@ async function buildFfmpegArgs(
       discontinuity: options.discontinuity,
       logLevel: ffmpegSettings?.logLevel,
       copyAudio: options.localCopy.copyAudio,
+      readrateInitialBurst: ffmpegSupportsReadrateInitialBurst(),
     });
   }
   const mode: LiveEncodeMode = options?.forceSoftware
@@ -164,6 +167,8 @@ async function buildFfmpegArgs(
     {
       hwaccelMethod: process.env.FFMPEG_HWACCEL_METHOD,
       hardwareDevice: process.env.HARDWARE_ACCEL_DEVICE,
+      readrateInitialBurst: ffmpegSupportsReadrateInitialBurst(),
+      gpuFrames: process.env.NVENC_GPU_FRAMES === 'true',
     },
   );
 }
@@ -569,6 +574,16 @@ export async function GET(request: NextRequest) {
       }
       return false;
     };
+    /** Hub still registered in the pool (not dissolved or reaped after idle grace). */
+    const hubStillServing = () =>
+      liveHub !== null && sharedLiveTranscodePool.isHubActive(liveHub);
+    /** Monitor session to drive recovery: this request's, else the hub's current owner. */
+    const lifecycleSessionId = () => {
+      if (streamMonitorService.getSession(sessionId) || !liveHub || !hubStillServing()) {
+        return sessionId;
+      }
+      return liveHub.ownerSessionId;
+    };
 
     const syncFfmpegToSessions = (child: ChildProcess | null) => {
       if (liveHub) {
@@ -735,7 +750,7 @@ export async function GET(request: NextRequest) {
           beginLiveEncoderGap();
           mpegtsDiscontinuity = true;
           streamRecoveryService
-            .attemptRecovery(sessionId, errorMessage, buildFfmpegArgs)
+            .attemptRecovery(lifecycleSessionId(), errorMessage, buildFfmpegArgs)
             .then((result) => {
               if (result.success && result.process) {
                 bindFfmpegLifecycle(result.process);
@@ -751,7 +766,7 @@ export async function GET(request: NextRequest) {
 
       child.on('error', (error) => {
         streamMonitorService.addError(sessionId, `Process error: ${error.message}`);
-        if (isAborted) {
+        if (isAborted || (liveHub && !hubStillServing())) {
           return;
         }
         ignoreClose(child);
@@ -761,7 +776,7 @@ export async function GET(request: NextRequest) {
         beginLiveEncoderGap();
         mpegtsDiscontinuity = true;
         streamRecoveryService
-          .attemptRecovery(sessionId, error.message, buildFfmpegArgs)
+          .attemptRecovery(lifecycleSessionId(), error.message, buildFfmpegArgs)
           .then((result) => {
             if (result.success && result.process) {
               bindFfmpegLifecycle(result.process);
@@ -776,6 +791,12 @@ export async function GET(request: NextRequest) {
           return;
         }
         if (!currentFfmpeg || currentFfmpeg.pid !== child.pid) {
+          return;
+        }
+        if (liveHub && !hubStillServing()) {
+          // Last viewer left (or idle grace expired) and the pool killed FFmpeg.
+          isAborted = true;
+          liveHub = null;
           return;
         }
 
@@ -924,16 +945,20 @@ export async function GET(request: NextRequest) {
         return null;
       }
 
-      const currentSession = streamMonitorService.getSession(sessionId);
-      if (!currentSession) {
+      // The request that spawned a shared hub keeps driving its FFmpeg after
+      // that client leaves. Without this, the first viewer leaving made the
+      // next episode handoff or recovery return null and every remaining
+      // viewer was dropped (and reconnected, spawning a fresh FFmpeg).
+      const currentSession = streamMonitorService.getSession(lifecycleSessionId());
+      if (!currentSession && !hubStillServing()) {
         return null;
       }
 
-      const activeStreamUrl = currentSession.streamUrl || streamUrl;
+      const activeStreamUrl = currentSession?.streamUrl || streamUrl;
       if (!activeStreamUrl) {
         return null;
       }
-      const activeSeekSeconds = currentSession.seekSeconds || seekSeconds;
+      const activeSeekSeconds = currentSession?.seekSeconds || seekSeconds;
 
       encodeMode = mode;
       encoderStepInFlight = false;
@@ -1010,7 +1035,12 @@ export async function GET(request: NextRequest) {
       // Owner disconnect with other viewers: hand off hub, do not kill FFmpeg.
       // Keep this request's FFmpeg event handlers alive so recovery/close still
       // serve remaining viewers until the shared process exits.
-      if (liveHub && liveHub.viewers.size > 1) {
+      // Last viewer with idle grace: keep FFmpeg warm for a quick re-tune;
+      // the pool reaps it when grace expires.
+      if (
+        liveHub &&
+        (liveHub.viewers.size > 1 || (liveIdleGraceMs() > 0 && liveHub.ffmpeg))
+      ) {
         sessionFinalized = true;
         finalizeStreamSession(sessionId, { killFfmpeg: true });
         return;

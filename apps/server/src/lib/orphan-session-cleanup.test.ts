@@ -85,6 +85,7 @@ describe("SharedLiveTranscodePool destroyed viewers", () => {
   });
 
   it("releases viewers whose passthrough already ended", () => {
+    process.env.TFS_LIVE_IDLE_GRACE_MS = "0";
     const pass = new PassThrough();
     const hub = pool.createHub({
       channelNumber: 3,
@@ -107,5 +108,6 @@ describe("SharedLiveTranscodePool destroyed viewers", () => {
     assert.deepEqual(released, ["gone"]);
     assert.equal(killed, true);
     assert.equal(pool.findLiveHub(3, "300"), undefined);
+    delete process.env.TFS_LIVE_IDLE_GRACE_MS;
   });
 });

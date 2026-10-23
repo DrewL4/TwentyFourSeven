@@ -287,7 +287,15 @@ sleep 2
 
 echo "=== Starting server on port 3000 ==="
 cd /app/apps/server
-npm start &
+# Run node directly (no npm wrapper: ~60 MB RSS for a process that only
+# waits) and give V8 a heap ceiling. Without one V8 sizes the heap from host
+# RAM (up to 4 GB on a 32 GB Unraid box) and collects lazily, so RSS climbs.
+# NODE_MAX_OLD_SPACE_MB=0 removes the cap; NODE_OPTIONS still applies.
+NODE_HEAP_FLAG=""
+if [ "${NODE_MAX_OLD_SPACE_MB:-768}" != "0" ]; then
+    NODE_HEAP_FLAG="--max-old-space-size=${NODE_MAX_OLD_SPACE_MB:-768}"
+fi
+NODE_ENV=production node $NODE_HEAP_FLAG server.js &
 SERVER_PID=$!
 echo "Server started with PID: $SERVER_PID"
 sleep 5

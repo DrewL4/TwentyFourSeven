@@ -108,6 +108,7 @@ describe("SharedLiveTranscodePool", () => {
   });
 
   it("fans out viewers on the same hub and kills FFmpeg only on last leave", () => {
+    process.env.TFS_LIVE_IDLE_GRACE_MS = "0";
     const ownerPass = new PassThrough();
     const hub = pool.createHub({
       channelNumber: 1,
@@ -143,6 +144,125 @@ describe("SharedLiveTranscodePool", () => {
     assert.equal(lastLeave.killedFfmpeg, true);
     assert.equal(killed, true);
     assert.equal(pool.findLiveHub(1, "100"), undefined);
+    delete process.env.TFS_LIVE_IDLE_GRACE_MS;
+  });
+
+  it("keeps FFmpeg warm for idle grace and hands the hub to the next viewer", async () => {
+    process.env.TFS_LIVE_IDLE_GRACE_MS = "40";
+    const hub = pool.createHub({
+      channelNumber: 21,
+      ratingKey: "2100",
+      ownerSessionId: "first",
+      streamUrl: "http://example/stream",
+      seekSeconds: 0,
+      passthrough: new PassThrough(),
+    });
+    let kills = 0;
+    pool.attachFfmpeg(hub, { kill: () => { kills++; }, stdout: new PassThrough() } as any);
+
+    const leave = pool.releaseViewer("first");
+    assert.equal(leave.idle, true);
+    assert.equal(leave.killedFfmpeg, false);
+    assert.equal(pool.isHubActive(hub), true);
+
+    const rejoin = await pool.joinOrCreateLiveHub({
+      channelNumber: 21,
+      ratingKey: "2100",
+      sessionId: "second",
+      streamUrl: "http://example/stream",
+      seekSeconds: 0,
+      passthrough: new PassThrough(),
+    });
+    assert.equal(rejoin.shouldStartFfmpeg, false);
+    assert.equal(rejoin.hub, hub);
+    assert.equal(hub.ownerSessionId, "second");
+    await new Promise((r) => setTimeout(r, 70));
+    assert.equal(kills, 0, "rejoin cancels the idle reap");
+
+    pool.releaseViewer("second");
+    await new Promise((r) => setTimeout(r, 70));
+    assert.equal(kills, 1);
+    assert.equal(pool.isHubActive(hub), false);
+    delete process.env.TFS_LIVE_IDLE_GRACE_MS;
+  });
+
+  it("keeps serving a fast viewer while a stalled one is capped and dropped", async () => {
+    process.env.TFS_LIVE_MAX_VIEWER_LAG_MB = "0.25";
+    const fast = new PassThrough({ highWaterMark: 64 * 1024 });
+    const stalled = new PassThrough({ highWaterMark: 64 * 1024 });
+    const hub = pool.createHub({
+      channelNumber: 22,
+      ratingKey: "2200",
+      ownerSessionId: "fast",
+      streamUrl: "http://example/stream",
+      seekSeconds: 0,
+      passthrough: fast,
+    });
+    pool.addViewer(hub, "stalled", stalled);
+    const stdout = new PassThrough();
+    pool.attachFfmpeg(hub, { kill: () => undefined, stdout } as any);
+
+    let fastBytes = 0;
+    fast.on("data", (chunk) => {
+      fastBytes += chunk.length;
+    });
+    for (let i = 0; i < 12; i++) {
+      stdout.write(Buffer.alloc(32 * 1024, 0x47));
+      await new Promise((r) => setImmediate(r));
+    }
+    await new Promise((r) => setTimeout(r, 10));
+
+    assert.equal(fastBytes, 12 * 32 * 1024, "fast viewer gets every byte");
+    assert.equal(stalled.destroyed, true, "stalled viewer cut at the lag cap");
+    assert.ok(stalled.listenerCount("drain") <= 1, "one drain listener per viewer");
+    assert.equal(stdout.isPaused(), false);
+    pool.dissolveHub(hub, { killFfmpeg: false });
+    delete process.env.TFS_LIVE_MAX_VIEWER_LAG_MB;
+  });
+
+  it("pauses FFmpeg only when every viewer is backpressured", async () => {
+    const a = new PassThrough({ highWaterMark: 16 });
+    const b = new PassThrough({ highWaterMark: 16 });
+    const hub = pool.createHub({
+      channelNumber: 23,
+      ratingKey: "2300",
+      ownerSessionId: "a",
+      streamUrl: "http://example/stream",
+      seekSeconds: 0,
+      passthrough: a,
+    });
+    pool.addViewer(hub, "b", b);
+    const stdout = new PassThrough();
+    pool.attachFfmpeg(hub, { kill: () => undefined, stdout } as any);
+    stdout.write(Buffer.alloc(1024, 0x47));
+    await new Promise((r) => setImmediate(r));
+    assert.equal(stdout.isPaused(), true);
+    assert.equal(a.destroyed, false);
+    assert.equal(b.destroyed, false);
+
+    a.resume();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(stdout.isPaused(), false, "first drain resumes FFmpeg");
+    pool.dissolveHub(hub, { killFfmpeg: false });
+  });
+
+  it("does not stuff null packets into a backpressured viewer", async () => {
+    const stalled = new PassThrough({ highWaterMark: 1024 });
+    const hub = pool.createHub({
+      channelNumber: 24,
+      ratingKey: "2400",
+      ownerSessionId: "owner",
+      streamUrl: "http://example/stream",
+      seekSeconds: 0,
+      passthrough: stalled,
+    });
+    pool.beginEncoderGap(hub);
+    await new Promise((r) => setTimeout(r, 400));
+    pool.dissolveHub(hub, { killFfmpeg: false });
+    assert.ok(
+      stalled.writableLength < 1024 + 7 * 188 + 1,
+      `buffer stayed bounded (${stalled.writableLength})`,
+    );
   });
 
   it("broadcasts chunks to all attached viewers", async () => {

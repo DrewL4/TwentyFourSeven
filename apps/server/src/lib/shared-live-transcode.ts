@@ -22,7 +22,45 @@ export function createMpegTsNullBurst(packetCount = 7): Buffer {
 export type SharedLiveViewer = {
   sessionId: string;
   passthrough: PassThrough;
+  /** Waiting for one `drain` — at most one listener per viewer. */
+  awaitingDrain?: boolean;
 };
+
+function envNumber(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw == null || raw.trim() === "") {
+    return fallback;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+/**
+ * Bytes a viewer may fall behind the shared encoder before it is cut loose.
+ * Each viewer's backlog lives in Node's heap, so without a cap one stalled
+ * client grows RSS without bound. 12 MB is ~25 s of 4 Mbps video.
+ */
+export function liveMaxViewerLagBytes(): number {
+  return Math.round(envNumber("TFS_LIVE_MAX_VIEWER_LAG_MB", 12) * 1024 * 1024);
+}
+
+/** FFmpeg paused because every viewer is stalled: give up after this long. */
+export function liveStallTimeoutMs(): number {
+  return envNumber("TFS_LIVE_STALL_TIMEOUT_MS", 120_000);
+}
+
+/**
+ * Keep a channel's FFmpeg running this long after the last viewer leaves.
+ * IPTV clients (Plex, Jellyfin, TiviMate) probe-then-reopen and zap back and
+ * forth; reusing the warm encoder avoids a second spawn and seek. 0 disables.
+ */
+export function liveIdleGraceMs(): number {
+  return envNumber("TFS_LIVE_IDLE_GRACE_MS", 15_000);
+}
+
+function isWritable(viewer: SharedLiveViewer): boolean {
+  return !viewer.passthrough.destroyed && !viewer.passthrough.writableEnded;
+}
 
 export type SharedLiveHub = {
   key: string;
@@ -37,6 +75,10 @@ export type SharedLiveHub = {
   restartedToSoftware: boolean;
   /** Remux hub (`copy=1`) — never mixed with a transcode hub on the same channel. */
   copy: boolean;
+  /** Set while the hub has no viewers and waits for a re-tune (idle grace). */
+  idleTimer?: ReturnType<typeof setTimeout> | null;
+  /** Set while FFmpeg stdout is paused because all viewers are backpressured. */
+  stallTimer?: ReturnType<typeof setTimeout> | null;
 };
 
 /**
@@ -64,6 +106,9 @@ export class SharedLiveTranscodePool {
       clearInterval(timer);
     }
     this.stuffingTimers.clear();
+    for (const hub of this.hubs.values()) {
+      this.clearHubTimers(hub);
+    }
     this.hubs.clear();
     this.pendingCreates.clear();
   }
@@ -238,44 +283,123 @@ export class SharedLiveTranscodePool {
     sessionId: string,
     passthrough: PassThrough,
   ): void {
+    if (hub.idleTimer) {
+      clearTimeout(hub.idleTimer);
+      hub.idleTimer = null;
+    }
     hub.viewers.set(sessionId, { sessionId, passthrough });
+    if (!hub.viewers.has(hub.ownerSessionId)) {
+      // Joined a hub kept warm by idle grace: this viewer owns it now.
+      hub.ownerSessionId = sessionId;
+    }
+  }
+
+  /** True while the hub is still registered (not dissolved or reaped). */
+  isHubActive(hub: SharedLiveHub): boolean {
+    return this.hubs.get(hub.key) === hub;
   }
 
   /**
    * Wire FFmpeg stdout to all current (and future) viewers via chunk fan-out.
-   * Copy remux (and a single transcode viewer) must pause on backpressure —
-   * dropping the only client makes MWS reconnect and spawn a new FFmpeg.
-   * Multi-viewer transcode still drops a slow client so it cannot stall others.
+   *
+   * Live input is paced at 1x, so a healthy viewer keeps up. FFmpeg pauses
+   * only when every viewer is backpressured (the fastest viewer sets the pace),
+   * a viewer that falls more than `liveMaxViewerLagBytes()` behind is cut loose,
+   * and an all-stalled hub is torn down after `liveStallTimeoutMs()`. Every
+   * viewer's backlog is bounded, so Node RSS cannot grow with stalled clients.
    */
   attachFfmpeg(hub: SharedLiveHub, child: ChildProcess): void {
     this.stopHandoffStuffing(hub);
+    this.clearStallTimer(hub);
     hub.ffmpeg = child;
     this.clearPendingCreate(hub.key);
 
     const stdout = child.stdout;
-    stdout?.on("data", (chunk: Buffer) => {
-      const viewers = [...hub.viewers.values()].filter(
-        (viewer) => !viewer.passthrough.destroyed && !viewer.passthrough.writableEnded,
-      );
-      const dropSlow = !hub.copy && viewers.length > 1;
+    if (!stdout) {
+      return;
+    }
+    const maxLag = liveMaxViewerLagBytes();
+
+    const resumeIfAnyReady = () => {
+      if (hub.ffmpeg !== child || !stdout.isPaused()) {
+        return;
+      }
+      const viewers = [...hub.viewers.values()].filter(isWritable);
+      if (viewers.length === 0 || viewers.some((viewer) => !viewer.awaitingDrain)) {
+        this.clearStallTimer(hub);
+        stdout.resume();
+      }
+    };
+
+    stdout.on("data", (chunk: Buffer) => {
+      const viewers = [...hub.viewers.values()].filter(isWritable);
+      let ready = 0;
       for (const viewer of viewers) {
+        const pass = viewer.passthrough;
+        if (pass.writableLength > maxLag) {
+          // Too far behind the live edge: drop it so its backlog is freed.
+          // The route's close handler releases the session.
+          pass.destroy();
+          continue;
+        }
+        let ok = true;
         try {
-          const ok = viewer.passthrough.write(chunk);
-          if (!ok) {
-            if (dropSlow) {
-              viewer.passthrough.destroy();
-            } else {
-              stdout.pause();
-              viewer.passthrough.once("drain", () => {
-                stdout.resume();
-              });
-            }
-          }
+          ok = pass.write(chunk);
         } catch {
           // ignore write errors from disconnected clients
+          continue;
+        }
+        if (ok) {
+          ready++;
+          continue;
+        }
+        if (!viewer.awaitingDrain) {
+          viewer.awaitingDrain = true;
+          pass.once("drain", () => {
+            viewer.awaitingDrain = false;
+            resumeIfAnyReady();
+          });
         }
       }
+      if (viewers.length > 0 && ready === 0 && !stdout.isPaused()) {
+        stdout.pause();
+        this.armStallTimer(hub, child);
+      }
     });
+  }
+
+  private armStallTimer(hub: SharedLiveHub, child: ChildProcess): void {
+    const timeout = liveStallTimeoutMs();
+    if (timeout <= 0 || hub.stallTimer) {
+      return;
+    }
+    hub.stallTimer = setTimeout(() => {
+      hub.stallTimer = null;
+      if (hub.ffmpeg !== child || !child.stdout?.isPaused()) {
+        return;
+      }
+      for (const viewer of hub.viewers.values()) {
+        if (viewer.awaitingDrain && isWritable(viewer)) {
+          viewer.passthrough.destroy();
+        }
+      }
+    }, timeout);
+    hub.stallTimer.unref?.();
+  }
+
+  private clearStallTimer(hub: SharedLiveHub): void {
+    if (hub.stallTimer) {
+      clearTimeout(hub.stallTimer);
+      hub.stallTimer = null;
+    }
+  }
+
+  private clearHubTimers(hub: SharedLiveHub): void {
+    this.clearStallTimer(hub);
+    if (hub.idleTimer) {
+      clearTimeout(hub.idleTimer);
+      hub.idleTimer = null;
+    }
   }
 
   setRestartedToSoftware(hub: SharedLiveHub, value: boolean): void {
@@ -332,6 +456,8 @@ export class SharedLiveTranscodePool {
     wasInPool: boolean;
     killedFfmpeg: boolean;
     hubKey?: string;
+    /** Hub kept warm with no viewers (idle grace). */
+    idle?: boolean;
   } {
     const hub = this.getHubForSession(sessionId);
     if (!hub) {
@@ -349,9 +475,24 @@ export class SharedLiveTranscodePool {
     hub.viewers.delete(sessionId);
 
     if (hub.viewers.size === 0) {
-      this.stopHandoffStuffing(hub);
-      this.killHubFfmpeg(hub);
-      this.hubs.delete(hub.key);
+      const graceMs = liveIdleGraceMs();
+      if (graceMs > 0 && hub.ffmpeg) {
+        this.stopHandoffStuffing(hub);
+        this.clearStallTimer(hub);
+        hub.ffmpeg.stdout?.resume();
+        if (hub.idleTimer) {
+          clearTimeout(hub.idleTimer);
+        }
+        hub.idleTimer = setTimeout(() => {
+          hub.idleTimer = null;
+          if (hub.viewers.size === 0 && this.hubs.get(hub.key) === hub) {
+            this.reapHub(hub);
+          }
+        }, graceMs);
+        hub.idleTimer.unref?.();
+        return { wasInPool: true, killedFfmpeg: false, hubKey: hub.key, idle: true };
+      }
+      this.reapHub(hub);
       return { wasInPool: true, killedFfmpeg: true, hubKey: hub.key };
     }
 
@@ -363,10 +504,21 @@ export class SharedLiveTranscodePool {
     return { wasInPool: true, killedFfmpeg: false, hubKey: hub.key };
   }
 
+  private reapHub(hub: SharedLiveHub): void {
+    this.clearHubTimers(hub);
+    this.stopHandoffStuffing(hub);
+    this.killHubFfmpeg(hub);
+    this.clearPendingCreate(hub.key);
+    if (this.hubs.get(hub.key) === hub) {
+      this.hubs.delete(hub.key);
+    }
+  }
+
   /** End all viewer streams and remove hub (FFmpeg already exiting). */
   dissolveHub(hub: SharedLiveHub, options?: { killFfmpeg?: boolean }): void {
     this.clearPendingCreate(hub.key);
     this.stopHandoffStuffing(hub);
+    this.clearHubTimers(hub);
     if (options?.killFfmpeg !== false) {
       this.killHubFfmpeg(hub);
     }
@@ -380,7 +532,9 @@ export class SharedLiveTranscodePool {
       }
     }
     hub.viewers.clear();
-    this.hubs.delete(hub.key);
+    if (this.hubs.get(hub.key) === hub) {
+      this.hubs.delete(hub.key);
+    }
   }
 
   private startHandoffStuffing(hub: SharedLiveHub): void {
@@ -391,8 +545,12 @@ export class SharedLiveTranscodePool {
         if (viewer.passthrough.destroyed || viewer.passthrough.writableEnded) {
           continue;
         }
+        // Never destroy slow clients for stuffing — skip if back-pressured,
+        // otherwise 25 bursts/s pile up in a stalled viewer's buffer.
+        if (viewer.passthrough.writableLength >= viewer.passthrough.writableHighWaterMark) {
+          continue;
+        }
         try {
-          // Never destroy slow clients for stuffing — skip if back-pressured.
           viewer.passthrough.write(burst);
         } catch {
           // ignore write errors from disconnected clients

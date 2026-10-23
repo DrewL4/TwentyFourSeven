@@ -6,41 +6,7 @@
  * video route then restarts the whole stream on CPU.
  */
 
-import { execFileSync } from "node:child_process";
-
 export type LiveEncodeMode = "hardware" | "cpu-decode" | "software";
-
-const burstCache = globalThis as unknown as { __tfsInitialBurst?: Map<string, boolean> };
-
-/**
- * `-readrate_initial_burst` arrived in FFmpeg 6.1. Older builds (Debian 12
- * ships 5.1) refuse to start when they see it, so ask the binary once.
- * Default "ffmpeg" matches the binary the video route spawns.
- */
-export function ffmpegSupportsInitialBurst(ffmpegPath = "ffmpeg"): boolean {
-  const cache = (burstCache.__tfsInitialBurst ??= new Map());
-  let ok = cache.get(ffmpegPath);
-  if (ok === undefined) {
-    try {
-      ok = execFileSync(ffmpegPath, ["-hide_banner", "-h", "full"], {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-        maxBuffer: 64 * 1024 * 1024,
-        timeout: 10_000,
-      }).includes("readrate_initial_burst");
-    } catch {
-      ok = false;
-    }
-    cache.set(ffmpegPath, ok);
-  }
-  return ok;
-}
-
-/** Read at 1x; with a 2 s head start when this FFmpeg knows how. */
-function paceArgs(initialBurst: boolean | undefined): string[] {
-  const burst = initialBurst ?? ffmpegSupportsInitialBurst();
-  return burst ? ["-readrate", "1", "-readrate_initial_burst", "2"] : ["-readrate", "1"];
-}
 
 export type FfmpegLiveSettings = {
   enableTranscoding?: boolean | null;
@@ -69,7 +35,28 @@ export type FfmpegLiveSettings = {
 export type LiveFfmpegEnv = {
   hwaccelMethod?: string | null;
   hardwareDevice?: string | null;
+  /**
+   * FFmpeg >= 6.1 understands `-readrate_initial_burst`. Older builds (Debian
+   * bookworm ships 5.1) exit on the unknown flag, so callers pass the probed
+   * value. Undefined keeps the burst.
+   */
+  readrateInitialBurst?: boolean;
+  /**
+   * Opt-in (NVENC_GPU_FRAMES=true): keep decoded frames in GPU memory and
+   * scale with scale_cuda, so NVDEC -> scale -> NVENC never copies frames
+   * through system RAM. Off by default; a failing filter graph steps down to
+   * cpu-decode through the normal encoder ladder.
+   */
+  gpuFrames?: boolean;
 };
+
+/** Pace live input at 1x so one encoder never races ahead of its viewers. */
+function pushLiveReadrate(args: string[], initialBurst: boolean): void {
+  args.push("-readrate", "1");
+  if (initialBurst) {
+    args.push("-readrate_initial_burst", "2");
+  }
+}
 
 const NVENC_PRESETS = new Set([
   "default",
@@ -188,17 +175,18 @@ export function buildCopyFfmpegArgs(
     logLevel?: string | null;
     /** Local files whose audio is already stereo AAC: copy it too (no encode at all). */
     copyAudio?: boolean;
-    /** Override FFmpeg capability detection (tests). */
-    initialBurst?: boolean;
+    readrateInitialBurst?: boolean;
   },
 ): string[] {
+  const pacing: string[] = [];
+  pushLiveReadrate(pacing, options?.readrateInitialBurst !== false);
   const args = [
     "-loglevel",
     options?.logLevel || "error",
     "-nostdin",
     "-ss",
     `${seekSeconds}`,
-    ...paceArgs(options?.initialBurst),
+    ...pacing,
     "-probesize",
     "131072",
     "-analyzeduration",
@@ -256,8 +244,6 @@ export function buildLiveFfmpegArgs(
      * for video nobody is watching yet.
      */
     pace?: boolean;
-    /** Override FFmpeg capability detection (tests). */
-    initialBurst?: boolean;
   },
   env: LiveFfmpegEnv = {},
 ): string[] {
@@ -271,7 +257,7 @@ export function buildLiveFfmpegArgs(
     return buildCopyFfmpegArgs(streamUrl, seekSeconds, {
       discontinuity: options.discontinuity,
       logLevel: settings?.logLevel,
-      initialBurst: options.initialBurst,
+      readrateInitialBurst: env.readrateInitialBurst,
     });
   }
 
@@ -317,10 +303,18 @@ export function buildLiveFfmpegArgs(
   const codecImpliesGpu = family !== "software";
   const useHwDecode = options.mode === "hardware" && (checkboxOn || codecImpliesGpu || (useEnvironmentFallback && !!hwMethod && hwMethod !== "none" && hwMethod !== "cpu"));
 
+  const gpuFrames =
+    env.gpuFrames === true &&
+    useHwDecode &&
+    family === "nvenc" &&
+    (codecImpliesGpu || hwMethod === "nvenc" || hwMethod === "cuda");
   if (useHwDecode) {
     const accel = codecImpliesGpu ? family : hwMethod;
     if (accel === "nvenc" || accel === "cuda") {
       args.push("-hwaccel", "cuda");
+      if (gpuFrames) {
+        args.push("-hwaccel_output_format", "cuda");
+      }
     } else if (accel === "qsv") {
       args.push("-hwaccel", "qsv");
     } else if (accel === "vaapi") {
@@ -335,8 +329,14 @@ export function buildLiveFfmpegArgs(
   // Short analyze so the first TS packets leave quickly. 128KB is enough
   // for typical Plex MP4/MKV headers without a multi-megabyte probe.
   args.push("-ss", `${seekSeconds}`);
-  if (options.pace) {
-    args.push(...paceArgs(options.initialBurst));
+  // Live TV is shared by every viewer of the channel. Without pacing the
+  // encoder (NVENC especially) runs several times faster than realtime, the
+  // fastest client sets the pace and everyone else's buffer fills until they
+  // are dropped and reconnect. Browser playback of a remote stream keeps its
+  // own pacing; a local file read from disk has nothing to slow it, so it is
+  // paced in the browser too.
+  if (!options.browser || options.pace) {
+    pushLiveReadrate(args, env.readrateInitialBurst !== false);
   }
   args.push("-probesize", "131072");
   args.push("-analyzeduration", "200000");
@@ -397,8 +397,13 @@ export function buildLiveFfmpegArgs(
   // Do not add a CPU scale filter on the browser path when CUDA decode is
   // active — that filter graph exits FFmpeg and the client only sees null TS.
   const resolution = settings?.targetResolution;
-  if (!options.browser && resolution && resolution !== "original") {
-    args.push("-vf", `scale=${resolution}`);
+  const scaleTo = !options.browser && resolution && resolution !== "original" ? resolution : null;
+  if (gpuFrames) {
+    // nv12 also turns 10-bit HEVC (p010) into something h264_nvenc accepts.
+    const size = scaleTo ? `${scaleTo.replace("x", ":")}:` : "";
+    args.push("-vf", `scale_cuda=${size}format=nv12`);
+  } else if (scaleTo) {
+    args.push("-vf", `scale=${scaleTo}`);
   }
 
   args.push("-c:a", options.browser ? "aac" : settings?.audioCodec || "aac");

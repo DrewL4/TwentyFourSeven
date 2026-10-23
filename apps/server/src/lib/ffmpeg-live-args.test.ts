@@ -108,7 +108,6 @@ describe("nvenc live args", () => {
     const args = buildLiveFfmpegArgs("http://plex/file", 42, unraidSettings, {
       mode: "hardware",
       copy: true,
-      initialBurst: true,
     });
     assert.equal(args[args.indexOf("-c:v") + 1], "copy");
     assert.equal(args[args.indexOf("-c:a") + 1], "aac");
@@ -118,6 +117,7 @@ describe("nvenc live args", () => {
     assert.equal(args.includes("-crf"), false);
     assert.equal(args[args.indexOf("-readrate") + 1], "1");
     assert.equal(args[args.indexOf("-readrate_initial_burst") + 1], "2");
+    assert.ok(args.indexOf("-readrate") < args.indexOf("-i"));
     assert.equal(args[args.indexOf("-probesize") + 1], "131072");
     assert.equal(args[args.indexOf("-analyzeduration") + 1], "200000");
     assert.equal(args[args.indexOf("-max_interleave_delta") + 1], "0");
@@ -126,6 +126,40 @@ describe("nvenc live args", () => {
     assert.ok(args.includes("+resend_headers"));
     assert.equal(args.includes("dump_extra=freq=keyframe"), false);
   });
+
+  it("paces the live transcode at 1x but leaves the browser path alone", () => {
+    const live = buildLiveFfmpegArgs("http://plex/file", 5, unraidSettings, { mode: "hardware" });
+    assert.equal(live[live.indexOf("-readrate") + 1], "1");
+    assert.ok(live.indexOf("-readrate") < live.indexOf("-i"));
+    const old = buildLiveFfmpegArgs("http://plex/file", 5, unraidSettings, { mode: "software" }, {
+      readrateInitialBurst: false,
+    });
+    assert.equal(old[old.indexOf("-readrate") + 1], "1");
+    assert.equal(old.includes("-readrate_initial_burst"), false);
+  });
+
+  it("drops -readrate_initial_burst on copy for FFmpeg builds older than 6.1", () => {
+    const args = buildLiveFfmpegArgs("http://plex/file", 0, unraidSettings, { mode: "hardware", copy: true }, {
+      readrateInitialBurst: false,
+    });
+    assert.equal(args[args.indexOf("-readrate") + 1], "1");
+    assert.equal(args.includes("-readrate_initial_burst"), false);
+  });
+
+  it("keeps NVENC frames on the GPU only when NVENC_GPU_FRAMES is on", () => {
+    const settings = { ...unraidSettings, videoCodec: "h264_nvenc", targetResolution: "1920x1080" };
+    const cpuScale = buildLiveFfmpegArgs("http://plex/file", 0, settings, { mode: "hardware" });
+    assert.equal(cpuScale.includes("-hwaccel_output_format"), false);
+    assert.equal(cpuScale[cpuScale.indexOf("-vf") + 1], "scale=1920x1080");
+
+    const gpu = buildLiveFfmpegArgs("http://plex/file", 0, settings, { mode: "hardware" }, { gpuFrames: true });
+    assert.equal(gpu[gpu.indexOf("-hwaccel_output_format") + 1], "cuda");
+    assert.equal(gpu[gpu.indexOf("-vf") + 1], "scale_cuda=1920:1080:format=nv12");
+
+    const cpuDecode = buildLiveFfmpegArgs("http://plex/file", 0, settings, { mode: "cpu-decode" }, { gpuFrames: true });
+    assert.equal(cpuDecode.includes("-hwaccel_output_format"), false);
+    assert.equal(cpuDecode.includes("scale_cuda=1920:1080:format=nv12"), false);
+  });
 });
 
 test("local files: copy can keep AAC audio, transcodes can be paced", () => {
@@ -133,20 +167,20 @@ test("local files: copy can keep AAC audio, transcodes can be paced", () => {
   const ca = copy.indexOf("-c:a");
   assert.equal(copy[ca + 1], "copy");
   assert.ok(!copy.includes("160k"));
-  const paced = buildLiveFfmpegArgs("/movies/a.mkv", 5, null, { mode: "software", pace: true });
+  const paced = buildLiveFfmpegArgs("/movies/a.mkv", 5, null, { mode: "software", browser: true, pace: true });
   assert.ok(paced.indexOf("-readrate") > -1 && paced.indexOf("-readrate") < paced.indexOf("-i"));
-  const unpaced = buildLiveFfmpegArgs("http://plex/x", 5, null, { mode: "software" });
+  const unpaced = buildLiveFfmpegArgs("http://plex/x", 5, null, { mode: "software", browser: true });
   assert.equal(unpaced.indexOf("-readrate"), -1);
 });
 
 test("FFmpeg without -readrate_initial_burst (5.1) still gets 1x pacing and nothing it can't parse", () => {
   for (const args of [
-    buildCopyFfmpegArgs("/movies/a.mkv", 0, { initialBurst: false }),
-    buildLiveFfmpegArgs("/movies/a.mkv", 5, null, { mode: "software", pace: true, initialBurst: false }),
+    buildCopyFfmpegArgs("/movies/a.mkv", 0, { readrateInitialBurst: false }),
+    buildLiveFfmpegArgs("/movies/a.mkv", 5, null, { mode: "software", browser: true, pace: true }, { readrateInitialBurst: false }),
   ]) {
     assert.equal(args[args.indexOf("-readrate") + 1], "1");
     assert.equal(args.includes("-readrate_initial_burst"), false);
   }
-  const withBurst = buildCopyFfmpegArgs("/movies/a.mkv", 0, { initialBurst: true });
+  const withBurst = buildCopyFfmpegArgs("/movies/a.mkv", 0, { readrateInitialBurst: true });
   assert.equal(withBurst[withBurst.indexOf("-readrate_initial_burst") + 1], "2");
 });
