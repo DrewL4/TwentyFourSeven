@@ -1,4 +1,4 @@
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 
 export const DEFAULT_LOCAL_ROOTS = ["/movies", "/tv", "/media"];
@@ -11,15 +11,29 @@ export function isSystemFolder(p: string): boolean {
   return norm === "/" || SYSTEM_FOLDERS.some((s) => norm === s || norm.startsWith(s + "/"));
 }
 
+/**
+ * A usual mount point counts only when something is in it. Base images ship an
+ * empty /media, and warning "/media has no videos" to someone who only mapped
+ * /movies and /tv would send them chasing a problem they don't have.
+ */
+function hasEntries(p: string): boolean {
+  try {
+    return readdirSync(p).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Folders to scan: settings first, then LOCAL_MEDIA_PATHS, then the usual mounts. */
 export function configuredLocalRoots(
   settingValue?: string | null,
   env: Record<string, string | undefined> = process.env,
+  defaults: string[] = DEFAULT_LOCAL_ROOTS,
 ): string[] {
   const raw = (settingValue || "").trim() || (env.LOCAL_MEDIA_PATHS || "").trim();
   const list = raw
     ? raw.split(/[,;\n]/).map((p) => p.trim()).filter(Boolean)
-    : DEFAULT_LOCAL_ROOTS.filter((p) => existsSync(p));
+    : defaults.filter(hasEntries);
   const out: string[] = [];
   for (const p of list) {
     if (!path.isAbsolute(p)) continue;

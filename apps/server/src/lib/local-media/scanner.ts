@@ -49,17 +49,29 @@ export type LocalScanState = {
   folders: FolderStatus[];
 };
 
-const state: LocalScanState = {
-  running: false,
-  startedAt: null,
-  finishedAt: null,
-  lastError: null,
-  probed: 0,
-  skippedUnchanged: 0,
-  removed: 0,
-  folders: [],
-};
-let inFlight: Promise<LocalScanState> | null = null;
+/*
+ * The custom server (startup scan, timer) and the Next.js route bundle load
+ * this file as two separate modules. Keeping the scan state on globalThis lets
+ * both see the same scan: Settings shows the startup scan's result, and two
+ * scans never run at once.
+ */
+type Shared = { state: LocalScanState; inFlight: Promise<LocalScanState> | null; timer: NodeJS.Timeout | null };
+const g = globalThis as unknown as { __tfsLocalScan?: Shared };
+const shared: Shared = (g.__tfsLocalScan ??= {
+  state: {
+    running: false,
+    startedAt: null,
+    finishedAt: null,
+    lastError: null,
+    probed: 0,
+    skippedUnchanged: 0,
+    removed: 0,
+    folders: [],
+  },
+  inFlight: null,
+  timer: null,
+});
+const state = shared.state;
 
 export function getLocalScanState(): LocalScanState {
   return { ...state, folders: state.folders.map((f) => ({ ...f })) };
@@ -448,8 +460,8 @@ async function scanLibrary(root: string, serverId: string, counters: { probed: n
 }
 
 export async function scanLocalMedia(): Promise<LocalScanState> {
-  if (inFlight) return inFlight;
-  inFlight = (async () => {
+  if (shared.inFlight) return shared.inFlight;
+  shared.inFlight = (async () => {
     const settings = await prisma.settings.findUnique({ where: { id: "singleton" } });
     state.running = true;
     state.startedAt = new Date().toISOString();
@@ -476,22 +488,21 @@ export async function scanLocalMedia(): Promise<LocalScanState> {
       state.probed = counters.probed;
       state.skippedUnchanged = counters.skipped;
       state.removed = counters.removed;
-      inFlight = null;
+      shared.inFlight = null;
     }
     console.log(
       `[LocalMedia] scan done folders=${state.folders.length} probed=${counters.probed} unchanged=${counters.skipped} removed=${counters.removed}`,
     );
     return getLocalScanState();
   })();
-  return inFlight;
+  return shared.inFlight;
 }
 
-let timer: NodeJS.Timeout | null = null;
 
 export function startLocalMediaScheduler(): void {
-  if (timer) return;
+  if (shared.timer) return;
   const minutes = Math.max(5, Number(process.env.LOCAL_MEDIA_SCAN_MINUTES) || 60);
   setTimeout(() => void scanLocalMedia(), 5_000).unref?.();
-  timer = setInterval(() => void scanLocalMedia(), minutes * 60_000);
-  timer.unref?.();
+  shared.timer = setInterval(() => void scanLocalMedia(), minutes * 60_000);
+  shared.timer.unref?.();
 }

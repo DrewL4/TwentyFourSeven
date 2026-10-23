@@ -42,6 +42,18 @@ test("folders come from settings, then LOCAL_MEDIA_PATHS; relative paths ignored
   assert.deepEqual(configuredLocalRoots("", { LOCAL_MEDIA_PATHS: "/x" }), ["/x"]);
 });
 
+test("empty or missing usual mount points are skipped, so no false 'no videos' warning", () => {
+  const base = mkdtempSync(path.join(tmpdir(), "roots-"));
+  const full = path.join(base, "movies");
+  const empty = path.join(base, "media");
+  mkdirSync(full);
+  mkdirSync(empty);
+  writeFileSync(path.join(full, "A (2000).mkv"), "x");
+  assert.deepEqual(configuredLocalRoots("", {}, [full, empty, path.join(base, "tv")]), [full]);
+  // A folder the person typed in is kept even when empty, so they get a clear warning about it.
+  assert.deepEqual(configuredLocalRoots(empty, {}), [empty]);
+});
+
 test("movie and episode names", () => {
   assert.deepEqual(parseMovieName("Big Buck Bunny (2008).mkv"), { title: "Big Buck Bunny", year: 2008 });
   assert.deepEqual(parseMovieName("Tears.of.Steel.2012.1080p.mkv"), { title: "Tears of Steel", year: 2012 });
