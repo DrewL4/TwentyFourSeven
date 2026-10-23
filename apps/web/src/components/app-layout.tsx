@@ -5,6 +5,7 @@ import { authClient } from "@/lib/auth-client";
 import { AppLogo } from "@/components/app-logo";
 import { ModeToggle } from "./mode-toggle";
 import Sidebar from "./sidebar";
+import { AppVersion } from "./app-version";
 import MobileBottomNav from "./mobile-bottom-nav";
 
 interface AppLayoutProps {
@@ -30,6 +31,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <div className="flex items-center gap-2 font-bold text-lg">
               <AppLogo size="sm" href="/" />
               <span>24/7</span>
+              {/* Phones have no sidebar: show the version next to the name. */}
+              <AppVersion className="self-end pb-0.5 font-normal" />
             </div>
             <ModeToggle />
           </header>

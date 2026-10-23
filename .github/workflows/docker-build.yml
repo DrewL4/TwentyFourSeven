@@ -47,6 +47,9 @@ jobs:
       run: |
         echo "timestamp=$(date +%Y%m%d_%H%M%S)" >> "$GITHUB_OUTPUT"
         echo "deps_week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+        echo "app_version=$(TZ=America/Chicago date +%Y.%m.%d)" >> "$GITHUB_OUTPUT"
+        echo "git_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
     - name: Build and push
       uses: docker/build-push-action@v5
@@ -64,4 +67,7 @@ jobs:
         # Re-run apt once per ISO week for security fixes (otherwise cached until the Dockerfile changes).
         build-args: |
           DEPS_REFRESH=${{ steps.set-tag.outputs.deps_week }}
+          APP_VERSION=${{ steps.set-tag.outputs.app_version }}
+          GIT_SHA=${{ steps.set-tag.outputs.git_sha }}
+          BUILD_DATE=${{ steps.set-tag.outputs.build_date }}
         platforms: linux/amd64

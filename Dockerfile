@@ -226,5 +226,15 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:80/health || curl -f http://localhost:3000/ || exit 1
 
 # Override the NVIDIA FFmpeg base image entrypoint and set our own command
+# Build info from CI, declared last so it never invalidates cached layers above.
+# Unset locally -> the app shows "dev".
+ARG APP_VERSION=
+ARG GIT_SHA=
+ARG BUILD_DATE=
+ENV APP_VERSION=${APP_VERSION} GIT_SHA=${GIT_SHA} BUILD_DATE=${BUILD_DATE}
+LABEL org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
+
 ENTRYPOINT []
 CMD ["/app/start.sh"] 

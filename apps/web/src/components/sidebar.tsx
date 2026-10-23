@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { Skeleton } from "./ui/skeleton";
 import { useAdmin } from "@/hooks/use-admin";
 import { isAdminOnlyPath } from "@/lib/admin-routes";
+import { AppVersion } from "@/components/app-version";
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -177,6 +178,7 @@ export default function Sidebar() {
             </Link>
           </Button>
         )}
+        <AppVersion compact={isCollapsed} className="mt-1" />
       </div>
     </div>
   );
