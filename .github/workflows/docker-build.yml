@@ -44,7 +44,9 @@ jobs:
 
     - name: Set Docker tags
       id: set-tag
-      run: echo "timestamp=$(date +%Y%m%d_%H%M%S)" >> "$GITHUB_OUTPUT"
+      run: |
+        echo "timestamp=$(date +%Y%m%d_%H%M%S)" >> "$GITHUB_OUTPUT"
+        echo "deps_week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
 
     - name: Build and push
       uses: docker/build-push-action@v5
@@ -59,4 +61,7 @@ jobs:
           drew4/twentyfourseven:latest_${{ steps.set-tag.outputs.timestamp }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        # Re-run apt once per ISO week for security fixes (otherwise cached until the Dockerfile changes).
+        build-args: |
+          DEPS_REFRESH=${{ steps.set-tag.outputs.deps_week }}
         platforms: linux/amd64
