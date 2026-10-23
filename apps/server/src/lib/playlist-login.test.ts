@@ -175,3 +175,15 @@ test("old-style logins still check out (existing rows are never rewritten)", asy
   const c = checker(f, false, { [old.username]: { userId: "u3", passwordSealed: old.passwordSealed } });
   assert.ok((await c.check({ username: old.username, password: old.password })).ok);
 });
+
+test("linked: someone ESPG refuses as expired is not let in, and an expiry lands within the cache window", async () => {
+  let expired = true;
+  const { f } = fakeEspg(() => ({ status: 200, json: expired ? { valid: false } : { valid: true, user: { email: "viewer@example.test" }, playlist: "Home" } }));
+  const c = checker(f);
+  assert.deepEqual(await c.check(good), { ok: false, reason: "wrong" });
+  expired = false;
+  assert.equal((await c.check(good)).ok, true);
+  expired = true; // access runs out in ESPG
+  clock += LOGIN_CACHE_MS + 1;
+  assert.deepEqual(await c.check(good), { ok: false, reason: "wrong" });
+});
