@@ -231,7 +231,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 ARG APP_VERSION=
 ARG GIT_SHA=
 ARG BUILD_DATE=
-ENV APP_VERSION=${APP_VERSION} GIT_SHA=${GIT_SHA} BUILD_DATE=${BUILD_DATE}
+# Written into the image, not ENV: Unraid's update copies the old container's
+# environment onto the new one, so an env-stamped version would go stale.
+RUN printf '{"version":"%s","revision":"%s","build_date":"%s"}\n' "${APP_VERSION}" "${GIT_SHA}" "${BUILD_DATE}" > /app/build-info.json
 LABEL org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.revision="${GIT_SHA}" \
       org.opencontainers.image.created="${BUILD_DATE}"
