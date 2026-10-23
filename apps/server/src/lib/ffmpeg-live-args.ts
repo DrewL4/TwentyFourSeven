@@ -6,7 +6,41 @@
  * video route then restarts the whole stream on CPU.
  */
 
+import { execFileSync } from "node:child_process";
+
 export type LiveEncodeMode = "hardware" | "cpu-decode" | "software";
+
+const burstCache = globalThis as unknown as { __tfsInitialBurst?: Map<string, boolean> };
+
+/**
+ * `-readrate_initial_burst` arrived in FFmpeg 6.1. Older builds (Debian 12
+ * ships 5.1) refuse to start when they see it, so ask the binary once.
+ * Default "ffmpeg" matches the binary the video route spawns.
+ */
+export function ffmpegSupportsInitialBurst(ffmpegPath = "ffmpeg"): boolean {
+  const cache = (burstCache.__tfsInitialBurst ??= new Map());
+  let ok = cache.get(ffmpegPath);
+  if (ok === undefined) {
+    try {
+      ok = execFileSync(ffmpegPath, ["-hide_banner", "-h", "full"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        maxBuffer: 64 * 1024 * 1024,
+        timeout: 10_000,
+      }).includes("readrate_initial_burst");
+    } catch {
+      ok = false;
+    }
+    cache.set(ffmpegPath, ok);
+  }
+  return ok;
+}
+
+/** Read at 1x; with a 2 s head start when this FFmpeg knows how. */
+function paceArgs(initialBurst: boolean | undefined): string[] {
+  const burst = initialBurst ?? ffmpegSupportsInitialBurst();
+  return burst ? ["-readrate", "1", "-readrate_initial_burst", "2"] : ["-readrate", "1"];
+}
 
 export type FfmpegLiveSettings = {
   enableTranscoding?: boolean | null;
@@ -154,6 +188,8 @@ export function buildCopyFfmpegArgs(
     logLevel?: string | null;
     /** Local files whose audio is already stereo AAC: copy it too (no encode at all). */
     copyAudio?: boolean;
+    /** Override FFmpeg capability detection (tests). */
+    initialBurst?: boolean;
   },
 ): string[] {
   const args = [
@@ -162,10 +198,7 @@ export function buildCopyFfmpegArgs(
     "-nostdin",
     "-ss",
     `${seekSeconds}`,
-    "-readrate",
-    "1",
-    "-readrate_initial_burst",
-    "2",
+    ...paceArgs(options?.initialBurst),
     "-probesize",
     "131072",
     "-analyzeduration",
@@ -223,6 +256,8 @@ export function buildLiveFfmpegArgs(
      * for video nobody is watching yet.
      */
     pace?: boolean;
+    /** Override FFmpeg capability detection (tests). */
+    initialBurst?: boolean;
   },
   env: LiveFfmpegEnv = {},
 ): string[] {
@@ -236,6 +271,7 @@ export function buildLiveFfmpegArgs(
     return buildCopyFfmpegArgs(streamUrl, seekSeconds, {
       discontinuity: options.discontinuity,
       logLevel: settings?.logLevel,
+      initialBurst: options.initialBurst,
     });
   }
 
@@ -300,7 +336,7 @@ export function buildLiveFfmpegArgs(
   // for typical Plex MP4/MKV headers without a multi-megabyte probe.
   args.push("-ss", `${seekSeconds}`);
   if (options.pace) {
-    args.push("-readrate", "1", "-readrate_initial_burst", "2");
+    args.push(...paceArgs(options.initialBurst));
   }
   args.push("-probesize", "131072");
   args.push("-analyzeduration", "200000");

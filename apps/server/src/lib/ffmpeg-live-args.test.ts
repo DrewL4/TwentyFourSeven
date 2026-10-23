@@ -108,6 +108,7 @@ describe("nvenc live args", () => {
     const args = buildLiveFfmpegArgs("http://plex/file", 42, unraidSettings, {
       mode: "hardware",
       copy: true,
+      initialBurst: true,
     });
     assert.equal(args[args.indexOf("-c:v") + 1], "copy");
     assert.equal(args[args.indexOf("-c:a") + 1], "aac");
@@ -136,4 +137,16 @@ test("local files: copy can keep AAC audio, transcodes can be paced", () => {
   assert.ok(paced.indexOf("-readrate") > -1 && paced.indexOf("-readrate") < paced.indexOf("-i"));
   const unpaced = buildLiveFfmpegArgs("http://plex/x", 5, null, { mode: "software" });
   assert.equal(unpaced.indexOf("-readrate"), -1);
+});
+
+test("FFmpeg without -readrate_initial_burst (5.1) still gets 1x pacing and nothing it can't parse", () => {
+  for (const args of [
+    buildCopyFfmpegArgs("/movies/a.mkv", 0, { initialBurst: false }),
+    buildLiveFfmpegArgs("/movies/a.mkv", 5, null, { mode: "software", pace: true, initialBurst: false }),
+  ]) {
+    assert.equal(args[args.indexOf("-readrate") + 1], "1");
+    assert.equal(args.includes("-readrate_initial_burst"), false);
+  }
+  const withBurst = buildCopyFfmpegArgs("/movies/a.mkv", 0, { initialBurst: true });
+  assert.equal(withBurst[withBurst.indexOf("-readrate_initial_burst") + 1], "2");
 });
