@@ -261,7 +261,9 @@ export async function POST(request: NextRequest) {
     };
 
     let keptPlaylistLoginId: string | null = null;
+    let oldUserId: string | null = null;
     if (user) {
+      oldUserId = user.id;
       // Update existing user
       
       await prisma.user.update({
@@ -346,6 +348,15 @@ export async function POST(request: NextRequest) {
       await prisma.playlistLogin
         .update({ where: { id: keptPlaylistLoginId }, data: { userId: signUpResult.user.id } })
         .catch((e: unknown) => console.warn("[watchtower] could not keep playlist login:", e instanceof Error ? e.message : "error"));
+    }
+    // Other rows that point at the user by id (no foreign key, so nothing
+    // cascades): device keys this user made and IP-to-person mappings.
+    if (oldUserId && oldUserId !== signUpResult.user.id) {
+      const newUserId = signUpResult.user.id;
+      await Promise.all([
+        prisma.playerKey.updateMany({ where: { userId: oldUserId }, data: { userId: newUserId } }),
+        prisma.viewer.updateMany({ where: { userId: oldUserId }, data: { userId: newUserId } }),
+      ]).catch((e: unknown) => console.warn("[watchtower] could not move user rows:", e instanceof Error ? e.message : "error"));
     }
 
     // Create response
