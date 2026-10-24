@@ -15,6 +15,7 @@ import {
   type LinkScope,
 } from "./link-security";
 import { playlistLogins, type Login } from "./playlist-login";
+import { hasSessionCookie, homeNetworkFallback, type SessionCheck } from "./home-network-fallback";
 import { isEspgCaller } from "./espg-caller";
 import { ESPG_SERVICE_IMAGE_PASS_SECONDS, ESPG_SERVICE_SUBJECT, espgServiceCaller } from "./espg-service-access";
 
@@ -173,18 +174,42 @@ export async function authorizePlayer(
       return { ok: true, auth: { via: "key", keyId: id, userId: null } };
     }
   }
+  let session: SessionCheck = "none";
   if (request.headers.get("cookie")) {
     try {
-      const session = await auth.api.getSession({ headers: request.headers });
-      if (session?.user?.id) {
-        return { ok: true, auth: { via: "session", keyId: null, userId: session.user.id, email: session.user.email ?? null } };
+      const found = await auth.api.getSession({ headers: request.headers });
+      if (found?.user?.id) {
+        return { ok: true, auth: { via: "session", keyId: null, userId: found.user.id, email: found.user.email ?? null } };
       }
-    } catch {
-      // fall through
+      if (hasSessionCookie(request.headers.get("cookie"))) session = "dead";
+    } catch (error) {
+      console.warn("[Player] couldn't check the sign-in cookie:", error instanceof Error ? error.message : "error");
+      if (hasSessionCookie(request.headers.get("cookie"))) session = "error";
     }
   }
-  if (!t && !k && !login && check.allowLan !== false && isPrivateAddress(ip) && (await allowLanWithoutKey())) {
+  const lan = homeNetworkFallback({
+    hasCredential: !!(t || k || login),
+    allowLan: check.allowLan !== false,
+    privateAddress: isPrivateAddress(ip),
+    lanWithoutKey: !(t || k || login) && check.allowLan !== false && isPrivateAddress(ip) ? await allowLanWithoutKey() : false,
+    session,
+  });
+  if (lan === "lan") {
     return { ok: true, auth: { via: "lan", keyId: null, userId: null } };
+  }
+  if (lan === "session-expired" || lan === "session-unavailable") {
+    // A browser that signed in as someone stays that someone: falling back to
+    // the anonymous home-network pass would drop their per-person stream limit.
+    console.warn(`[Player] refused home-network fallback: sign-in cookie ${lan === "session-expired" ? "expired or invalid" : "couldn't be checked"}`);
+    return {
+      ok: false,
+      response: new NextResponse(
+        lan === "session-expired"
+          ? "Your TwentyFourSeven sign-in has expired. Sign in again."
+          : "Can't check your sign-in right now. Try again in a minute.",
+        { status: lan === "session-expired" ? 401 : 503, headers: { "Cache-Control": "no-store", ...(lan === "session-unavailable" ? { "Retry-After": "30" } : {}) } },
+      ),
+    };
   }
   limiter.recordFailure(ip);
   const status = t || k ? 403 : 401;

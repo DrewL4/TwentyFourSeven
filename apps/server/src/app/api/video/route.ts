@@ -413,6 +413,7 @@ export async function GET(request: NextRequest) {
     // yields, so two players can't both take the last slot.
     const [streamSettings, viewer] = await Promise.all([streamSettingsPromise, viewerLimitPromise]);
     streamMonitorService.cleanupStaleSessions();
+    let viewerActive = 0;
     if (viewer) {
       const active = countViewerStreams(streamMonitorService.getActiveSessions(), viewer.key, {
         channelNumber,
@@ -425,6 +426,7 @@ export async function GET(request: NextRequest) {
           { status: 429, headers: { 'Cache-Control': 'no-store' } },
         );
       }
+      viewerActive = active;
     }
     const streamLimit = streamSettings?.concurrentStreams ?? 1;
     if (copyBlocker) {
@@ -1082,7 +1084,7 @@ export async function GET(request: NextRequest) {
     encodeMode = preferredMode;
     await startFfmpeg(encodeMode);
     console.log(
-      `[Video] start channel=${channelNumber} mode=${useBrowser ? 'browser' : useCopyRemux ? 'copy' : 'transcode'}${isLocal ? ' source=local' : ''} encode=${autoCopyActive ? 'copy' : encodeMode} session=${sessionId}${isCatchup ? ' catchup' : ''}${remoteVideo ? ` video="${describeRemoteVideo(remoteVideo)}"` : ''}`,
+      `[Video] start channel=${channelNumber} mode=${useBrowser ? 'browser' : useCopyRemux ? 'copy' : 'transcode'}${isLocal ? ' source=local' : ''} encode=${autoCopyActive ? 'copy' : encodeMode} via=${access.auth.via}${viewer ? ` viewer=${viewerActive + 1}/${viewer.limit.allowed}` : ''} session=${sessionId}${isCatchup ? ' catchup' : ''}${remoteVideo ? ` video="${describeRemoteVideo(remoteVideo)}"` : ''}`,
     );
 
     // Handle client abort / stream close (IPTV clients often drop without a
