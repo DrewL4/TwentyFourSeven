@@ -21,13 +21,18 @@ export default function AppLayout({ children }: AppLayoutProps) {
     return <>{children}</>;
   }
 
-  // Show app layout with responsive navigation for authenticated users
+  // One layout for every screen size, so each page is rendered once (it used to be
+  // rendered three times, once per breakpoint, with two copies hidden by CSS).
   if (session) {
     return (
-      <>
-        {/* Mobile Layout (< 768px) - Bottom Navigation */}
-        <div className="md:hidden flex flex-col h-svh">
-          <header className="tfs-topbar flex h-14 shrink-0 items-center justify-between px-2">
+      <div className="flex h-svh md:bg-background">
+        {/* Tablet and desktop (768px and up): sidebar */}
+        <div className="hidden md:flex">
+          <Sidebar />
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col relative">
+          {/* Phones (< 768px): top bar with the version; navigation is at the bottom */}
+          <header className="md:hidden tfs-topbar flex h-14 shrink-0 items-center justify-between px-2">
             <div className="flex items-center gap-1 text-lg font-semibold tracking-[-0.03em]">
               <AppLogo size="sm" href="/" linkClassName="tfs-tap inline-flex items-center justify-center" />
               <span>24/7</span>
@@ -36,44 +41,27 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </div>
             <ModeToggle className="tfs-tap justify-center" />
           </header>
-          <main className="flex-1 overflow-auto px-4 pt-4 pb-24">
+          {/* Tablets (768px - 1024px): title bar */}
+          <header className="hidden md:flex lg:hidden tfs-topbar h-14 shrink-0 items-center justify-between px-4">
+            <h1 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
+              {pathname === "/" && "Dashboard"}
+              {pathname === "/dashboard" && "Dashboard"}
+              {pathname === "/guide" && "TV Guide"}
+              {pathname === "/channels" && "Channels"}
+              {pathname === "/library" && "Library"}
+              {pathname === "/users" && "Users"}
+              {pathname === "/settings" && "Settings"}
+              {pathname.startsWith("/channels/") && "Channel Details"}
+            </h1>
+          </header>
+          <main className="flex-1 overflow-auto px-4 pt-4 pb-24 md:p-4 lg:px-8 lg:py-8">
             {children}
           </main>
-          <MobileBottomNav />
-        </div>
-
-        {/* Tablet Layout (768px - 1024px) - Compact Sidebar */}
-        <div className="hidden md:flex lg:hidden h-svh bg-background">
-          <Sidebar />
-          <div className="flex-1 flex flex-col relative">
-            <header className="tfs-topbar flex h-14 shrink-0 items-center justify-between px-4">
-              <h1 className="text-lg font-semibold tracking-[-0.03em] text-foreground">
-                {pathname === "/" && "Dashboard"}
-                {pathname === "/dashboard" && "Dashboard"}
-                {pathname === "/guide" && "TV Guide"}
-                {pathname === "/channels" && "Channels"}
-                {pathname === "/library" && "Library"}
-                {pathname === "/users" && "Users"}
-                {pathname === "/settings" && "Settings"}
-                {pathname.startsWith("/channels/") && "Channel Details"}
-              </h1>
-            </header>
-            <main className="flex-1 overflow-auto p-4">
-              {children}
-            </main>
+          <div className="md:hidden">
+            <MobileBottomNav />
           </div>
         </div>
-
-        {/* Desktop Layout (> 1024px) - Full Sidebar */}
-        <div className="hidden lg:flex h-svh bg-background">
-          <Sidebar />
-          <div className="flex-1 flex flex-col relative">
-            <main className="flex-1 overflow-auto px-6 py-8 lg:px-8">
-              {children}
-            </main>
-          </div>
-        </div>
-      </>
+      </div>
     );
   }
 
