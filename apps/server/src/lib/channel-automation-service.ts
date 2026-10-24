@@ -2,6 +2,13 @@ import { prisma } from '@/lib/prisma';
 import { scoreTitleMatch } from './franchise-title-match';
 import type { Channel, MediaMovie, MediaShow } from '../../prisma/generated/client';
 
+// Automation reads only the movie ids already on a channel; shows need their
+// rows (title, genres, actors) for franchise and similarity matching.
+const AUTOMATION_CHANNEL_INCLUDE = {
+  channelMovies: { select: { movieId: true } },
+  channelShows: { include: { show: true } },
+} as const;
+
 export class ChannelAutomationService {
   private automationLocks = new Set<string>();
 
@@ -18,28 +25,25 @@ export class ChannelAutomationService {
    * Check all channels with automation enabled and apply filters to new content
    */
   async processAutomatedChannels(): Promise<void> {
+    // Load one channel's content at a time: loading every automated channel with all of
+    // its rows up front held the whole set in memory for the length of the sweep.
     const automatedChannels = await prisma.channel.findMany({
       where: {
         autoFilterEnabled: true,
         stealth: false,
         isOnDemand: false
       },
-      include: {
-        channelMovies: {
-          include: {
-            movie: true
-          }
-        },
-        channelShows: {
-          include: {
-            show: true
-          }
-        }
-      }
+      select: { id: true }
     });
 
-    for (const channel of automatedChannels) {
-      await this.processChannelAutomation(channel);
+    for (const { id } of automatedChannels) {
+      const channel = await prisma.channel.findUnique({
+        where: { id },
+        include: AUTOMATION_CHANNEL_INCLUDE
+      });
+      if (channel && channel.autoFilterEnabled) {
+        await this.processChannelAutomation(channel);
+      }
     }
   }
 
@@ -398,12 +402,13 @@ export class ChannelAutomationService {
     const franchiseShows: MediaShow[] = [];
     const existingShowIds = existingShows.map(cs => cs.showId);
 
+    // One read of the show table for the whole channel, not one per show on it.
+    const allShows = existingShows.length ? await prisma.mediaShow.findMany() : [];
     for (const channelShow of existingShows) {
       const show = channelShow.show;
       const showTitle = show.title.toLowerCase();
 
       // Find shows with similar titles (franchise/sequel/prequel patterns)
-      const allShows = await prisma.mediaShow.findMany();
       
       const relatedShows = allShows.filter(otherShow => {
         if (existingShowIds.includes(otherShow.id)) {
@@ -891,18 +896,7 @@ export class ChannelAutomationService {
   async processChannelById(channelId: string): Promise<void> {
     const channel = await prisma.channel.findUnique({
       where: { id: channelId },
-      include: {
-        channelMovies: {
-          include: {
-            movie: true
-          }
-        },
-        channelShows: {
-          include: {
-            show: true
-          }
-        }
-      }
+      include: AUTOMATION_CHANNEL_INCLUDE
     });
 
     if (channel && channel.autoFilterEnabled) {
