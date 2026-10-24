@@ -6,7 +6,7 @@ import { clearLoginCache } from "@/lib/playlist-login";
 export const dynamic = "force-dynamic";
 
 /** How long a link ESPG hands a viewer is good for (only to start playback). */
-export const ESPG_SIGNED_LINK_TTL_SECONDS = 300;
+const ESPG_SIGNED_LINK_TTL_SECONDS = 300;
 
 /**
  * Server-to-server calls from ESPG (authenticated with ESPG's WatchTower app token):

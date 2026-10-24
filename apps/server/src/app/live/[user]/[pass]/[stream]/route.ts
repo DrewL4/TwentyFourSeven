@@ -7,7 +7,7 @@ import { parseLiveStream } from "@/lib/xtream";
 export const dynamic = "force-dynamic";
 
 /** Signed video links from /live are good for this long (only to start playback). */
-export const LIVE_LINK_TTL_SECONDS = 120;
+const LIVE_LINK_TTL_SECONDS = 120;
 
 /**
  * Xtream live address: /live/<username>/<password>/<channel>.ts (or .m3u8).
