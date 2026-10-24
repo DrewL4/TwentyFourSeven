@@ -16,8 +16,64 @@ type Row = {
   email: string;
   firstName: string;
   lastName: string;
-  login: { username: string; password: string | null; custom: boolean; origin: string; updatedAt: string | Date } | null;
+  login: { username: string; password: string | null; custom: boolean; origin: string; updatedAt: string | Date; maxStreams?: number } | null;
 };
+
+const DEFAULT_STREAMS = 2;
+
+/** On its own: how many 24/7 streams this person may run at once. Saves when changed. */
+function StreamLimit({ row }: { row: Row }) {
+  const queryClient = useQueryClient();
+  const saved = row.login?.maxStreams ?? DEFAULT_STREAMS;
+  const [value, setValue] = useState(String(saved));
+  const save = useMutation(
+    orpc.settings.playlistLogin.adminSetStreamLimit.mutationOptions({
+      onSuccess: () => {
+        toast.success(`24/7 stream limit saved for ${row.name || row.email}`);
+        queryClient.invalidateQueries();
+      },
+      onError: (e: Error) => {
+        toast.error(e.message);
+        setValue(String(saved));
+      },
+    }),
+  );
+  const commit = () => {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0 || n > 50) {
+      toast.error("Use a whole number from 0 to 50.");
+      setValue(String(saved));
+      return;
+    }
+    if (n !== saved) save.mutate({ userId: row.userId, maxStreams: n });
+  };
+  const id = `streams-${row.userId}`;
+  return (
+    <div className="w-[7.5rem]">
+      <Label htmlFor={id} className="text-xs text-muted-foreground">24/7 streams</Label>
+      {row.login ? (
+        <Input
+          id={id}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={50}
+          className="h-8 w-20"
+          value={value}
+          disabled={save.isPending}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          data-testid="stream-limit-input"
+        />
+      ) : (
+        <div className="text-xs" title="Make a login first">—</div>
+      )}
+    </div>
+  );
+}
 
 function originLabel(login: Row["login"]) {
   if (!login) return { text: "None yet", variant: "outline" as const };
@@ -118,6 +174,13 @@ export default function PlaylistLoginsAdmin() {
             Linked to ESPG: these logins come from ESPG. Edit or reset them in ESPG (Users → Playlist login). The list below shows the logins 24/7 kept for itself, which don&apos;t work while linked.
           </p>
         )}
+        {d && (
+          <p className="text-sm text-muted-foreground" data-testid="stream-limit-help">
+            {d.readOnly
+              ? "24/7 streams per person: the TV connections they aren't using in ESPG, plus 1 that only 24/7 can use. No TV service = 1."
+              : `24/7 streams per person: how many 24/7 channels one person can watch at once (new logins get ${DEFAULT_STREAMS}). The server-wide limit in Settings still applies.`}
+          </p>
+        )}
         {list.isLoading && <div className="animate-pulse bg-muted h-10 rounded" />}
         {d?.users.map((row) => {
           const label = originLabel(row.login);
@@ -136,6 +199,14 @@ export default function PlaylistLoginsAdmin() {
                   <div className="text-xs text-muted-foreground">Password</div>
                   {row.login ? <Secret value={row.login.password} /> : <span>—</span>}
                 </div>
+                {d.readOnly ? (
+                  <div className="w-[7.5rem]">
+                    <div className="text-xs text-muted-foreground">24/7 streams</div>
+                    <div className="text-xs">ESPG TV + 1</div>
+                  </div>
+                ) : (
+                  <StreamLimit key={`${row.userId}:${row.login?.maxStreams ?? DEFAULT_STREAMS}`} row={row} />
+                )}
                 <Badge variant={label.variant}>{label.text}</Badge>
                 {!d.readOnly && (
                   <div className="flex gap-2">

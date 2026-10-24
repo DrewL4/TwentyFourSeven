@@ -1920,7 +1920,7 @@ export const appRouter = {
               firstName: u.firstName ?? "",
               lastName: u.lastName ?? "",
               login: r
-                ? { username: opened?.username ?? r.username, password: opened?.password ?? null, custom: r.custom, origin: r.origin, updatedAt: r.updatedAt }
+                ? { username: opened?.username ?? r.username, password: opened?.password ?? null, custom: r.custom, origin: r.origin, updatedAt: r.updatedAt, maxStreams: r.maxStreams }
                 : null,
             };
           }),
@@ -1964,6 +1964,18 @@ export const appRouter = {
           if (s.mode !== "tfs") throw new ORPCError("BAD_REQUEST", { message: "Playlist logins come from ESPG. Reset them in ESPG." });
           const login = await pl.makeDefaultLoginFor(input.userId);
           return { ok: true, username: login.username };
+        }),
+
+      adminSetStreamLimit: adminProcedure
+        .input(z.object({ userId: z.string().min(1), maxStreams: z.number().int().min(0).max(50) }))
+        .handler(async ({ input }) => {
+          const pl = await import('../lib/playlist-login');
+          const s = await pl.loginSettings();
+          if (s.mode !== "tfs") throw new ORPCError("BAD_REQUEST", { message: "Linked to ESPG: the 24/7 limit is each person's ESPG TV connections + 1." });
+          const row = await prisma.playlistLogin.findUnique({ where: { userId: input.userId }, select: { id: true } });
+          if (!row) throw new ORPCError("NOT_FOUND", { message: "Make a playlist login for this person first." });
+          await prisma.playlistLogin.update({ where: { userId: input.userId }, data: { maxStreams: input.maxStreams } });
+          return { ok: true };
         }),
 
       adminSetNames: adminProcedure

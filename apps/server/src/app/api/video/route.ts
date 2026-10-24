@@ -19,6 +19,16 @@ import {
 } from '@/lib/shared-live-transcode';
 import { loadLiveProgramForChannel } from '@/lib/resolve-live-program';
 import { authorizePlayer } from '@/lib/player-access';
+import {
+  countViewerStreams,
+  limitForViewer,
+  resolveViewer,
+  shouldRefuseViewer,
+  viewerFromAuth,
+  viewerKey,
+  viewerLimitMessage,
+  type ViewerLimit,
+} from '@/lib/viewer-limit';
 import { resolveLocalStream } from '@/lib/local-media/resolve';
 import { chooseLocalPlayback, type LocalProbe } from '@/lib/local-media/playback';
 import {
@@ -203,6 +213,20 @@ export async function GET(request: NextRequest) {
     return access.response;
   }
 
+  // Per-person 24/7 limit (looked up while the stream is resolved below).
+  const viewerRef = viewerFromAuth(access.auth);
+  const viewerLimitPromise: Promise<{ key: string; limit: ViewerLimit } | null> = viewerRef
+    ? resolveViewer(viewerRef)
+        .then(async (v) => {
+          const key = viewerKey(v);
+          return key ? { key, limit: await limitForViewer(v) } : null;
+        })
+        .catch((error) => {
+          console.warn('[Video] Could not work out the 24/7 stream limit:', error instanceof Error ? error.message : 'error');
+          return null;
+        })
+    : Promise.resolve(null);
+
   try {
     let programInfo: any;
     let server: any;
@@ -362,8 +386,22 @@ export async function GET(request: NextRequest) {
       localAuto && chooseLocalPlayback(localProbe ?? null, { browser: useBrowser }).copyVideo;
     const countsAsCopy = (useCopyRemux && !useBrowser) || initialLocalCopy;
 
+    // Await everything first: from the counts below to createSession nothing
+    // yields, so two players can't both take the last slot.
+    const [streamSettings, viewer] = await Promise.all([streamSettingsPromise, viewerLimitPromise]);
     streamMonitorService.cleanupStaleSessions();
-    const streamSettings = await streamSettingsPromise;
+    if (viewer) {
+      const active = countViewerStreams(streamMonitorService.getActiveSessions(), viewer.key, {
+        channelNumber,
+        clientIp,
+      });
+      if (shouldRefuseViewer(active, viewer.limit)) {
+        return NextResponse.json(
+          { error: viewerLimitMessage(viewer.limit, active) },
+          { status: 429, headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
+    }
     const streamLimit = streamSettings?.concurrentStreams ?? 1;
     if (
       shouldRejectNewTranscode(
@@ -388,7 +426,7 @@ export async function GET(request: NextRequest) {
       channelNumber,
       { ratingKey: programInfo.ratingKey },
       clientIp,
-      { sharedLive: !isCatchup, copyRemux: countsAsCopy },
+      { sharedLive: !isCatchup, copyRemux: countsAsCopy, viewer: viewer?.key ?? null },
     );
 
     // Update session metadata

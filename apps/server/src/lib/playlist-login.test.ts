@@ -232,3 +232,41 @@ test("standalone: a case variant with a different password picks the row whose p
   assert.equal((await c.check({ username: "TVBOX", password: "pw2" }) as any).userId, "uB");
   assert.equal((await c.check({ username: "TVBOX", password: "pw1" }) as any).userId, "uA");
 });
+
+// --- 24/7 stream allowance (linked mode) ---
+
+test("allowance asks ESPG with the e-mail and caches briefly", async () => {
+  const { clearAllowanceCache, ALLOWANCE_FRESH_MS } = await import("./playlist-login");
+  clearAllowanceCache();
+  const { f, calls } = fakeEspg((body) => ({ status: 200, json: { tv_connections: 7, tv_active: 5, allowed: 3 } }));
+  const c = checker(f);
+  assert.deepEqual(await c.allowance("John@Example.test"), { tvConnections: 7, tvActive: 5 });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].body, { action: "stream-allowance", email: "john@example.test" });
+  assert.equal(calls[0].auth, "Bearer service-token");
+  await c.allowance("john@example.test");
+  assert.equal(calls.length, 1);
+  clock += ALLOWANCE_FRESH_MS + 1;
+  await c.allowance("john@example.test");
+  assert.equal(calls.length, 2);
+});
+
+test("allowance: ESPG down -> last answer for a minute, then null", async () => {
+  const { clearAllowanceCache, ALLOWANCE_FRESH_MS, ALLOWANCE_STALE_MS } = await import("./playlist-login");
+  clearAllowanceCache();
+  let down = false;
+  const { f } = fakeEspg(() => (down ? new Error("down") : { status: 200, json: { tv_connections: 3, tv_active: 1 } }));
+  const c = checker(f);
+  assert.deepEqual(await c.allowance("a@x.test"), { tvConnections: 3, tvActive: 1 });
+  down = true;
+  clock += ALLOWANCE_FRESH_MS + 1;
+  assert.deepEqual(await c.allowance("a@x.test"), { tvConnections: 3, tvActive: 1 });
+  clock += ALLOWANCE_STALE_MS;
+  assert.equal(await c.allowance("a@x.test"), null);
+});
+
+test("allowance is null on its own", async () => {
+  const { f, calls } = fakeEspg(() => ({ status: 200, json: {} }));
+  assert.equal(await checker(f, false).allowance("a@x.test"), null);
+  assert.equal(calls.length, 0);
+});

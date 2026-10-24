@@ -68,6 +68,7 @@ function cacheKey(login: Login): string {
 
 export function clearLoginCache() {
   cache.clear();
+  allowanceCache.clear();
 }
 
 /**
@@ -171,7 +172,48 @@ export function createLoginChecker(deps: Deps) {
     };
   }
 
-  return { check, lookup };
+  /**
+   * Linked mode: what ESPG says about this person's TV services, for the 24/7
+   * stream limit. Answers are reused for ALLOWANCE_FRESH_MS (TV streams start and
+   * stop, so not longer). If ESPG can't be asked, the last answer is used for up
+   * to ALLOWANCE_STALE_MS; after that null (the caller then allows just the one
+   * 24/7-only stream). Returns null when on its own.
+   */
+  async function allowance(email: string): Promise<EspgAllowance | null> {
+    const state = await deps.mode();
+    if (state.mode !== "espg" || !state.link) return null;
+    const key = email.trim().toLowerCase();
+    if (!key) return null;
+    const hit = allowanceCache.get(key);
+    const now = deps.now();
+    if (hit && now - hit.at < ALLOWANCE_FRESH_MS) return hit.value;
+    try {
+      const data = await askEspg(state.link, { action: "stream-allowance", email: key }, deps.fetch);
+      const value: EspgAllowance = {
+        tvConnections: Math.max(0, Number(data?.tv_connections) || 0),
+        tvActive: Math.max(0, Number(data?.tv_active) || 0),
+      };
+      allowanceCache.set(key, { at: now, value });
+      if (allowanceCache.size > 2000) {
+        for (const [k, v] of allowanceCache) if (now - v.at >= ALLOWANCE_STALE_MS) allowanceCache.delete(k);
+      }
+      return value;
+    } catch (error) {
+      console.warn("[stream-limit] ESPG allowance check failed:", error instanceof Error ? error.message : "error");
+      if (hit && now - hit.at < ALLOWANCE_STALE_MS) return hit.value;
+      return null;
+    }
+  }
+
+  return { check, lookup, allowance };
+}
+
+export type EspgAllowance = { tvConnections: number; tvActive: number };
+export const ALLOWANCE_FRESH_MS = 10_000;
+export const ALLOWANCE_STALE_MS = 60_000;
+const allowanceCache = new Map<string, { at: number; value: EspgAllowance }>();
+export function clearAllowanceCache() {
+  allowanceCache.clear();
 }
 
 // --- default login: a faithful port of ESPG's rule ---------------------------

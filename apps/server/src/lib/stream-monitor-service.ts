@@ -30,6 +30,8 @@ export interface StreamSession {
   sharedLive: boolean;
   /** Remux (`copy=1`) — excluded from the transcode cap. */
   copyRemux: boolean;
+  /** Who is watching (viewer-limit key), when known. */
+  viewer?: string | null;
 }
 
 export class StreamMonitorService {
@@ -59,7 +61,7 @@ export class StreamMonitorService {
     channelNumber: number,
     programInfo: ProgramInfo,
     clientIp?: string,
-    options?: { sharedLive?: boolean; copyRemux?: boolean },
+    options?: { sharedLive?: boolean; copyRemux?: boolean; viewer?: string | null },
   ): string {
     const sessionId = randomUUID();
     const now = new Date();
@@ -81,6 +83,7 @@ export class StreamMonitorService {
       seekSeconds: 0,
       sharedLive: options?.sharedLive === true,
       copyRemux: options?.copyRemux === true,
+      viewer: options?.viewer ?? null,
     };
 
     this.sessions.set(sessionId, session);

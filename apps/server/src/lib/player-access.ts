@@ -78,6 +78,10 @@ export type PlayerAuth = {
   userId: string | null;
   /** Playlist login; links we hand back carry it sealed. */
   login?: Login;
+  /** Who the signed link was made for (token only), e.g. "espg:<email>" or "user:<id>". */
+  sub?: string;
+  /** The person's e-mail when known (linked logins, signed-in browsers). */
+  email?: string | null;
 };
 
 function basicLogin(headers: Headers): Login | null {
@@ -122,7 +126,7 @@ export async function authorizePlayer(
     if (res.ok) {
       // Tokens issued to a device die with that device's key.
       if (!res.sub.startsWith("key:") || (await keyIsActive(res.sub.slice(4)))) {
-        return { ok: true, auth: { via: "token", keyId: res.sub.startsWith("key:") ? res.sub.slice(4) : null, userId: res.sub.startsWith("user:") ? res.sub.slice(5) : null } };
+        return { ok: true, auth: { via: "token", keyId: res.sub.startsWith("key:") ? res.sub.slice(4) : null, userId: res.sub.startsWith("user:") ? res.sub.slice(5) : null, sub: res.sub } };
       }
     }
   }
@@ -133,7 +137,7 @@ export async function authorizePlayer(
   if (login) {
     const res = await playlistLogins.check(login);
     if (res.ok) {
-      return { ok: true, auth: { via: "login", keyId: null, userId: res.userId, login } };
+      return { ok: true, auth: { via: "login", keyId: null, userId: res.userId, login, email: res.email } };
     }
     if (res.reason === "unavailable") {
       // ESPG is down and this login is not cached: not the viewer's fault.
@@ -173,7 +177,7 @@ export async function authorizePlayer(
     try {
       const session = await auth.api.getSession({ headers: request.headers });
       if (session?.user?.id) {
-        return { ok: true, auth: { via: "session", keyId: null, userId: session.user.id } };
+        return { ok: true, auth: { via: "session", keyId: null, userId: session.user.id, email: session.user.email ?? null } };
       }
     } catch {
       // fall through
