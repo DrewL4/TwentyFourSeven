@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
@@ -16,7 +16,22 @@ export default function UserUpdatesProvider({
   const { socket } = useSocketContext();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const sessionUserId = session?.user?.id ?? null;
+  const lastSessionUserId = useRef<string | null | undefined>(undefined);
+
+  // The server checks the sign-in when the socket connects (handshake cookie),
+  // so after signing in or out without a page load (the sign-in form uses
+  // router.push), reconnect: the fresh handshake carries the new cookie and
+  // use-socket subscribes again on connect.
+  useEffect(() => {
+    if (!socket || sessionPending) return;
+    const previous = lastSessionUserId.current;
+    lastSessionUserId.current = sessionUserId;
+    if (previous === undefined || previous === sessionUserId) return;
+    socket.disconnect();
+    socket.connect();
+  }, [socket, sessionUserId, sessionPending]);
 
   useEffect(() => {
     if (!socket) return;

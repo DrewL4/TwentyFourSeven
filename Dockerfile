@@ -198,6 +198,7 @@ COPY --from=builder --chown=abc:users /app/apps/server/prisma ./apps/server/pris
 
 # Copy server.js (required for running the server)
 COPY --from=builder --chown=abc:users /app/apps/server/server.js ./apps/server/server.js
+COPY --from=builder --chown=abc:users /app/apps/server/socket-auth.js ./apps/server/socket-auth.js
 
 # Set hardware acceleration environment variables (TwentyFourSeven pattern)
 ENV NVIDIA_VISIBLE_DEVICES=all

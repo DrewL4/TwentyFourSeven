@@ -1,6 +1,7 @@
 const { createServer } = require('http');
 const { parse } = require('url');
 const next = require('next');
+const { lookupSession, roomsFor } = require('./socket-auth');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || 'localhost';
@@ -43,10 +44,20 @@ app.prepare().then(() => {
       console.log('[Socket] Client disconnected:', socket.id);
     });
 
-    // Join room for user updates
-    socket.on('subscribe:users', () => {
-      socket.join('users');
-      console.log('[Socket] Client subscribed to user updates:', socket.id);
+    // User updates: admins get every account's changes; any other signed-in
+    // user only their own (so a disabled account is signed out live). No
+    // valid sign-in, no updates.
+    socket.on('subscribe:users', async () => {
+      const session = await lookupSession(socket.handshake.headers.cookie, { port });
+      const rooms = roomsFor(session);
+      if (!rooms.length) {
+        console.warn('[Socket] subscribe:users refused (not signed in):', socket.id);
+        socket.emit('subscribe:refused', { room: 'users', reason: 'sign-in required' });
+        return;
+      }
+      socket.join(rooms);
+      socket.emit('subscribe:ok', { scope: rooms.includes('users') ? 'all' : 'self' });
+      console.log(`[Socket] Client subscribed to ${rooms.includes('users') ? 'all user updates (admin)' : 'own account updates'}:`, socket.id);
     });
   });
 
