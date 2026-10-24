@@ -92,7 +92,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # DEPS_REFRESH: CI passes the ISO week so apt picks up security fixes weekly; empty locally.
 ARG DEPS_REFRESH=
 # Install system dependencies, Nginx, and Debian ffmpeg with VAAPI like ESPG
-RUN echo "deps refresh: ${DEPS_REFRESH:-none}" && apt-get update && apt-get install -y \
+RUN echo "deps refresh: ${DEPS_REFRESH:-none}" && apt-get update && apt-get upgrade -y --no-install-recommends && apt-get install -y \
     curl \
     wget \
     nginx \
