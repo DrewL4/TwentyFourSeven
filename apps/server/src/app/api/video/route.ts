@@ -30,6 +30,7 @@ import {
   type ViewerLimit,
 } from '@/lib/viewer-limit';
 import { resolveLocalStream } from '@/lib/local-media/resolve';
+import { localCopyProbe } from '@/lib/local-media/copy-probe';
 import {
   chooseLocalPlayback,
   copyRemuxBlocker,
@@ -207,7 +208,7 @@ export async function GET(request: NextRequest) {
   //   • `lutc`  – "live" Unix epoch (current wall-clock when player made request)
   const isCatchup = request.nextUrl.searchParams.get('catchup') === 'true';
   const copyRequested = request.nextUrl.searchParams.get('copy') === '1';
-  // copy=1 is a request: a Plex file whose video players can't take as-is
+  // copy=1 is a request: a Plex or local file whose video players can't take as-is
   // (10-bit / HDR / Dolby Vision / very high bitrate) is transcoded instead.
   let useCopyRemux = copyRequested;
   const useBrowser = request.nextUrl.searchParams.get('browser') === '1';
@@ -401,7 +402,11 @@ export async function GET(request: NextRequest) {
         remoteVideo = undefined;
       }
     }
-    const copyBlocker = copyRequested && !isLocal && !useBrowser ? copyRemuxBlocker(remoteVideo) : null;
+    // Local files: the scan's probe plus one cached ffprobe per file (HDR, DV, bitrate).
+    if (isLocal && copyRequested && !useBrowser) {
+      remoteVideo = await localCopyProbe.videoInfo(streamUrl, localProbe);
+    }
+    const copyBlocker = copyRequested && !useBrowser ? copyRemuxBlocker(remoteVideo) : null;
 
     // Local files: copy compatible video as-is (no encode); otherwise transcode.
     const localAuto = isLocal && !copyRequested;
