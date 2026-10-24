@@ -34,7 +34,10 @@ function checker(f: typeof fetch, espg: boolean | ModeState = true, local: Recor
   return createLoginChecker({
     mode: async () => state,
     fetch: f,
-    findLocal: async (u) => local[u] ?? null,
+    findLocal: async (u) =>
+      Object.entries(local)
+        .filter(([name]) => name.toLowerCase() === u.toLowerCase())
+        .map(([username, r]) => ({ username, ...r })),
     userIdByEmail: async (e) => (e === "viewer@example.test" ? "user-1" : null),
     now: () => clock,
   });
@@ -157,8 +160,8 @@ const fixture = JSON.parse(readFileSync(new URL("./__fixtures__/espg-default-log
 
 for (const c of fixture.cases) {
   test(`default login matches ESPG: ${c.name}`, async () => {
-    const taken = new Set<string>(c.taken);
-    const login = await defaultLogin({ firstName: c.first, lastName: c.last, email: c.email }, c.playlist, (u) => taken.has(u));
+    const taken = new Set<string>(c.taken.map((t: string) => t.toLowerCase()));
+    const login = await defaultLogin({ firstName: c.first, lastName: c.last, email: c.email }, c.playlist, (u) => taken.has(u.toLowerCase()));
     assert.deepEqual(login, { username: c.username, password: c.password });
   });
 }
@@ -186,4 +189,46 @@ test("linked: someone ESPG refuses as expired is not let in, and an expiry lands
   expired = true; // access runs out in ESPG
   clock += LOGIN_CACHE_MS + 1;
   assert.deepEqual(await c.check(good), { ok: false, reason: "wrong" });
+});
+
+test("standalone: the username ignores case, the password does not", async () => {
+  const mine = { username: "247Captain", password: "Lumen" };
+  const c = checker(fakeEspg(() => ({ status: 500 })).f, false, { [mine.username]: { userId: "u1", passwordSealed: sealLogin(mine) } });
+  for (const username of ["247captain", "247CAPTAIN", "247Captain"]) {
+    assert.deepEqual(await c.check({ username, password: "Lumen" }), { ok: true, source: "tfs", email: null, userId: "u1" });
+  }
+  assert.deepEqual(await c.check({ username: "247captain", password: "lumen" }), { ok: false, reason: "wrong" });
+  assert.deepEqual(await c.check({ username: "247captain", password: "" }), { ok: false, reason: "wrong" });
+});
+
+test("standalone: when several logins match ignoring case, the exact-case one wins; otherwise it is refused", async () => {
+  const a = { username: "TvBox", password: "pw1" };
+  const b = { username: "tvbox", password: "pw1" };
+  const c = checker(fakeEspg(() => ({ status: 500 })).f, false, {
+    [a.username]: { userId: "uA", passwordSealed: sealLogin(a) },
+    [b.username]: { userId: "uB", passwordSealed: sealLogin(b) },
+  });
+  assert.equal((await c.check({ username: "TvBox", password: "pw1" }) as any).userId, "uA");
+  assert.equal((await c.check({ username: "tvbox", password: "pw1" }) as any).userId, "uB");
+  const warn = console.warn;
+  const logged: string[] = [];
+  console.warn = (...args: unknown[]) => void logged.push(args.join(" "));
+  try {
+    assert.deepEqual(await c.check({ username: "TVBOX", password: "pw1" }), { ok: false, reason: "wrong" });
+  } finally {
+    console.warn = warn;
+  }
+  assert.ok(logged.some((l) => l.includes("ignoring case")));
+  assert.ok(!logged.some((l) => l.includes("pw1")));
+});
+
+test("standalone: a case variant with a different password picks the row whose password matches", async () => {
+  const a = { username: "TvBox", password: "pw1" };
+  const b = { username: "tvbox", password: "pw2" };
+  const c = checker(fakeEspg(() => ({ status: 500 })).f, false, {
+    [a.username]: { userId: "uA", passwordSealed: sealLogin(a) },
+    [b.username]: { userId: "uB", passwordSealed: sealLogin(b) },
+  });
+  assert.equal((await c.check({ username: "TVBOX", password: "pw2" }) as any).userId, "uB");
+  assert.equal((await c.check({ username: "TVBOX", password: "pw1" }) as any).userId, "uA");
 });

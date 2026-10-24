@@ -11,7 +11,7 @@
     { "name": "names are trimmed and lowercased, inner spaces kept", "playlist": "247", "first": "  Mary Ann ", "last": " Van Dyke ", "email": "mary@example.test", "taken": [], "username": "247mary ann", "password": "van dyke" },
     { "name": "only the playlist name is cleaned (Unicode letters kept)", "playlist": "Café TV-24/7!", "first": "José", "last": "Núñez", "email": "jose@example.test", "taken": [], "username": "cafétv247josé", "password": "núñez" },
     { "name": "no last name: collisions use the e-mail part", "playlist": "247", "first": "Gus", "last": "", "email": "gus.gale@example.test", "taken": ["247gus"], "username": "247gusg", "password": "password" },
-    { "name": "taken check is exact (case matters)", "playlist": "247", "first": "Drew", "last": "Lindstrom", "email": "drew@example.test", "taken": ["247Drew"], "username": "247drew", "password": "lindstrom" },
+    { "name": "taken check ignores case (logins match ignoring case)", "playlist": "247", "first": "Drew", "last": "Lindstrom", "email": "drew@example.test", "taken": ["247Drew"], "username": "247drewl", "password": "lindstrom" },
     { "name": "underscores stay in the playlist name", "playlist": "Family_TV 2", "first": "Foggy", "last": "Frank", "email": "foggy@example.test", "taken": [], "username": "family_tv2foggy", "password": "frank" }
   ]
 }

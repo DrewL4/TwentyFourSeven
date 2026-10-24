@@ -22,13 +22,36 @@ export type LoginCheck =
 
 export type EspgLink = { url: string; token: string };
 export type LoginMode = "tfs" | "espg";
+export type LocalLoginRow = { userId: string; username: string; passwordSealed: string };
+
+/**
+ * Pick the local login for what a TV app sent. The username ignores case, the
+ * password must match exactly. If several rows match, the exact-case one wins;
+ * with no exact-case one it is ambiguous and refused (and logged).
+ */
+export function pickLocalLogin(rows: LocalLoginRow[], login: Login): LocalLoginRow | "ambiguous" | null {
+  const want = login.username.toLowerCase();
+  const matches = rows.filter((r) => {
+    if (r.username.toLowerCase() !== want) return false;
+    const stored = openSealedLogin(r.passwordSealed);
+    return !!stored && stored.username.toLowerCase() === want && stored.password === login.password;
+  });
+  if (matches.length === 0) return null;
+  const exact = matches.find((r) => r.username === login.username);
+  if (exact) return exact;
+  if (matches.length === 1) return matches[0];
+  console.warn(`[playlist-login] refused: username matches ${matches.length} logins ignoring case and none exactly`);
+  return "ambiguous";
+}
+
 /** What the checker needs to know: on its own, or linked (with the link, or null when the token is missing). */
 export type ModeState = { mode: "tfs" } | { mode: "espg"; link: EspgLink | null; url: string };
 
 type Deps = {
   mode(): Promise<ModeState>;
   fetch: typeof fetch;
-  findLocal(username: string): Promise<{ userId: string; passwordSealed: string } | null>;
+  /** Local logins whose username matches ignoring case (usernames are unique as typed). */
+  findLocal(username: string): Promise<LocalLoginRow[]>;
   userIdByEmail(email: string): Promise<string | null>;
   now(): number;
 };
@@ -118,12 +141,8 @@ export function createLoginChecker(deps: Deps) {
         return { ok: false, reason: "unavailable" };
       }
     } else {
-      const row = await deps.findLocal(login.username);
-      const stored = row ? openSealedLogin(row.passwordSealed) : null;
-      result =
-        row && stored && stored.username === login.username && stored.password === login.password
-          ? { ok: true, source: "tfs", email: null, userId: row.userId }
-          : { ok: false, reason: "wrong" };
+      const row = pickLocalLogin(await deps.findLocal(login.username), login);
+      result = row && row !== "ambiguous" ? { ok: true, source: "tfs", email: null, userId: row.userId } : { ok: false, reason: "wrong" };
     }
 
     if (result.ok) {
@@ -178,7 +197,7 @@ function emailPart(email?: string | null): string {
 
 /**
  * ESPG's default playlist login for a person. `isTaken(username)` says whether
- * another login already uses a username (ESPG checks this exactly).
+ * another login already uses a username, ignoring case (as ESPG does).
  */
 export async function defaultLogin(
   user: NameSource,
@@ -288,6 +307,12 @@ export async function pruneOrphanLogins(): Promise<number> {
   return count;
 }
 
+/** Logins whose username equals `username` ignoring (ASCII) case. SQLite's lower() is ASCII-only, as is ESPG's default rule. */
+async function localLoginsIgnoringCase(username: string): Promise<LocalLoginRow[]> {
+  const { prisma } = await import("./prisma");
+  return prisma.$queryRaw<LocalLoginRow[]>`SELECT userId, username, passwordSealed FROM playlist_login WHERE lower(username) = lower(${username}) LIMIT 5`;
+}
+
 /** Make (or rebuild) a user's default login in standalone mode. Never touches another user's row. */
 export async function makeDefaultLoginFor(userId: string): Promise<Login> {
   const { prisma } = await import("./prisma");
@@ -298,7 +323,7 @@ export async function makeDefaultLoginFor(userId: string): Promise<Login> {
   const login = await defaultLogin(
     { firstName: user.firstName, lastName: user.lastName, email: user.email },
     playlistName,
-    async (u) => !!(await prisma.playlistLogin.findFirst({ where: { username: u, NOT: { userId } }, select: { id: true } })),
+    async (u) => (await localLoginsIgnoringCase(u)).some((r) => r.userId !== userId),
   );
   const s = sealed(login);
   await prisma.playlistLogin.upsert({
@@ -315,11 +340,12 @@ export const playlistLogins = createLoginChecker({
   fetch: (...args) => fetch(...args),
   findLocal: async (username) => {
     const { prisma } = await import("./prisma");
-    const row = await prisma.playlistLogin.findUnique({ where: { username }, select: { userId: true, passwordSealed: true } });
-    if (!row) return null;
+    const rows = await localLoginsIgnoringCase(username);
+    if (!rows.length) return [];
     // A login left behind by a deleted user does not let anyone in.
-    const user = await prisma.user.findUnique({ where: { id: row.userId }, select: { id: true } });
-    return user ? row : null;
+    const users = await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.userId) } }, select: { id: true } });
+    const alive = new Set(users.map((u) => u.id));
+    return rows.filter((r) => alive.has(r.userId));
   },
   userIdByEmail: async (email) => {
     const { prisma } = await import("./prisma");
