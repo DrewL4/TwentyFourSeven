@@ -267,8 +267,14 @@ async function scanLibrary(root: string, serverId: string, counters: { probed: n
   const libKind = library.type;
   status.kind = libKind === "MOVIE" ? "movies" : "shows";
 
+  // Only the columns the change check and clean-up read; the probe details stay in the DB.
   const known = new Map(
-    (await prisma.localMediaItem.findMany({ where: { libraryId: library.id } })).map((r) => [r.relPath, r]),
+    (
+      await prisma.localMediaItem.findMany({
+        where: { libraryId: library.id },
+        select: { id: true, relPath: true, kind: true, size: true, mtimeMs: true, durationMs: true },
+      })
+    ).map((r) => [r.relPath, r]),
   );
   const seen = new Set<string>();
 
@@ -279,6 +285,12 @@ async function scanLibrary(root: string, serverId: string, counters: { probed: n
   }
 
   if (libKind === "MOVIE") {
+    // One query for which files already have a movie row, instead of one per file.
+    const moviesIndexed = new Set(
+      (await prisma.mediaMovie.findMany({ where: { libraryId: library.id }, select: { ratingKey: true } })).map(
+        (m) => m.ratingKey,
+      ),
+    );
     await mapLimit(videos, PROBE_CONCURRENCY, async (v) => {
       seen.add(v.rel);
       const parts = v.rel.split("/");
@@ -290,8 +302,7 @@ async function scanLibrary(root: string, serverId: string, counters: { probed: n
       const nfo = nfoName ? await readNfo(root, dirRel ? `${dirRel}/${nfoName}` : nfoName) : null;
       const stamp = Math.max(v.mtimeMs, nfo?.mtimeMs ?? 0);
       const prev = known.get(v.rel);
-      const existingMovie = prev ? await prisma.mediaMovie.findUnique({ where: { libraryId_ratingKey: { libraryId: library.id, ratingKey: v.rel } }, select: { id: true } }) : null;
-      if (prev && prev.size === v.size && prev.mtimeMs === stamp && prev.durationMs && existingMovie) {
+      if (prev && prev.size === v.size && prev.mtimeMs === stamp && prev.durationMs && moviesIndexed.has(v.rel)) {
         counters.skipped++;
         return;
       }
@@ -388,6 +399,11 @@ async function scanLibrary(root: string, serverId: string, counters: { probed: n
       status.shows++;
 
       const sorted = [...eps].sort((a, b) => a.rel.localeCompare(b.rel, undefined, { numeric: true }));
+      const episodesIndexed = new Set(
+        (await prisma.mediaEpisode.findMany({ where: { showId: show.id }, select: { ratingKey: true } })).map(
+          (e) => e.ratingKey,
+        ),
+      );
       await mapLimit(sorted.map((v, idx) => ({ v, idx })), PROBE_CONCURRENCY, async ({ v, idx }) => {
         seen.add(v.rel);
         const parts = v.rel.split("/");
@@ -400,8 +416,7 @@ async function scanLibrary(root: string, serverId: string, counters: { probed: n
         const stamp = Math.max(v.mtimeMs, epNfo?.mtimeMs ?? 0);
         const prev = known.get(v.rel);
         if (prev && prev.size === v.size && prev.mtimeMs === stamp && prev.durationMs) {
-          const exists = await prisma.mediaEpisode.findUnique({ where: { showId_ratingKey: { showId: show.id, ratingKey: v.rel } }, select: { id: true } });
-          if (exists) {
+          if (episodesIndexed.has(v.rel)) {
             counters.skipped++;
             return;
           }
