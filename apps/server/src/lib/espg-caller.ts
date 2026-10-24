@@ -14,7 +14,21 @@ type Deps = {
 };
 
 const CACHE_MS = 60_000;
+// Keyed by whatever bearer token a caller sends, so it has to stay bounded.
+const CACHE_MAX = 1000;
 const cache = new Map<string, { at: number; ok: boolean }>();
+
+function remember(key: string, ok: boolean, now: number) {
+  cache.delete(key);
+  cache.set(key, { at: now, ok });
+  if (cache.size <= CACHE_MAX) return;
+  for (const [k, v] of cache) if (now - v.at >= CACHE_MS) cache.delete(k);
+  // Still full of fresh entries: drop the oldest (Map keeps insertion order).
+  for (const k of cache.keys()) {
+    if (cache.size <= CACHE_MAX) break;
+    cache.delete(k);
+  }
+}
 
 export function clearEspgCallerCache() {
   cache.clear();
@@ -49,7 +63,7 @@ export function createEspgCallerCheck(deps: Deps) {
     } catch {
       return false; // not cached: WatchTower may be back in a moment
     }
-    cache.set(key, { at: deps.now(), ok });
+    remember(key, ok, deps.now());
     return ok;
   };
 }

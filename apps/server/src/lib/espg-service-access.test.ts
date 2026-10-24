@@ -81,3 +81,15 @@ test("links handed to ESPG carry no key", () => {
   assert.equal(keyParam("abc"), "&k=abc");
   assert.equal(keyParam("abc", "&amp;"), "&amp;k=abc");
 });
+
+test("random bearer tokens cannot grow the token cache without limit", async () => {
+  assert.equal(await espgServiceCaller(h("Bearer espg-app-token-test"), m3u, isEspg), "service");
+  assert.equal(wtCalls, 1);
+  for (let i = 0; i < 1500; i++) await espgServiceCaller(h(`Bearer junk-${i}`), m3u, isEspg);
+  // The oldest entry was dropped to make room, so the real token is checked again.
+  assert.equal(await espgServiceCaller(h("Bearer espg-app-token-test"), m3u, isEspg), "service");
+  assert.equal(wtCalls, 1502);
+  // A recent one is still cached.
+  assert.equal(await espgServiceCaller(h("Bearer junk-1499"), m3u, isEspg), "refused");
+  assert.equal(wtCalls, 1502);
+});
