@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from "fs";
-import { mkdir, readFile, rename, stat, writeFile } from "fs/promises";
+import { mkdir, readFile, rename, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { Readable } from "stream";
 import { finished } from "stream/promises";
@@ -12,6 +12,19 @@ const DEFAULT_PATH = path.join(
 
 export function getXmlTvCachePath(): string {
   return process.env.XMLTV_STATIC_PATH || DEFAULT_PATH;
+}
+
+// On globalThis so every bundle that imports this module (API router, guide routes) shares one counter.
+const shared = globalThis as typeof globalThis & { __tfsXmltvGeneration?: number };
+let tmpSeq = 0;
+/** Bumped on every invalidation, so a build that started before it is known to be stale. */
+export function xmlTvCacheGeneration(): number {
+  return shared.__tfsXmltvGeneration ?? 0;
+}
+/** Each writer gets its own temp file; two writers on one temp file interleave into a broken guide. */
+function tmpPathFor(filePath: string): string {
+  tmpSeq += 1;
+  return `${filePath}.${process.pid}.${tmpSeq}.tmp`;
 }
 
 export async function readXmlTvCacheIfFresh(
@@ -48,7 +61,7 @@ export async function openXmlTvCacheStreamIfFresh(
 export async function writeXmlTvCache(xml: string): Promise<void> {
   const filePath = getXmlTvCachePath();
   await mkdir(path.dirname(filePath), { recursive: true });
-  const tmp = `${filePath}.tmp`;
+  const tmp = tmpPathFor(filePath);
   await writeFile(tmp, xml, "utf8");
   await rename(tmp, filePath);
 }
@@ -59,7 +72,7 @@ export async function writeXmlTvCacheStreaming(
 ): Promise<void> {
   const filePath = getXmlTvCachePath();
   await mkdir(path.dirname(filePath), { recursive: true });
-  const tmp = `${filePath}.tmp`;
+  const tmp = tmpPathFor(filePath);
   const stream = createWriteStream(tmp, { encoding: "utf8" });
   const write = (line: string) => {
     stream.write(`${line}\n`);
@@ -72,11 +85,13 @@ export async function writeXmlTvCacheStreaming(
     await rename(tmp, filePath);
   } catch (error) {
     stream.destroy();
+    await unlink(tmp).catch(() => undefined);
     throw error;
   }
 }
 
 export async function invalidateXmlTvCache(): Promise<void> {
+  shared.__tfsXmltvGeneration = xmlTvCacheGeneration() + 1;
   const filePath = getXmlTvCachePath();
   try {
     const tmp = `${filePath}.stale`;
