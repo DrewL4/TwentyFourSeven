@@ -210,6 +210,9 @@ export async function GET(request: NextRequest) {
   // Signed-in browser, a signed link, a device key, or (if allowed) the home network.
   const access = await authorizePlayer(request, { scope: 'video', resource: `ch:${channelNumber}` });
   if (!access.ok) {
+    // One line per refused play so "it just spins" shows up in the logs.
+    // Status only: never the URL, it carries the key or signed token.
+    console.warn(`[Video] refused channel=${channelNumber} status=${access.response.status}`);
     return access.response;
   }
 
