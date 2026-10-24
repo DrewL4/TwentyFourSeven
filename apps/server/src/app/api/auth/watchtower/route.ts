@@ -260,6 +260,7 @@ export async function POST(request: NextRequest) {
       }
     };
 
+    let keptPlaylistLoginId: string | null = null;
     if (user) {
       // Update existing user
       
@@ -275,6 +276,11 @@ export async function POST(request: NextRequest) {
       // For existing users, delete and recreate to use better-auth
       
       
+      // The playlist login is keyed by user id; keep it so TV apps keep working
+      // after the user is recreated below.
+      keptPlaylistLoginId =
+        (await prisma.playlistLogin.findUnique({ where: { userId: user.id }, select: { id: true } }))?.id ?? null;
+
       // Delete existing user and sessions
       await prisma.session.deleteMany({ where: { userId: user.id } });
       await prisma.account.deleteMany({ where: { userId: user.id } });
@@ -322,6 +328,8 @@ export async function POST(request: NextRequest) {
     await prisma.user.update({
       where: { id: signUpResult.user.id },
       data: {
+        firstName: userData.firstName,
+        lastName: userData.lastName,
         watchTowerUserId: userData.watchTowerUserId,
         watchTowerUsername: userData.watchTowerUsername,
         role: userData.role,
@@ -333,6 +341,12 @@ export async function POST(request: NextRequest) {
         password: null,
       },
     });
+
+    if (keptPlaylistLoginId) {
+      await prisma.playlistLogin
+        .update({ where: { id: keptPlaylistLoginId }, data: { userId: signUpResult.user.id } })
+        .catch((e: unknown) => console.warn("[watchtower] could not keep playlist login:", e instanceof Error ? e.message : "error"));
+    }
 
     // Create response
     const response = NextResponse.json({

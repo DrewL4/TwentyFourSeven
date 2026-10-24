@@ -279,11 +279,21 @@ export async function espgConfigured(): Promise<{ url: string; hasToken: boolean
   return { url: s.espgUrl, hasToken: s.hasToken };
 }
 
+/** Drop logins whose user is gone (a deleted user's login must not keep working or hold a username). */
+export async function pruneOrphanLogins(): Promise<number> {
+  const { prisma } = await import("./prisma");
+  const users = await prisma.user.findMany({ select: { id: true } });
+  const { count } = await prisma.playlistLogin.deleteMany({ where: { userId: { notIn: users.map((u) => u.id) } } });
+  if (count) clearLoginCache();
+  return count;
+}
+
 /** Make (or rebuild) a user's default login in standalone mode. Never touches another user's row. */
 export async function makeDefaultLoginFor(userId: string): Promise<Login> {
   const { prisma } = await import("./prisma");
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true, email: true, name: true } });
   if (!user) throw new Error("No such user");
+  await pruneOrphanLogins();
   const { playlistName } = await loginSettings();
   const login = await defaultLogin(
     { firstName: user.firstName, lastName: user.lastName, email: user.email },
@@ -305,7 +315,11 @@ export const playlistLogins = createLoginChecker({
   fetch: (...args) => fetch(...args),
   findLocal: async (username) => {
     const { prisma } = await import("./prisma");
-    return prisma.playlistLogin.findUnique({ where: { username }, select: { userId: true, passwordSealed: true } });
+    const row = await prisma.playlistLogin.findUnique({ where: { username }, select: { userId: true, passwordSealed: true } });
+    if (!row) return null;
+    // A login left behind by a deleted user does not let anyone in.
+    const user = await prisma.user.findUnique({ where: { id: row.userId }, select: { id: true } });
+    return user ? row : null;
   },
   userIdByEmail: async (email) => {
     const { prisma } = await import("./prisma");
