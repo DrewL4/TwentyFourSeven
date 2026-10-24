@@ -9,6 +9,28 @@ const AUTOMATION_CHANNEL_INCLUDE = {
   channelShows: { include: { show: true } },
 } as const;
 
+// Movie automation only matches on these columns and then adds by id, so it never
+// needs the summary, artwork or cast/crew text the full rows carry.
+const AUTOMATION_MOVIE_SELECT = {
+  id: true,
+  title: true,
+  year: true,
+  tmdbId: true,
+  genres: true,
+  actors: true,
+  directors: true,
+  collections: true,
+} as const;
+
+type AutomationMovie = Pick<
+  MediaMovie,
+  'id' | 'title' | 'year' | 'tmdbId' | 'genres' | 'actors' | 'directors' | 'collections'
+>;
+type FilterableMedia = Pick<MediaMovie, 'genres' | 'actors' | 'directors' | 'collections'>;
+
+/** Per-sweep reuse: franchise channels all match against the same movie list. */
+type SweepContext = { franchiseMovies?: Promise<AutomationMovie[]> };
+
 export class ChannelAutomationService {
   private automationLocks = new Set<string>();
 
@@ -36,13 +58,14 @@ export class ChannelAutomationService {
       select: { id: true }
     });
 
+    const sweep: SweepContext = {};
     for (const { id } of automatedChannels) {
       const channel = await prisma.channel.findUnique({
         where: { id },
         include: AUTOMATION_CHANNEL_INCLUDE
       });
       if (channel && channel.autoFilterEnabled) {
-        await this.processChannelAutomation(channel);
+        await this.processChannelAutomation(channel, sweep);
       }
     }
   }
@@ -50,7 +73,7 @@ export class ChannelAutomationService {
   /**
    * Process automation for a specific channel
    */
-  async processChannelAutomation(channel: any): Promise<void> {
+  async processChannelAutomation(channel: any, sweep: SweepContext = {}): Promise<void> {
     try {
       if (channel.stealth || channel.isOnDemand) {
         return;
@@ -67,7 +90,7 @@ export class ChannelAutomationService {
 
       // Process movies if enabled
       if (filterType === 'movies' || filterType === 'both') {
-        const moviesAdded = await this.processMovieAutomation(channel);
+        const moviesAdded = await this.processMovieAutomation(channel, sweep);
         contentAdded = contentAdded || moviesAdded;
       }
 
@@ -101,9 +124,9 @@ export class ChannelAutomationService {
   /**
    * Process movie automation for a channel
    */
-  private async processMovieAutomation(channel: any): Promise<boolean> {
+  private async processMovieAutomation(channel: any, sweep: SweepContext): Promise<boolean> {
     // Get all movies that match the filter criteria
-    const matchingMovies = await this.getMatchingMovies(channel);
+    const matchingMovies = await this.getMatchingMovies(channel, sweep);
 
     // Get movies already in the channel
     const existingMovieIds = new Set(
@@ -174,7 +197,7 @@ export class ChannelAutomationService {
   /**
    * Get movies that match the channel's filter criteria
    */
-  private async getMatchingMovies(channel: any): Promise<MediaMovie[]> {
+  private async getMatchingMovies(channel: any, sweep: SweepContext): Promise<AutomationMovie[]> {
     const whereClause: any = {};
 
     // Franchise filter — match library movies by TMDB ids in franchise entries
@@ -192,10 +215,11 @@ export class ChannelAutomationService {
         .map((e) => e.titlePattern)
         .filter((p): p is string => !!p?.trim());
 
-      const matchesFranchiseEntry = (movie: MediaMovie): boolean =>
+      const matchesFranchiseEntry = (movie: AutomationMovie): boolean =>
         entries.some((entry) => scoreTitleMatch(movie, entry) >= 800);
 
-      const movies = await prisma.mediaMovie.findMany();
+      sweep.franchiseMovies ??= prisma.mediaMovie.findMany({ select: AUTOMATION_MOVIE_SELECT });
+      const movies = await sweep.franchiseMovies;
       return movies.filter(
         (movie) => matchesFranchiseEntry(movie) && this.matchesFilters(movie, channel),
       );
@@ -255,7 +279,8 @@ export class ChannelAutomationService {
     }
 
     const movies = await prisma.mediaMovie.findMany({
-      where: whereClause
+      where: whereClause,
+      select: AUTOMATION_MOVIE_SELECT
     });
 
     // Apply additional filters that require JSON parsing
@@ -578,7 +603,7 @@ export class ChannelAutomationService {
   /**
    * Check if a media item matches the channel's filter criteria
    */
-  private matchesFilters(media: MediaMovie | MediaShow, channel: any): boolean {
+  private matchesFilters(media: FilterableMedia, channel: any): boolean {
     // Collection filter (collection-first)
     const filterCollections = this.safeParseList(channel.filterCollections);
     if (filterCollections.length > 0) {
