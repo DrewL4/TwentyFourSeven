@@ -18,6 +18,7 @@ import {
   type SharedLiveHub,
 } from '@/lib/shared-live-transcode';
 import { loadLiveProgramForChannel } from '@/lib/resolve-live-program';
+import { requireLiveProgram, videoErrorStatus } from '@/lib/live-program-lookup';
 import { authorizePlayer } from '@/lib/player-access';
 import {
   countViewerStreams,
@@ -134,11 +135,11 @@ async function loadFfmpegSettings(): Promise<CachedFfmpegSettings> {
 }
 
 async function getProgramInfo(channelNumber: number) {
-  const live = await loadLiveProgramForChannel(channelNumber);
-  if (!live) {
-    throw new Error('Channel or program not found');
-  }
-  return live;
+  return requireLiveProgram(channelNumber, {
+    loadLive: (n) => loadLiveProgramForChannel(n),
+    channelExists: async (n) =>
+      !!(await prisma.channel.findUnique({ where: { number: n }, select: { id: true } })),
+  });
 }
 
 async function buildFfmpegArgs(
@@ -1155,7 +1156,10 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    
-    return new NextResponse(error.message, { status: 500 });
+    const status = videoErrorStatus(error);
+    if (status === 404) {
+      console.warn(`[Video] channel not found: ${error.channelNumber}`);
+    }
+    return new NextResponse(error.message, { status });
   }
 } 
