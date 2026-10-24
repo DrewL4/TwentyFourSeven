@@ -4,7 +4,10 @@ import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  ffmpegCanToneMap,
   ffmpegSupportsReadrateInitialBurst,
+  parseFilterNames,
+  warmFfmpegToneMap,
   resetFfmpegCapabilitiesForTests,
   warmFfmpegCapabilities,
 } from "./ffmpeg-capabilities";
@@ -22,6 +25,7 @@ const slow = fakeFfmpeg("slow", 'sleep 3; echo "-readrate_initial_burst <double>
 
 beforeEach(() => {
   delete process.env.FFMPEG_READRATE_INITIAL_BURST;
+  delete process.env.FFMPEG_TONEMAP;
   resetFfmpegCapabilitiesForTests();
 });
 
@@ -60,4 +64,41 @@ test("env override wins without spawning", async () => {
   assert.equal(ffmpegSupportsReadrateInitialBurst(join(dir, "nope")), true);
   process.env.FFMPEG_READRATE_INITIAL_BURST = "false";
   assert.equal(await warmFfmpegCapabilities(withFlag), false);
+});
+
+const filtersList = [
+  "Filters:",
+  "  T.. = Timeline support",
+  " ... tonemap           V->V       Conversion to/from different dynamic ranges.",
+  " .SC zscale            V->V       Apply resizing, colorspace and bit depth conversion.",
+  " ... scale_cuda        V->V       GPU accelerated video resizer",
+].map((l) => `echo "${l}"`).join("; ");
+const withToneMap = fakeFfmpeg("tm", filtersList);
+const withoutZscale = fakeFfmpeg("nozs", 'echo " ... tonemap           V->V       Conversion"');
+
+test("tone map: detected when zscale and tonemap are both listed", async () => {
+  assert.equal(ffmpegCanToneMap(withToneMap), false); // not probed yet: never blocks
+  assert.equal(await warmFfmpegToneMap(withToneMap), true);
+  assert.equal(ffmpegCanToneMap(withToneMap), true);
+});
+
+test("tone map: missing zscale means no tone map", async () => {
+  assert.equal(await warmFfmpegToneMap(withoutZscale), false);
+  assert.equal(ffmpegCanToneMap(withoutZscale), false);
+});
+
+test("tone map: a missing ffmpeg resolves false instead of throwing", async () => {
+  assert.equal(await warmFfmpegToneMap(join(dir, "nope")), false);
+});
+
+test("tone map: FFMPEG_TONEMAP overrides the probe", async () => {
+  process.env.FFMPEG_TONEMAP = "false";
+  assert.equal(await warmFfmpegToneMap(withToneMap), false);
+  assert.equal(ffmpegCanToneMap(withToneMap), false);
+  delete process.env.FFMPEG_TONEMAP;
+});
+
+test("parseFilterNames reads the flag column format", () => {
+  const names = parseFilterNames(" .SC zscale            V->V       x\n TSC scale    V->V   y\nnot a filter line");
+  assert.deepEqual([...names].sort(), ["scale", "zscale"]);
 });

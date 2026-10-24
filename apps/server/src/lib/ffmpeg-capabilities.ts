@@ -11,7 +11,12 @@ import { spawn } from "child_process";
  * Until the answer is known the flag is left out, which is always safe.
  */
 
-type CapabilityState = { initialBurst?: boolean; probing?: Promise<boolean> };
+type CapabilityState = {
+  initialBurst?: boolean;
+  probing?: Promise<boolean>;
+  toneMap?: boolean;
+  toneMapProbing?: Promise<boolean>;
+};
 
 // globalThis so the boot hook and the route bundles share one answer.
 const KEY = Symbol.for("tfs.ffmpegCapabilities");
@@ -94,9 +99,108 @@ export function ffmpegSupportsReadrateInitialBurst(ffmpegPath = process.env.FFMP
   return false;
 }
 
+/** Filters the HDR -> SDR tone map needs (zscale is libzimg, not in every build). */
+export const TONE_MAP_FILTERS = ["zscale", "tonemap"] as const;
+
+function toneMapOverride(): boolean | undefined {
+  const value = process.env.FFMPEG_TONEMAP?.toLowerCase();
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
+  return undefined;
+}
+
+/** Filter names from `ffmpeg -filters` output (" TSC name  in->out  description"). */
+export function parseFilterNames(output: string): Set<string> {
+  const names = new Set<string>();
+  for (const line of output.split("\n")) {
+    const m = /^\s*[TSC.]{3}\s+(\S+)\s+\S+->\S+/.exec(line);
+    if (m) names.add(m[1]);
+  }
+  return names;
+}
+
+/**
+ * Background probe: does this FFmpeg have the HDR tone-map filters? Logs the
+ * answer once. Resolves to the answer; never rejects. FFMPEG_TONEMAP=true|false
+ * overrides it.
+ */
+export function warmFfmpegToneMap(
+  ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg",
+  spawner: Spawner = spawn,
+  timeoutMs = 10_000,
+): Promise<boolean> {
+  const s = state();
+  const forced = toneMapOverride();
+  if (forced !== undefined) {
+    if (s.toneMap !== forced) console.log(`[FFmpeg] HDR tone mapping ${forced ? "on" : "off"} (FFMPEG_TONEMAP)`);
+    s.toneMap = forced;
+    return Promise.resolve(forced);
+  }
+  if (s.toneMap !== undefined) return Promise.resolve(s.toneMap);
+  if (s.toneMapProbing) return s.toneMapProbing;
+  s.toneMapProbing = new Promise<boolean>((resolve) => {
+    let out = "";
+    let done = false;
+    const finish = (failed?: string) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      const names = parseFilterNames(out);
+      const missing = TONE_MAP_FILTERS.filter((f) => !names.has(f));
+      const ok = !failed && missing.length === 0;
+      s.toneMap = ok;
+      s.toneMapProbing = undefined;
+      if (ok) {
+        console.log("[FFmpeg] HDR tone mapping available (zscale + tonemap): HDR plays as SDR bt709");
+      } else {
+        console.warn(
+          `[FFmpeg] HDR tone mapping unavailable (${failed ?? `missing ${missing.join(", ")}`}): HDR is only converted to 8-bit, colors will look washed out`,
+        );
+      }
+      resolve(ok);
+    };
+    let child: ReturnType<Spawner>;
+    try {
+      child = spawner(ffmpegPath, ["-hide_banner", "-filters"], { stdio: ["ignore", "pipe", "ignore"] });
+    } catch {
+      finish("ffmpeg did not start");
+      return;
+    }
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+        child.stdout?.destroy();
+      } catch {
+        // ignore
+      }
+      finish("probe timed out");
+    }, timeoutMs);
+    child.stdout?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => {
+      // The full list is ~50 KB; cap it anyway.
+      if (out.length < 1_000_000) out += chunk;
+    });
+    child.on("error", () => finish("ffmpeg did not start"));
+    child.on("close", () => finish());
+  });
+  return s.toneMapProbing;
+}
+
+/** Answer for building FFmpeg args right now. Never blocks; false until probed. */
+export function ffmpegCanToneMap(ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg"): boolean {
+  const forced = toneMapOverride();
+  if (forced !== undefined) return forced;
+  const s = state();
+  if (s.toneMap !== undefined) return s.toneMap;
+  void warmFfmpegToneMap(ffmpegPath);
+  return false;
+}
+
 /** Tests only. */
 export function resetFfmpegCapabilitiesForTests(): void {
   const s = state();
   s.initialBurst = undefined;
   s.probing = undefined;
+  s.toneMap = undefined;
+  s.toneMapProbing = undefined;
 }

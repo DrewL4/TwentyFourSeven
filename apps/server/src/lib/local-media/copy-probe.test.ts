@@ -79,3 +79,12 @@ test("the cache is bounded", async () => {
   for (const f of ["/1", "/2", "/3", "/1"]) await p.videoInfo(f);
   assert.equal(calls, 4);
 });
+
+test("Dolby Vision profile from ffprobe side data", () => {
+  const p5 = { streams: [{ codec_type: "video", codec_name: "hevc", pix_fmt: "yuv420p10le", side_data_list: [{ side_data_type: "DOVI configuration record", dv_profile: 5 }] }] };
+  assert.equal(videoInfoFromFfprobe(p5)?.dolbyVisionProfile, 5);
+  const p8 = { streams: [{ codec_type: "video", codec_name: "hevc", pix_fmt: "yuv420p10le", color_transfer: "smpte2084", side_data_list: [{ side_data_type: "DOVI configuration record", dv_profile: "8" }] }] };
+  assert.equal(videoInfoFromFfprobe(p8)?.dolbyVisionProfile, 8);
+  const sdr = { streams: [{ codec_type: "video", codec_name: "h264", pix_fmt: "yuv420p" }] };
+  assert.equal(videoInfoFromFfprobe(sdr)?.dolbyVisionProfile, null);
+});

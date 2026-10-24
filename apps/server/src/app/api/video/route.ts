@@ -1,4 +1,5 @@
-import { ffmpegSupportsReadrateInitialBurst } from '@/lib/ffmpeg-capabilities';
+import { ffmpegCanToneMap, ffmpegSupportsReadrateInitialBurst } from '@/lib/ffmpeg-capabilities';
+import { planHdrToneMap, type HdrToneMap } from '@/lib/hdr-tone-map';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { TimingService } from '@/lib/timing-service';
@@ -156,6 +157,8 @@ async function buildFfmpegArgs(
     localCopy?: { copyAudio: boolean };
     /** Local file being transcoded: read at 1x. */
     pace?: boolean;
+    /** HDR source: tone-map to SDR bt709. */
+    toneMap?: HdrToneMap | null;
   },
 ): Promise<string[]> {
   const ffmpegSettings = await loadFfmpegSettings();
@@ -181,6 +184,7 @@ async function buildFfmpegArgs(
       copy: options?.copy === true,
       browser: options?.browser === true,
       pace: options?.pace === true,
+      toneMap: options?.toneMap ?? null,
     },
     {
       hwaccelMethod: process.env.FFMPEG_HWACCEL_METHOD,
@@ -403,10 +407,14 @@ export async function GET(request: NextRequest) {
         remoteVideo = undefined;
       }
     }
-    // Local files: the scan's probe plus one cached ffprobe per file (HDR, DV, bitrate).
-    if (isLocal && copyRequested && !useBrowser) {
+    // Local files: the scan's probe plus one cached ffprobe per file (HDR, DV,
+    // bitrate). Needed for copy=1 safety and for the HDR tone map on transcodes.
+    if (isLocal) {
       remoteVideo = await localCopyProbe.videoInfo(streamUrl, localProbe);
     }
+    // The video now on air (changes at each program handoff); drives the tone map.
+    let currentVideo = remoteVideo;
+    let hdrLoggedFor: string | null = null;
     const copyBlocker = copyRequested && !useBrowser ? copyRemuxBlocker(remoteVideo) : null;
 
     // Local files: copy compatible video as-is (no encode); otherwise transcode.
@@ -1005,6 +1013,15 @@ export async function GET(request: NextRequest) {
         streamUrl = next.streamUrl;
         seekSeconds = next.seekSeconds;
         localProbe = next.local?.probe;
+        try {
+          currentVideo = next.local
+            ? await localCopyProbe.videoInfo(next.streamUrl, next.local.probe)
+            : next.server.token
+              ? (await new PlexAPI({ uri: next.server.url }).getMediaParts(next.server.url, next.server.token, next.programInfo.ratingKey))?.media
+              : undefined;
+        } catch {
+          currentVideo = undefined;
+        }
         const metadata = {
           programInfo: next.programInfo,
           streamUrl: next.streamUrl,
@@ -1058,7 +1075,19 @@ export async function GET(request: NextRequest) {
           ? chooseLocalPlayback(localProbe ?? null, { browser: useBrowser })
           : null;
       autoCopyActive = !!localChoice?.copyVideo;
+      // HDR -> SDR only when video is encoded (copy keeps the source as-is).
+      const hdr =
+        !useCopyRemux && !autoCopyActive
+          ? planHdrToneMap(currentVideo, ffmpegCanToneMap())
+          : { toneMap: null };
+      if (hdr.log && hdrLoggedFor !== String(programInfo.ratingKey)) {
+        hdrLoggedFor = String(programInfo.ratingKey);
+        const line = `[Video] channel=${channelNumber} ${hdr.log.message}`;
+        if (hdr.log.level === 'warn') console.warn(line);
+        else console.log(line);
+      }
       const ffmpegArgs = await buildFfmpegArgs(activeStreamUrl, activeSeekSeconds, {
+        toneMap: hdr.toneMap,
         mode,
         fallback: fallingBack,
         discontinuity: mpegtsDiscontinuity,

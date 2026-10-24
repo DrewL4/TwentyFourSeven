@@ -115,6 +115,7 @@ export function plexVideoInfo(media: any): RemoteVideoInfo | undefined {
     bitDepth: num(video?.bitDepth),
     colorTrc: video?.colorTrc ?? null,
     dolbyVision: dv === true || dv === 1 || dv === "1" || /dovi/i.test(String(media.videoDynamicRange ?? "")),
+    dolbyVisionProfile: num(video?.DOVIProfile),
     height: num(media.height ?? video?.height),
     bitrateKbps: num(media.bitrate),
     audioCodec: media.audioCodec ?? null,

@@ -44,6 +44,8 @@ export type RemoteVideoInfo = {
   bitDepth?: number | null;
   colorTrc?: string | null;
   dolbyVision?: boolean | null;
+  /** Dolby Vision profile (5 has no HDR10 base layer). */
+  dolbyVisionProfile?: number | null;
   height?: number | null;
   bitrateKbps?: number | null;
   audioCodec?: string | null;

@@ -73,3 +73,9 @@ test("transcodes take only the main video and audio, in 8-bit, with 2 s keyframe
   assert.equal(own.filter((a) => a === "0:v:0").length, 0, "user's own -map wins");
   assert.equal(own.filter((a) => a === "-g").length, 1, "user's own -g wins");
 });
+
+test("Dolby Vision profile from Plex (DOVIProfile)", () => {
+  const p5 = { videoCodec: "hevc", Part: [{ Stream: [{ streamType: 1, codec: "hevc", bitDepth: 10, DOVIPresent: true, DOVIProfile: 5 }] }] };
+  assert.equal(plexVideoInfo(p5)!.dolbyVisionProfile, 5);
+  assert.equal(plexVideoInfo(hd)!.dolbyVisionProfile, null);
+});

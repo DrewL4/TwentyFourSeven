@@ -20,7 +20,7 @@ type FfprobeJson = {
     height?: number;
     bit_rate?: string;
     channels?: number;
-    side_data_list?: Array<{ side_data_type?: string }>;
+    side_data_list?: Array<{ side_data_type?: string; dv_profile?: number | string }>;
   }>;
   format?: { bit_rate?: string };
 };
@@ -31,6 +31,12 @@ function bitDepthFromPixFmt(pixFmt?: string | null): number | null {
   if (p) return Number(p[1]);
   const m = /(9|10|12|14|16)(le|be)$/i.exec(pixFmt);
   return m ? Number(m[1]) : 8;
+}
+
+function dvProfile(list?: Array<{ side_data_type?: string; dv_profile?: number | string }>): number | null {
+  const rec = list?.find((s) => /dovi|dolby vision/i.test(s.side_data_type || "") && s.dv_profile !== undefined);
+  const n = Number(rec?.dv_profile);
+  return rec && Number.isFinite(n) ? n : null;
 }
 
 /** The scan's stored probe, as video info (codec + bit depth only). */
@@ -59,6 +65,7 @@ export function videoInfoFromFfprobe(data: FfprobeJson): RemoteVideoInfo | undef
     bitDepth: Number.isFinite(raw) && raw > 0 ? raw : bitDepthFromPixFmt(v.pix_fmt),
     colorTrc: v.color_transfer ?? null,
     dolbyVision: !!v.side_data_list?.some((s) => /dovi|dolby vision/i.test(s.side_data_type || "")) || /dolby ?vision|dvh/i.test(v.profile || ""),
+    dolbyVisionProfile: dvProfile(v.side_data_list),
     height: v.height ?? null,
     bitrateKbps: kbps === null ? null : Math.round(kbps),
     audioCodec: a?.codec_name ?? null,
@@ -73,7 +80,7 @@ export function ffprobeVideo(file: string): Promise<FfprobeJson> {
       [
         "-v", "error",
         "-show_entries",
-        "stream=codec_type,codec_name,profile,pix_fmt,bits_per_raw_sample,color_transfer,height,bit_rate,channels:stream_side_data=side_data_type:format=bit_rate",
+        "stream=codec_type,codec_name,profile,pix_fmt,bits_per_raw_sample,color_transfer,height,bit_rate,channels:stream_side_data=side_data_type,dv_profile:format=bit_rate",
         "-of", "json",
         file,
       ],

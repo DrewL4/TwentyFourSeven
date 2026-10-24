@@ -6,6 +6,8 @@
  * video route then restarts the whole stream on CPU.
  */
 
+import { SDR_BT709_OUTPUT_ARGS, toneMapFilter, type HdrToneMap } from "./hdr-tone-map";
+
 export type LiveEncodeMode = "hardware" | "cpu-decode" | "software";
 
 export type FfmpegLiveSettings = {
@@ -244,6 +246,12 @@ export function buildLiveFfmpegArgs(
      * for video nobody is watching yet.
      */
     pace?: boolean;
+    /**
+     * HDR source to tone-map to SDR bt709 (CPU zscale + tonemap). Only the
+     * software and NVENC encoders apply it; the caller passes it only when
+     * the filters were found.
+     */
+    toneMap?: HdrToneMap | null;
   },
   env: LiveFfmpegEnv = {},
 ): string[] {
@@ -303,7 +311,12 @@ export function buildLiveFfmpegArgs(
   const codecImpliesGpu = family !== "software";
   const useHwDecode = options.mode === "hardware" && (checkboxOn || codecImpliesGpu || (useEnvironmentFallback && !!hwMethod && hwMethod !== "none" && hwMethod !== "cpu"));
 
+  // Tone mapping runs on the CPU, so frames must come back to system memory.
+  const browserCuda = !!options.browser && useHwDecode;
+  const toneMap =
+    options.toneMap && (family === "software" || family === "nvenc") && !browserCuda ? options.toneMap : null;
   const gpuFrames =
+    !toneMap &&
     env.gpuFrames === true &&
     useHwDecode &&
     family === "nvenc" &&
@@ -419,13 +432,18 @@ export function buildLiveFfmpegArgs(
     // Frames here are in system memory, so convert to 8-bit 4:2:0. 8-bit input
     // already matches one of the two and passes through unchanged.
     const filters: string[] = [];
-    if (scaleTo) filters.push(`scale=${scaleTo}`);
-    // (Browser + CUDA decode stays filter-free, see above; a 10-bit failure
-    // there falls back to CPU decode, which gets this filter.)
-    const browserCuda = options.browser && useHwDecode;
-    if ((family === "software" || family === "nvenc") && !browserCuda) filters.push("format=yuv420p|nv12");
+    if (toneMap) {
+      // HDR: tone-map to SDR bt709 (scales too) and ends in 8-bit yuv420p.
+      filters.push(toneMapFilter(toneMap, scaleTo));
+    } else {
+      if (scaleTo) filters.push(`scale=${scaleTo}`);
+      // (Browser + CUDA decode stays filter-free, see above; a 10-bit failure
+      // there falls back to CPU decode, which gets this filter.)
+      if ((family === "software" || family === "nvenc") && !browserCuda) filters.push("format=yuv420p|nv12");
+    }
     if (filters.length) args.push("-vf", filters.join(","));
   }
+  if (toneMap) args.push(...SDR_BT709_OUTPUT_ARGS);
 
   args.push("-c:a", options.browser ? "aac" : settings?.audioCodec || "aac");
   if (options.browser) {

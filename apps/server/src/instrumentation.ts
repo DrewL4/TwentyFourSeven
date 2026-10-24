@@ -4,8 +4,9 @@ export async function register() {
     
     // Use dynamic import to avoid loading Prisma-dependent code in Edge Runtime
     // Probe FFmpeg in the background so the first play doesn't wait on it.
-    const { warmFfmpegCapabilities } = await import('./lib/ffmpeg-capabilities');
+    const { warmFfmpegCapabilities, warmFfmpegToneMap } = await import('./lib/ffmpeg-capabilities');
     void warmFfmpegCapabilities();
+    void warmFfmpegToneMap();
     const { initSqlitePragmas } = await import('./lib/prisma');
     await initSqlitePragmas();
     const { StartupService } = await import('./lib/startup');
