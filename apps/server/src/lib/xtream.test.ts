@@ -97,3 +97,19 @@ test("ESPG caller check: only active 'espg' app tokens, cached by hash", async (
   assert.equal(bearer(new Headers({ authorization: "Token abc" })), "abc");
   assert.equal(bearer(new Headers()), null);
 });
+
+test("user_info.max_connections is the person's 24/7 allowance", async () => {
+  const { userInfo } = await import("./xtream");
+  const { linkedLimit, standaloneLimit } = await import("./viewer-limit");
+  const now = new Date(1_800_000_000_000);
+  const login = { username: "u", password: "p" };
+  // John linked: 3 + 4 TV connections, 5 playing -> 3.
+  assert.equal(userInfo(login, now, linkedLimit({ tvConnections: 7, tvActive: 5 }).allowed).max_connections, "3");
+  assert.equal(userInfo(login, now, linkedLimit({ tvConnections: 0, tvActive: 0 }).allowed).max_connections, "1");
+  assert.equal(userInfo(login, now, standaloneLimit(undefined).allowed).max_connections, "2");
+  assert.equal(userInfo(login, now, standaloneLimit(5).allowed).max_connections, "5");
+  assert.equal(userInfo(login, now, 0).max_connections, "0");
+  // Unknown or broken -> the old answer, 1.
+  assert.equal(userInfo(login, now).max_connections, "1");
+  assert.equal(userInfo(login, now, NaN).max_connections, "1");
+});

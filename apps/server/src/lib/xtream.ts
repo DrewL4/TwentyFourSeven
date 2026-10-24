@@ -87,7 +87,9 @@ export function epgListings(channel: XtreamChannel, programs: XtreamProgram[], n
   });
 }
 
-export function userInfo(login: { username: string; password: string }, now: Date) {
+/** maxConnections: this person's 24/7 stream allowance (see viewer-limit); 1 when it can't be worked out. */
+export function userInfo(login: { username: string; password: string }, now: Date, maxConnections = 1) {
+  const max = Number.isInteger(maxConnections) && maxConnections >= 0 ? maxConnections : 1;
   return {
     username: login.username,
     password: login.password,
@@ -98,7 +100,7 @@ export function userInfo(login: { username: string; password: string }, now: Dat
     is_trial: "0",
     active_cons: "0",
     created_at: String(Math.floor(now.getTime() / 1000)),
-    max_connections: "1",
+    max_connections: String(max),
     allowed_output_formats: ["ts", "m3u8"],
   };
 }

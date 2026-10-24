@@ -3,12 +3,25 @@ import { prisma } from "@/lib/prisma";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
 import { createPlayerImageLinker } from "@/lib/plex-image";
+import { limitForViewer, resolveViewer, viewerFromAuth } from "@/lib/viewer-limit";
 import { epgListings, liveCategories, liveStreams, serverInfo, userInfo, type XtreamChannel } from "@/lib/xtream";
 
 export const dynamic = "force-dynamic";
 
 const json = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
+
+/** The person's 24/7 stream allowance for user_info.max_connections (1 if it can't be worked out). */
+async function maxConnectionsFor(auth: Parameters<typeof viewerFromAuth>[0]): Promise<number> {
+  try {
+    const who = viewerFromAuth(auth);
+    if (!who) return 1;
+    return (await limitForViewer(await resolveViewer(who))).allowed;
+  } catch (err) {
+    console.warn("player_api: couldn't work out the 24/7 stream allowance", err instanceof Error ? err.message : err);
+    return 1;
+  }
+}
 
 /**
  * Xtream Codes API for IPTV apps (TiviMate, IPTV Smarters…). Uses the same
@@ -29,7 +42,7 @@ export async function GET(request: NextRequest) {
   const action = p.get("action") || "";
 
   if (!action) {
-    return json({ user_info: userInfo({ username, password }, now), server_info: serverInfo(baseUrl, now) });
+    return json({ user_info: userInfo({ username, password }, now, await maxConnectionsFor(access.auth)), server_info: serverInfo(baseUrl, now) });
   }
 
   const channels = (await prisma.channel.findMany({
