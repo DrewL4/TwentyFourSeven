@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { createPlayerImageLinker } from "@/lib/plex-image";
 import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
+import { keyParam } from "@/lib/espg-service-access";
 
 export async function GET(request: NextRequest) {
   const access = await authorizePlayer(request, { scope: "guide", resource: "m3u" });
@@ -115,7 +116,7 @@ export async function GET(request: NextRequest) {
     );
     
     // Include EPG URL hints for players that support different keys
-    const guideUrl = `${baseUrl}/media.xml?k=${links.k}`;
+    const guideUrl = links.k ? `${baseUrl}/media.xml?k=${links.k}` : `${baseUrl}/media.xml`;
     let m3u = `#EXTM3U url-tvg="${guideUrl}" x-tvg-url="${guideUrl}"\n`;
     
     for (const channel of channels) {
@@ -145,14 +146,14 @@ export async function GET(request: NextRequest) {
         extinf += ` catchup="vod"`;
         extinf += ` catchup-days="${catchupDays}"`;
         // {start} = programme start (Unix s); {timestamp} = player wall clock — matches XMLTV template
-        extinf += ` catchup-source="${baseUrl}/api/video?channel=${channel.number}&catchup=true&utc={start}&lutc={timestamp}&k=${links.k}"`;
+        extinf += ` catchup-source="${baseUrl}/api/video?channel=${channel.number}&catchup=true&utc={start}&lutc={timestamp}${keyParam(links.k)}"`;
       }
       
       extinf += `,${channel.name}\n`;
       m3u += extinf;
       
       // Use a single video endpoint that will handle the streaming
-      m3u += `${baseUrl}/api/video?channel=${channel.number}&k=${links.k}\n`;
+      m3u += `${baseUrl}/api/video?channel=${channel.number}${keyParam(links.k)}\n`;
     }
 
     return new NextResponse(m3u, {

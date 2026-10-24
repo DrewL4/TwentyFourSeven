@@ -15,6 +15,8 @@ import {
   type LinkScope,
 } from "./link-security";
 import { playlistLogins, type Login } from "./playlist-login";
+import { isEspgCaller } from "./espg-caller";
+import { ESPG_SERVICE_IMAGE_PASS_SECONDS, ESPG_SERVICE_SUBJECT, espgServiceCaller } from "./espg-service-access";
 
 /**
  * Who may open a stream, guide or image link:
@@ -23,7 +25,10 @@ import { playlistLogins, type Login } from "./playlist-login";
  *  3. a device key that has not been revoked (`k=`), or
  *  4. a playlist login (the same one ESPG uses): `username=` + `password=`,
  *     HTTP Basic, or the sealed form we put in links we hand out (`k=pl1.…`), or
- *  5. a device on the home network, while "home network without a key" is on.
+ *  5. a device on the home network, while "home network without a key" is on, or
+ *  6. ESPG's source sync (playlist and guide only): ESPG's WatchTower app token
+ *     in `Authorization: Bearer`, confirmed with WatchTower. Links it gets back
+ *     carry no key; ESPG signs each channel per viewer.
  * Anything else counts as a failed check; too many from one address → 429.
  */
 
@@ -67,7 +72,7 @@ async function keyIsActive(id: string): Promise<boolean> {
 }
 
 export type PlayerAuth = {
-  via: "session" | "token" | "key" | "lan" | "login";
+  via: "session" | "token" | "key" | "lan" | "login" | "service";
   /** Key id for links we hand back to this client (M3U, lineup). */
   keyId: string | null;
   userId: string | null;
@@ -120,6 +125,10 @@ export async function authorizePlayer(
         return { ok: true, auth: { via: "token", keyId: res.sub.startsWith("key:") ? res.sub.slice(4) : null, userId: res.sub.startsWith("user:") ? res.sub.slice(5) : null } };
       }
     }
+  }
+  const service = login ? "absent" : await espgServiceCaller(request.headers, check, isEspgCaller);
+  if (service === "service") {
+    return { ok: true, auth: { via: "service", keyId: null, userId: null } };
   }
   if (login) {
     const res = await playlistLogins.check(login);
@@ -178,7 +187,11 @@ export async function authorizePlayer(
   return {
     ok: false,
     response: new NextResponse(
-      status === 403 ? "This link has expired or was turned off. Get a new link in TwentyFourSeven Settings." : "A player link with a key is required.",
+      status === 403
+        ? "This link has expired or was turned off. Get a new link in TwentyFourSeven Settings."
+        : service === "refused"
+          ? "That app token isn't ESPG's (or WatchTower couldn't confirm it)."
+          : "A player link with a key is required.",
       { status, headers: { "Cache-Control": "no-store" } },
     ),
   };
@@ -190,6 +203,11 @@ export async function authorizePlayer(
  * again (and access removed in ESPG stops it) without a password in the URL.
  */
 export async function linkParamsFor(a: PlayerAuth) {
+  if (a.via === "service") {
+    // ESPG: no key in links (they end up in ESPG's database and playlists);
+    // channels are signed per viewer, artwork carries an image-only pass.
+    return { k: "", imagePass: signLink("image", "*", ESPG_SERVICE_SUBJECT, ESPG_SERVICE_IMAGE_PASS_SECONDS) };
+  }
   if (a.via === "login" && a.login) {
     return {
       k: sealLogin(a.login),

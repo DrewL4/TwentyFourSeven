@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PlexService } from "@/lib/plex-service";
 import { TimingService } from "@/lib/timing-service";
 import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
+import { keyParam } from "@/lib/espg-service-access";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
 
 export async function GET(request: NextRequest) {
@@ -108,7 +109,7 @@ export async function GET(request: NextRequest) {
           title = `${episode.show.title} - ${episode.title}`;
           
           if (server.type === 'LOCAL' || (server.type === 'PLEX' && server.token)) {
-            videoUrl = `${publicBase}/api/video?channel=${channelNumber}&k=${links.k}`;
+            videoUrl = `${publicBase}/api/video?channel=${channelNumber}${keyParam(links.k)}`;
           }
         } else if (program.movie) {
           const movie = program.movie;
@@ -116,7 +117,7 @@ export async function GET(request: NextRequest) {
           title = movie.title;
           
           if (server.type === 'LOCAL' || (server.type === 'PLEX' && server.token)) {
-            videoUrl = `${publicBase}/api/video?channel=${channelNumber}&k=${links.k}`;
+            videoUrl = `${publicBase}/api/video?channel=${channelNumber}${keyParam(links.k)}`;
           }
         }
         
