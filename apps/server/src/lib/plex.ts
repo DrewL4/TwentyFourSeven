@@ -83,6 +83,13 @@ export type PlexMediaPart = { partKey: string; duration: number; media?: RemoteV
 
 const mediaPartCache = new Map<string, PlexMediaPart & { expires: number }>();
 const mediaPartInflight = new Map<string, Promise<PlexMediaPart | null>>();
+const MEDIA_PART_SWEEP_MS = 10 * 60 * 1000;
+let nextMediaPartSweep = 0;
+
+/** Entries in the media part cache, expired ones included (for tests). */
+export function mediaPartCacheSize(): number {
+  return mediaPartCache.size;
+}
 
 function mediaPartCacheKey(uri: string, ratingKey: string): string {
   return `${uri}|${ratingKey}`;
@@ -128,9 +135,18 @@ function storeMediaPartCache(
   ratingKey: string,
   part: PlexMediaPart,
 ): void {
+  const now = Date.now();
+  if (now >= nextMediaPartSweep) {
+    // Expired entries are only dropped when the same item is read again, so
+    // drop the rest here or every item ever played stays in memory.
+    nextMediaPartSweep = now + MEDIA_PART_SWEEP_MS;
+    for (const [key, entry] of mediaPartCache) {
+      if (entry.expires <= now) mediaPartCache.delete(key);
+    }
+  }
   mediaPartCache.set(mediaPartCacheKey(uri, ratingKey), {
     ...part,
-    expires: Date.now() + MEDIA_PART_TTL_MS,
+    expires: now + MEDIA_PART_TTL_MS,
   });
 }
 
