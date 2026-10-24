@@ -30,7 +30,13 @@ import {
   type ViewerLimit,
 } from '@/lib/viewer-limit';
 import { resolveLocalStream } from '@/lib/local-media/resolve';
-import { chooseLocalPlayback, type LocalProbe } from '@/lib/local-media/playback';
+import {
+  chooseLocalPlayback,
+  copyRemuxBlocker,
+  describeRemoteVideo,
+  type LocalProbe,
+  type RemoteVideoInfo,
+} from '@/lib/local-media/playback';
 import {
   buildCopyFfmpegArgs,
   buildLiveFfmpegArgs,
@@ -200,7 +206,10 @@ export async function GET(request: NextRequest) {
   //   • `utc`   – Unix epoch seconds (IPTV player standard)
   //   • `lutc`  – "live" Unix epoch (current wall-clock when player made request)
   const isCatchup = request.nextUrl.searchParams.get('catchup') === 'true';
-  const useCopyRemux = request.nextUrl.searchParams.get('copy') === '1';
+  const copyRequested = request.nextUrl.searchParams.get('copy') === '1';
+  // copy=1 is a request: a Plex file whose video players can't take as-is
+  // (10-bit / HDR / Dolby Vision / very high bitrate) is transcoded instead.
+  let useCopyRemux = copyRequested;
   const useBrowser = request.nextUrl.searchParams.get('browser') === '1';
   const timeParam = request.nextUrl.searchParams.get('time');
   const utcParam = request.nextUrl.searchParams.get('utc');
@@ -383,11 +392,22 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // What Plex says about the video (cached with the file part, no extra request).
+    let remoteVideo: RemoteVideoInfo | undefined;
+    if (!isLocal && server.token) {
+      try {
+        remoteVideo = (await new PlexAPI({ uri: server.url }).getMediaParts(server.url, server.token, programInfo.ratingKey))?.media;
+      } catch {
+        remoteVideo = undefined;
+      }
+    }
+    const copyBlocker = copyRequested && !isLocal && !useBrowser ? copyRemuxBlocker(remoteVideo) : null;
+
     // Local files: copy compatible video as-is (no encode); otherwise transcode.
-    const localAuto = isLocal && !useCopyRemux;
+    const localAuto = isLocal && !copyRequested;
     const initialLocalCopy =
       localAuto && chooseLocalPlayback(localProbe ?? null, { browser: useBrowser }).copyVideo;
-    const countsAsCopy = (useCopyRemux && !useBrowser) || initialLocalCopy;
+    let countsAsCopy = (copyRequested && !useBrowser) || initialLocalCopy;
 
     // Await everything first: from the counts below to createSession nothing
     // yields, so two players can't both take the last slot.
@@ -399,6 +419,7 @@ export async function GET(request: NextRequest) {
         clientIp,
       });
       if (shouldRefuseViewer(active, viewer.limit)) {
+        console.warn(`[Video] refused channel=${channelNumber} status=429 viewer=${active}/${viewer.limit.allowed}`);
         return NextResponse.json(
           { error: viewerLimitMessage(viewer.limit, active) },
           { status: 429, headers: { 'Cache-Control': 'no-store' } },
@@ -406,6 +427,24 @@ export async function GET(request: NextRequest) {
       }
     }
     const streamLimit = streamSettings?.concurrentStreams ?? 1;
+    if (copyBlocker) {
+      const transcodeFull = shouldRejectNewTranscode(
+        streamMonitorService.getActiveSessions(),
+        channelNumber,
+        programInfo.ratingKey,
+        streamLimit,
+        !isCatchup,
+        false,
+      );
+      if (transcodeFull) {
+        // Better a copy the player may struggle with than no picture at all.
+        console.warn(`[Video] copy=1 kept channel=${channelNumber}: ${copyBlocker}, but every transcode slot is in use`);
+      } else {
+        console.warn(`[Video] copy=1 ignored channel=${channelNumber}: ${copyBlocker}; transcoding instead`);
+        useCopyRemux = false;
+        countsAsCopy = false;
+      }
+    }
     if (
       shouldRejectNewTranscode(
         streamMonitorService.getActiveSessions(),
@@ -416,6 +455,7 @@ export async function GET(request: NextRequest) {
         countsAsCopy,
       )
     ) {
+      console.warn(`[Video] refused channel=${channelNumber} status=503 transcodes=${streamLimit}`);
       return NextResponse.json(
         {
           error: `Maximum concurrent streams (${streamLimit}) reached. Try again later.`,
@@ -1042,7 +1082,7 @@ export async function GET(request: NextRequest) {
     encodeMode = preferredMode;
     await startFfmpeg(encodeMode);
     console.log(
-      `[Video] start channel=${channelNumber} mode=${useBrowser ? 'browser' : useCopyRemux ? 'copy' : 'transcode'}${isLocal ? ' source=local' : ''} encode=${autoCopyActive ? 'copy' : encodeMode} session=${sessionId}${isCatchup ? ' catchup' : ''}`,
+      `[Video] start channel=${channelNumber} mode=${useBrowser ? 'browser' : useCopyRemux ? 'copy' : 'transcode'}${isLocal ? ' source=local' : ''} encode=${autoCopyActive ? 'copy' : encodeMode} session=${sessionId}${isCatchup ? ' catchup' : ''}${remoteVideo ? ` video="${describeRemoteVideo(remoteVideo)}"` : ''}`,
     );
 
     // Handle client abort / stream close (IPTV clients often drop without a

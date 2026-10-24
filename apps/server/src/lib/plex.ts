@@ -1,3 +1,4 @@
+import type { RemoteVideoInfo } from "./local-media/playback";
 import type { NextConfig } from "next";
 
 interface PlexOptions {
@@ -78,27 +79,53 @@ interface PlexEpisode extends PlexMedia {
 }
 
 const MEDIA_PART_TTL_MS = 6 * 60 * 60 * 1000;
-const mediaPartCache = new Map<string, { partKey: string; duration: number; expires: number }>();
-const mediaPartInflight = new Map<string, Promise<{ partKey: string; duration: number } | null>>();
+export type PlexMediaPart = { partKey: string; duration: number; media?: RemoteVideoInfo };
+
+const mediaPartCache = new Map<string, PlexMediaPart & { expires: number }>();
+const mediaPartInflight = new Map<string, Promise<PlexMediaPart | null>>();
 
 function mediaPartCacheKey(uri: string, ratingKey: string): string {
   return `${uri}|${ratingKey}`;
 }
 
-function readMediaPartCache(uri: string, ratingKey: string): { partKey: string; duration: number } | null {
+function readMediaPartCache(uri: string, ratingKey: string): PlexMediaPart | null {
   const cached = mediaPartCache.get(mediaPartCacheKey(uri, ratingKey));
   if (!cached) return null;
   if (cached.expires <= Date.now()) {
     mediaPartCache.delete(mediaPartCacheKey(uri, ratingKey));
     return null;
   }
-  return { partKey: cached.partKey, duration: cached.duration };
+  return { partKey: cached.partKey, duration: cached.duration, media: cached.media };
+}
+
+function num(value: unknown): number | null {
+  const n = typeof value === "number" ? value : parseInt(String(value ?? ""), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Codec facts from a Plex Media entry and its first video Stream (JSON form). */
+export function plexVideoInfo(media: any): RemoteVideoInfo | undefined {
+  if (!media || typeof media !== "object") return undefined;
+  const streams: any[] = Array.isArray(media.Part?.[0]?.Stream) ? media.Part[0].Stream : [];
+  const video = streams.find((s) => Number(s?.streamType) === 1);
+  const dv = video?.DOVIPresent;
+  return {
+    videoCodec: media.videoCodec ?? video?.codec ?? null,
+    videoProfile: media.videoProfile ?? video?.profile ?? null,
+    bitDepth: num(video?.bitDepth),
+    colorTrc: video?.colorTrc ?? null,
+    dolbyVision: dv === true || dv === 1 || dv === "1" || /dovi/i.test(String(media.videoDynamicRange ?? "")),
+    height: num(media.height ?? video?.height),
+    bitrateKbps: num(media.bitrate),
+    audioCodec: media.audioCodec ?? null,
+    audioChannels: num(media.audioChannels),
+  };
 }
 
 function storeMediaPartCache(
   uri: string,
   ratingKey: string,
-  part: { partKey: string; duration: number },
+  part: PlexMediaPart,
 ): void {
   mediaPartCache.set(mediaPartCacheKey(uri, ratingKey), {
     ...part,
@@ -522,7 +549,7 @@ export class PlexAPI {
   /**
    * Get media parts for a rating key
    */
-  async getMediaParts(uri: string, token: string, ratingKey: string): Promise<{ partKey: string; duration: number } | null> {
+  async getMediaParts(uri: string, token: string, ratingKey: string): Promise<PlexMediaPart | null> {
     const cached = readMediaPartCache(uri, ratingKey);
     if (cached) {
       return cached;
@@ -545,7 +572,7 @@ export class PlexAPI {
     }
   }
 
-  private async fetchMediaParts(uri: string, token: string, ratingKey: string): Promise<{ partKey: string; duration: number } | null> {
+  private async fetchMediaParts(uri: string, token: string, ratingKey: string): Promise<PlexMediaPart | null> {
     try {
       console.log(`[PlexAPI] Getting media parts for ${ratingKey} from ${uri}`);
       
@@ -573,7 +600,7 @@ export class PlexAPI {
 
         if (partKey && !isNaN(duration)) {
           console.log(`[PlexAPI] Found part via JSON: key=${partKey}, duration=${duration}`);
-          return { partKey, duration };
+          return { partKey, duration, media: plexVideoInfo(data.MediaContainer.Metadata[0].Media[0]) };
         }
       }
 

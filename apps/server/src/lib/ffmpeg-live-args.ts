@@ -351,6 +351,12 @@ export function buildLiveFfmpegArgs(
   }
   pushWords(args, settings?.inputOptions);
   args.push("-i", streamUrl);
+  // First video + first audio only. Without this FFmpeg also tries to carry
+  // a movie's PGS subtitles / attachments into MPEG-TS, and picks streams by
+  // its own rules instead of the main ones. Users' own output options may map.
+  if (!hasFlag(settings?.outputOptions, "-map")) {
+    args.push("-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn");
+  }
 
   args.push("-c:v", videoCodec);
 
@@ -384,6 +390,11 @@ export function buildLiveFfmpegArgs(
       ? (configuredThreads > 0 ? Math.min(configuredThreads, 2) : 2)
       : (configuredThreads > 0 ? configuredThreads : 2);
     args.push("-threads", `${threads}`);
+    // x264's default is a keyframe every 250 frames (~10 s): a viewer joining
+    // a shared channel hears sound but waits that long for a picture.
+    if (!hasFlag(settings?.outputOptions, "-g")) {
+      args.push("-g", options.browser ? "48" : "60");
+    }
     if (settings?.videoCrf != null && !useEnvironmentFallback && !options.fallback) {
       args.push("-crf", `${settings.videoCrf}`);
     }
@@ -402,8 +413,18 @@ export function buildLiveFfmpegArgs(
     // nv12 also turns 10-bit HEVC (p010) into something h264_nvenc accepts.
     const size = scaleTo ? `${scaleTo.replace("x", ":")}:` : "";
     args.push("-vf", `scale_cuda=${size}format=nv12`);
-  } else if (scaleTo) {
-    args.push("-vf", `scale=${scaleTo}`);
+  } else {
+    // 10-bit / HDR sources: NVENC H.264 can't take 10-bit frames (FFmpeg exits)
+    // and libx264 would make High 10 that TVs and browsers can't decode.
+    // Frames here are in system memory, so convert to 8-bit 4:2:0. 8-bit input
+    // already matches one of the two and passes through unchanged.
+    const filters: string[] = [];
+    if (scaleTo) filters.push(`scale=${scaleTo}`);
+    // (Browser + CUDA decode stays filter-free, see above; a 10-bit failure
+    // there falls back to CPU decode, which gets this filter.)
+    const browserCuda = options.browser && useHwDecode;
+    if ((family === "software" || family === "nvenc") && !browserCuda) filters.push("format=yuv420p|nv12");
+    if (filters.length) args.push("-vf", filters.join(","));
   }
 
   args.push("-c:a", options.browser ? "aac" : settings?.audioCodec || "aac");

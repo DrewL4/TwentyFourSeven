@@ -150,7 +150,7 @@ describe("nvenc live args", () => {
     const settings = { ...unraidSettings, videoCodec: "h264_nvenc", targetResolution: "1920x1080" };
     const cpuScale = buildLiveFfmpegArgs("http://plex/file", 0, settings, { mode: "hardware" });
     assert.equal(cpuScale.includes("-hwaccel_output_format"), false);
-    assert.equal(cpuScale[cpuScale.indexOf("-vf") + 1], "scale=1920x1080");
+    assert.equal(cpuScale[cpuScale.indexOf("-vf") + 1], "scale=1920x1080,format=yuv420p|nv12");
 
     const gpu = buildLiveFfmpegArgs("http://plex/file", 0, settings, { mode: "hardware" }, { gpuFrames: true });
     assert.equal(gpu[gpu.indexOf("-hwaccel_output_format") + 1], "cuda");
