@@ -210,12 +210,16 @@ async function buildGuideFile(): Promise<void> {
   }
   } // Close the for (const channel of channels) loop
 
-  // Use array-based XML building for much better performance
+  // Lines go to disk in batches as they are built, so the guide never sits in memory whole.
+  await writeXmlTvCacheStreaming(async (write) => {
   const xmltvParts = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE tv SYSTEM "xmltv.dtd">',
     '<tv generator-info-name="TwentyFourSeven" generator-info-url="https://github.com/vexorian/TwentyFourSeven" source-info-name="TwentyFourSeven">'
   ];
+  const flush = async () => {
+    if (xmltvParts.length) await write(xmltvParts.splice(0).join("\n"));
+  };
 
   // Build a map of channel catchup settings for use in programme elements
   const channelCatchupMap = new Map<string, { enabled: boolean; windowHours: number }>();
@@ -355,9 +359,6 @@ async function buildGuideFile(): Promise<void> {
 
       xmltvParts.push(...episodeParts.filter((part): part is string => part !== null));
 
-      // Debug: Log progress every 100 programs
-      if (xmltvParts.length % 100 === 0) {
-      }
     } else if (program.movie) {
       const movie = program.movie;
 
@@ -454,9 +455,6 @@ async function buildGuideFile(): Promise<void> {
 
       xmltvParts.push(...movieParts.filter((part): part is string => part !== null));
 
-      // Debug: Log progress every 100 programs
-      if (xmltvParts.length % 100 === 0) {
-      }
       // Close the programme element for movies
     }
     // Close the if/else if program type block
@@ -489,13 +487,10 @@ async function buildGuideFile(): Promise<void> {
     }
 
     xmltvParts.push('  </programme>');
+    if (xmltvParts.length >= 2000) await flush();
   } // Close the for (const program of programs) loop
   xmltvParts.push('</tv>');
-
-  await writeXmlTvCacheStreaming(async (write) => {
-    for (const part of xmltvParts) {
-      write(part);
-    }
+  await flush();
   });
 }
 

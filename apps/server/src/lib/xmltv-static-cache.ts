@@ -1,6 +1,7 @@
 import { createReadStream, createWriteStream } from "fs";
 import { mkdir, readFile, rename, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
+import { once } from "events";
 import { Readable } from "stream";
 import { finished } from "stream/promises";
 
@@ -68,14 +69,15 @@ export async function writeXmlTvCache(xml: string): Promise<void> {
 
 /** Stream XMLTV to disk to avoid holding the full guide string in memory. */
 export async function writeXmlTvCacheStreaming(
-  writeLines: (write: (line: string) => void) => Promise<void>,
+  writeLines: (write: (line: string) => Promise<void>) => Promise<void>,
 ): Promise<void> {
   const filePath = getXmlTvCachePath();
   await mkdir(path.dirname(filePath), { recursive: true });
   const tmp = tmpPathFor(filePath);
   const stream = createWriteStream(tmp, { encoding: "utf8" });
-  const write = (line: string) => {
-    stream.write(`${line}\n`);
+  // Wait for the disk to catch up instead of queueing the whole guide in the stream's buffer.
+  const write = async (line: string) => {
+    if (!stream.write(`${line}\n`)) await once(stream, "drain");
   };
 
   try {
@@ -84,7 +86,9 @@ export async function writeXmlTvCacheStreaming(
     await finished(stream);
     await rename(tmp, filePath);
   } catch (error) {
+    // The file may still be opening; remove it only once the stream has closed.
     stream.destroy();
+    await finished(stream).catch(() => undefined);
     await unlink(tmp).catch(() => undefined);
     throw error;
   }
