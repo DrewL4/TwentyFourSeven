@@ -4,7 +4,6 @@ import {
   getXmlTvCachePath,
   openXmlTvCacheStreamIfFresh,
   replaceBaseUrlPlaceholder,
-  toPlaceholderIconUrl,
   writeXmlTvCacheStreaming,
   XMLTV_BASE_URL_PLACEHOLDER,
   XMLTV_IMAGE_PASS_PLACEHOLDER,
@@ -12,9 +11,10 @@ import {
   xmlTvCacheGeneration,
 } from "@/lib/xmltv-static-cache";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
-import { createPlayerImageLinker, parsePlexImageReference } from "@/lib/plex-image";
+import { createPlayerImageLinker } from "@/lib/plex-image";
 import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
 import { createBuildOnce } from "@/lib/xmltv-build-once";
+import { channelIconsForGuide, isAbsoluteImageUrl } from "@/lib/xmltv-channel-icons";
 
 /** Guides cached by an older build lack the per-client link placeholders; rebuild once per boot. */
 let rebuiltSinceBoot = false;
@@ -75,8 +75,7 @@ async function buildGuideFile(): Promise<void> {
   const channels = await prisma.channel.findMany({ where: { stealth: false }, orderBy: { number: 'asc' } });
 
   // Helper to ensure absolute URLs
-  const isAbsolute = (url?: string | null) =>
-    !!url && (/^(https?:)?\/\//i.test(url) || url.startsWith("/images/local/"));
+  const isAbsolute = isAbsoluteImageUrl;
   // Players load artwork without a session, so Plex artwork links are signed.
   const playerImage = createPlayerImageLinker(
     await prisma.mediaServer.findMany({ where: { type: 'PLEX' }, select: { url: true, token: true } }),
@@ -167,48 +166,8 @@ async function buildGuideFile(): Promise<void> {
     console.warn('💡 This indicates these channels need program generation. Run the "Ensure All Channels Have Programming" API endpoint.');
   }
 
-  // Use pre-cached channel icons for maximum performance
-  const channelIconMap = new Map<string, string>();
-
-  // Process channel icons using cached/optimized data
-  for (const channel of channels) {
-    // Use direct channel icon if available
-    if (isAbsolute(channel.icon)) {
-      try {
-        const u = new URL(channel.icon as string);
-        channelIconMap.set(channel.id, toPlexProxy(baseUrl, u.toString()));
-        continue;
-      } catch {}
-    }
-
-    // Use pre-cached Plex collection artwork if available
-  if (channel.cachedCollectionIcon) {
-    channelIconMap.set(
-      channel.id,
-      parsePlexImageReference(channel.cachedCollectionIcon)
-        ? toPlexProxy(baseUrl, channel.cachedCollectionIcon)
-        : toPlaceholderIconUrl(channel.cachedCollectionIcon)
-    );
-    continue;
-  }
-
-  // For now, use direct channel icon to test the system
-  // TODO: Implement collection icon caching in channel creation
-  if (isAbsolute(channel.icon)) {
-    try {
-      const u = new URL(channel.icon as string);
-      channelIconMap.set(channel.id, toPlexProxy(baseUrl, u.toString()));
-      continue;
-    } catch {}
-  }
-
-  // Fallback to programme poster (very fast)
-  const program = programs.find(p => p.channelId === channel.id);
-  const poster = program?.episode?.show?.poster || program?.movie?.poster || null;
-  if (isAbsolute(poster)) {
-    channelIconMap.set(channel.id, toPlexProxy(baseUrl, poster as string));
-  }
-  } // Close the for (const channel of channels) loop
+  // Channel icons: own icon, then collection artwork, then the first programme's poster.
+  const channelIconMap = channelIconsForGuide(channels, programs, (url) => toPlexProxy(baseUrl, url));
 
   // Lines go to disk in batches as they are built, so the guide never sits in memory whole.
   await writeXmlTvCacheStreaming(async (write) => {
