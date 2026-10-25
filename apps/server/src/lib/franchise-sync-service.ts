@@ -497,57 +497,6 @@ export async function syncAllFranchises(): Promise<FranchiseSyncResult[]> {
   return results;
 }
 
-/** @deprecated Use syncAllFranchises */
-export const syncAllBuiltinFranchises = syncAllFranchises;
-
-export async function onLibraryMovieUpdated(movieId: string): Promise<void> {
-  const movie = await prisma.mediaMovie.findUnique({
-    where: { id: movieId },
-    select: { id: true, tmdbId: true },
-  });
-  if (!movie?.tmdbId) return;
-
-  const franchises = await prisma.franchise.findMany({
-    select: { id: true, slug: true },
-  });
-
-  for (const franchise of franchises) {
-    const entry = await prisma.franchiseEntry.findFirst({
-      where: { franchiseId: franchise.id, tmdbId: movie.tmdbId },
-    });
-    if (!entry) continue;
-
-    await prisma.franchiseEntry.update({
-      where: { id: entry.id },
-      data: { movieId: movie.id },
-    });
-
-    const channels = await prisma.channel.findMany({
-      where: {
-        OR: [
-          { franchiseId: franchise.id },
-          {
-            autoSortMethod: {
-              in: [
-                franchiseSortMethodForSlug(franchise.slug),
-                ...Object.entries(LEGACY_TIMELINE_SORT_ALIASES)
-                  .filter(([, s]) => s === franchise.slug)
-                  .map(([legacy]) => legacy),
-              ],
-            },
-          },
-        ],
-        channelMovies: { some: { movieId: movie.id } },
-      },
-      select: { id: true },
-    });
-
-    for (const ch of channels) {
-      await applyFranchiseSortToChannel(ch.id, franchise.slug);
-    }
-  }
-}
-
 export function parseFranchiseSlugFromChannelSort(autoSortMethod: string | null | undefined): string | null {
   if (!autoSortMethod) return null;
   return parseFranchiseSlugFromSortMethod(autoSortMethod);
