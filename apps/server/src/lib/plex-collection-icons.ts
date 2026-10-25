@@ -5,6 +5,8 @@
  * by every channel, so building the playlist costs one request per library instead of
  * one per library per channel.
  */
+import { plexKeySegment } from "./plex-keys";
+
 export type PlexLibraryRef = { url: string; token: string; key: string };
 type Directory = { title?: string; thumb?: string };
 
@@ -24,7 +26,7 @@ export function createCollectionIconResolver(opts: {
     if (!pending) {
       pending = (async () => {
         try {
-          const res = await fetchImpl(`${lib.url}/library/sections/${lib.key}/collections`, {
+          const res = await fetchImpl(`${lib.url}/library/sections/${plexKeySegment(lib.key)}/collections`, {
             headers: { Accept: 'application/json', 'X-Plex-Token': lib.token },
           });
           if (!res.ok) return null;

@@ -1,3 +1,4 @@
+import { plexKeySegment } from "./plex-keys";
 import type { RemoteVideoInfo } from "./local-media/playback";
 import type { NextConfig } from "next";
 
@@ -384,7 +385,7 @@ export class PlexAPI {
    * Get media items from a library
    */
   async getLibraryContent(uri: string, token: string, libraryKey: string, type?: string): Promise<PlexMedia[]> {
-    let url = `${uri}/library/sections/${libraryKey}/all`;
+    let url = `${uri}/library/sections/${plexKeySegment(libraryKey)}/all`;
     if (type) {
       url += `?type=${type}`;
     }
@@ -408,7 +409,7 @@ export class PlexAPI {
    * Get episodes for a TV show
    */
   async getShowEpisodes(uri: string, token: string, showKey: string): Promise<PlexEpisode[]> {
-    const response = await fetch(`${uri}/library/metadata/${showKey}/allLeaves`, {
+    const response = await fetch(`${uri}/library/metadata/${plexKeySegment(showKey)}/allLeaves`, {
       headers: {
         ...this.headers,
         'X-Plex-Token': token
@@ -593,7 +594,7 @@ export class PlexAPI {
     try {
       console.log(`[PlexAPI] Getting media parts for ${ratingKey} from ${uri}`);
       
-      const response = await fetch(`${uri}/library/metadata/${ratingKey}`, {
+      const response = await fetch(`${uri}/library/metadata/${plexKeySegment(ratingKey)}`, {
         headers: {
           ...this.headers,
           'Accept': 'application/json', // Explicitly request JSON
@@ -640,7 +641,7 @@ export class PlexAPI {
     // If we are here, something went wrong. Let's try to fetch again but as text.
     console.log('[PlexAPI] Retrying fetch to get XML text for parsing.');
     try {
-        const response = await fetch(`${uri}/library/metadata/${ratingKey}`, {
+        const response = await fetch(`${uri}/library/metadata/${plexKeySegment(ratingKey)}`, {
             headers: {
               ...this.headers,
               // 'Accept': 'application/xml', // Request XML this time
@@ -675,7 +676,7 @@ export class PlexAPI {
     if (transcode) {
       // For IPTV compatibility, use direct file streaming
       // This requires the part key, but for now return a placeholder that will be resolved
-      let url = `${uri}/library/metadata/${ratingKey}/stream?X-Plex-Token=${token}`;
+      let url = `${uri}/library/metadata/${plexKeySegment(ratingKey)}/stream?X-Plex-Token=${token}`;
       
       // Add seek offset if provided (convert ms to seconds)
       if (seekOffsetMs && seekOffsetMs > 0) {
@@ -687,7 +688,7 @@ export class PlexAPI {
     }
     
     // For direct metadata access
-    let url = `${uri}/library/metadata/${ratingKey}?X-Plex-Token=${token}`;
+    let url = `${uri}/library/metadata/${plexKeySegment(ratingKey)}?X-Plex-Token=${token}`;
     
     if (seekOffsetMs && seekOffsetMs > 0) {
       url += `&viewOffset=${seekOffsetMs}`;

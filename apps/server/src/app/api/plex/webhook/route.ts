@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { badPlexWebhookKey, plexKeySegment } from '@/lib/plex-keys';
 
 interface PlexWebhookPayload {
   event: string;
@@ -80,6 +81,12 @@ export async function POST(request: NextRequest) {
     }
 
     const webhookData: PlexWebhookPayload = JSON.parse(payload);
+
+    // Rating keys go into Plex URLs (with the server token) and into the database.
+    const badKey = badPlexWebhookKey(webhookData?.Metadata);
+    if (badKey) {
+      return NextResponse.json({ error: `Invalid Metadata.${badKey}` }, { status: 400 });
+    }
 
     // Log webhook activity
     const webhookActivity = await prisma.webhookActivity.create({
@@ -190,7 +197,7 @@ async function syncSingleMovie(plexServer: any, metadata: any) {
     let actorsJson = '[]';
     let countriesJson = '[]';
     try {
-      const detail = await fetch(`${plexServer.url}/library/metadata/${metadata.ratingKey}`, {
+      const detail = await fetch(`${plexServer.url}/library/metadata/${plexKeySegment(metadata.ratingKey)}`, {
         headers: { 'X-Plex-Token': plexServer.token }
       });
       if (detail.ok) {
@@ -266,7 +273,7 @@ async function syncSingleShow(plexServer: any, metadata: any) {
     let actorsJson = '[]';
     let countriesJson = '[]';
     try {
-      const detail = await fetch(`${plexServer.url}/library/metadata/${metadata.ratingKey}`, {
+      const detail = await fetch(`${plexServer.url}/library/metadata/${plexKeySegment(metadata.ratingKey)}`, {
         headers: { 'X-Plex-Token': plexServer.token }
       });
       if (detail.ok) {

@@ -66,4 +66,14 @@ describe("createCollectionIconResolver", () => {
     });
     assert.equal(await resolve(["Marvel"]), "ok");
   });
+  it("path-encodes the library key so a crafted key cannot reach other Plex endpoints", async () => {
+    const calls: string[] = [];
+    const resolve = createCollectionIconResolver({
+      listLibraries: async () => [{ url: "http://plex-a.test:32400", token: "ta", key: "1/../../status" }],
+      toLink: (thumb) => thumb,
+      fetchImpl: (async (url: string) => { calls.push(url); return { ok: true, json: async () => ({}) }; }) as unknown as typeof fetch,
+    });
+    await resolve(["Marvel"]);
+    assert.deepEqual(calls, ["http://plex-a.test:32400/library/sections/1%2F..%2F..%2Fstatus/collections"]);
+  });
 });

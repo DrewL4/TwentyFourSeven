@@ -1,3 +1,4 @@
+import { plexKeySegment } from "./plex-keys";
 import { PlexAPI, type PlexCheckResult } from './plex';
 import { parsePlexGuids } from './plex-guid';
 import { prisma } from './prisma';
@@ -663,12 +664,12 @@ export class PlexService {
       }
       
       // Fallback to basic URL
-      return `${serverUrl}/library/metadata/${ratingKey}?X-Plex-Token=${token}`;
+      return `${serverUrl}/library/metadata/${plexKeySegment(ratingKey)}?X-Plex-Token=${token}`;
       
     } catch (error) {
       console.error('Error resolving proper stream URL:', error);
       // Fallback to basic URL
-      return `${serverUrl}/library/metadata/${ratingKey}?X-Plex-Token=${token}`;
+      return `${serverUrl}/library/metadata/${plexKeySegment(ratingKey)}?X-Plex-Token=${token}`;
     }
   }
 
