@@ -5,11 +5,10 @@ const globalForPrisma = globalThis as unknown as {
   sqlitePragmasInitialized?: boolean;
 };
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+// One client (one query engine, one connection pool) per process. Next bundles this module into
+// several server bundles (routes, instrumentation), so a module-level `new PrismaClient()` ran once per
+// bundle; keep the instance on globalThis in every environment so all copies share it.
+export const prisma = (globalForPrisma.prisma ??= new PrismaClient());
 
 /** Enable WAL for concurrent reads during XMLTV / UI access */
 export async function initSqlitePragmas(): Promise<void> {
