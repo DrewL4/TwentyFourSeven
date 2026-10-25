@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { removeOverlappingPrograms } from './remove-overlapping-programs';
 import { TimingService } from './timing-service';
 import { invalidateXmlTvCache } from './xmltv-static-cache';
 import { scheduleXmlTvWarm } from './xmltv-warm';
@@ -96,64 +97,6 @@ export class ProgrammingService {
     }
     
     return false;
-  }
-
-  /**
-   * Remove overlapping programs before inserting new ones
-   */
-  private async removeOverlappingPrograms(channelId: string, programs: Array<{ startTime: Date, duration: number }>): Promise<void> {
-    for (const program of programs) {
-      const programStart = program.startTime.getTime();
-      const programEnd = programStart + program.duration;
-      
-      // Find and delete any overlapping programs
-      const overlappingPrograms = await prisma.program.findMany({
-        where: {
-          channelId,
-          OR: [
-            // Existing program starts during new program
-            {
-              AND: [
-                { startTime: { gte: new Date(programStart) } },
-                { startTime: { lt: new Date(programEnd) } }
-              ]
-            },
-            // Existing program ends during new program
-            {
-              AND: [
-                { startTime: { lt: new Date(programStart) } }
-                // We need to check if startTime + duration > programStart
-                // Since we can't do math in Prisma queries, we'll check this in code
-              ]
-            }
-          ]
-        },
-        select: {
-          id: true,
-          startTime: true,
-          duration: true
-        }
-      });
-
-      // Filter results to only include actual overlaps
-      const actualOverlaps = overlappingPrograms.filter(existing => {
-        const existingStart = existing.startTime.getTime();
-        const existingEnd = existingStart + existing.duration;
-        
-        return programStart < existingEnd && programEnd > existingStart;
-      });
-
-      if (actualOverlaps.length > 0) {
-        console.log(`Removing ${actualOverlaps.length} overlapping programs for channel ${channelId}`);
-        await prisma.program.deleteMany({
-          where: {
-            id: {
-              in: actualOverlaps.map(p => p.id)
-            }
-          }
-        });
-      }
-    }
   }
 
   /**
@@ -660,7 +603,7 @@ export class ProgrammingService {
 
     // Remove any overlapping programs before inserting new ones
     console.log(`Checking for overlaps before inserting ${programs.length} programs...`);
-    await this.removeOverlappingPrograms(channelId, programs);
+    await removeOverlappingPrograms(channelId, programs);
     
     // Insert all programs
     await prisma.program.createMany({
