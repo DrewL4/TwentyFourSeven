@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { importWatchTowerUser } from "./import-watchtower-user";
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 interface WatchTowerSettings {
@@ -161,21 +162,11 @@ export class WatchTowerService {
           originalJoinDate: wtUser.date_joined // Pass the WatchTower join date
         };
 
-        const importResponse = await fetch("/api/admin/import-user", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(userData),
-        });
-
-        if (importResponse.ok) {
-          const result = await importResponse.json();
-          if (result.action === "created") {
-            created++;
-          } else if (result.action === "updated") {
-            updated++;
-          }
+        const { action } = await importWatchTowerUser(userData);
+        if (action === "created") {
+          created++;
         } else {
-          skipped++;
+          updated++;
         }
       } catch (error) {
         skipped++;
