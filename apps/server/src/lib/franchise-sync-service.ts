@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { fetchChecked } from './outbound-url';
 import {
   applyFranchiseSortToChannel,
   franchiseSortMethodForSlug,
@@ -65,7 +66,7 @@ function parseReleaseMs(dateStr?: string | null): number | null {
 async function fetchJson<T>(url: string): Promise<T | null> {
   if (!url?.trim()) return null;
   try {
-    const response = await fetch(url, {
+    const response = await fetchChecked(url, {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(60_000),
     });
