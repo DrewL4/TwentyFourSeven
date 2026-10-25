@@ -113,6 +113,8 @@ export async function invalidateXmlTvCache(): Promise<void> {
 export const XMLTV_BASE_URL_PLACEHOLDER = "@@TFS_PUBLIC_BASE_URL@@";
 /** The caller's device key (`k=`), filled in per request so the shared cache holds no secrets. */
 export const XMLTV_LINK_KEY_PLACEHOLDER = "@@TFS_LINK_KEY@@";
+/** The scheme the caller used (`http`/`https`), for protocol-relative channel icons. */
+export const XMLTV_SCHEME_PLACEHOLDER = "@@TFS_PUBLIC_SCHEME@@";
 /** The caller's short-lived image pass (`t=`). */
 export const XMLTV_IMAGE_PASS_PLACEHOLDER = "@@TFS_IMAGE_PASS@@";
 

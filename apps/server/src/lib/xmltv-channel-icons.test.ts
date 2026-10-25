@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { channelIconsForGuide } from "./xmltv-channel-icons";
 import { createPlayerImageLinker, parsePlexImageReference } from "./plex-image";
-import { toPlaceholderIconUrl, XMLTV_BASE_URL_PLACEHOLDER, XMLTV_IMAGE_PASS_PLACEHOLDER } from "./xmltv-static-cache";
+import { toPlaceholderIconUrl, XMLTV_BASE_URL_PLACEHOLDER, XMLTV_IMAGE_PASS_PLACEHOLDER, XMLTV_SCHEME_PLACEHOLDER } from "./xmltv-static-cache";
 
 type Ch = { id: string; icon: string | null; cachedCollectionIcon: string | null };
 type Pr = { channelId: string; episode: { show?: { poster: string | null } | null } | null; movie: { poster: string | null } | null };
@@ -47,7 +47,7 @@ const POSTERS = [null, "", "http://plex.example.test:32400/library/metadata/5/th
 
 function rng(seed: number) { return () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff); }
 
-test("channel icons match the previous loop for every icon/collection/poster combination", () => {
+test("channel icons match the previous loop except for local and protocol-relative icons", () => {
   const linker = createPlayerImageLinker([{ url: "http://plex.example.test:32400", token: "t" }], { pass: XMLTV_IMAGE_PASS_PLACEHOLDER });
   const base = XMLTV_BASE_URL_PLACEHOLDER;
   const r = rng(7);
@@ -69,8 +69,16 @@ test("channel icons match the previous loop for every icon/collection/poster com
       }
     }
     const before = oldIcons(channels, programs, (b, u) => linker(u, b), base);
-    const after = channelIconsForGuide(channels, programs, (u) => linker(u, base));
-    assert.deepEqual([...after.entries()], [...before.entries()]);
+    const after = channelIconsForGuide(channels, programs, (u) => linker(u, base), XMLTV_SCHEME_PLACEHOLDER);
+    const fixed = (c: Ch) => !!c.icon && (c.icon.startsWith("/images/local/") || c.icon.startsWith("//"));
+    const unchanged = channels.filter((c) => !fixed(c)).map((c) => c.id);
+    assert.deepEqual(unchanged.map((id) => after.get(id)), unchanged.map((id) => before.get(id)));
+    for (const c of channels.filter(fixed)) {
+      const want = c.icon!.startsWith("//")
+        ? `${XMLTV_SCHEME_PLACEHOLDER}:${c.icon}`
+        : `${base}${c.icon}?t=${XMLTV_IMAGE_PASS_PLACEHOLDER}`;
+      assert.equal(after.get(c.id), want, `icon ${c.icon} wins over collection art and posters`);
+    }
   }
 });
 
@@ -82,6 +90,7 @@ test("the fallback takes the first programme of each channel, not a later one", 
       { channelId: "a", episode: null, movie: { poster: "https://cdn.example.test/second.jpg" } },
     ],
     (u) => u,
+    "https",
   );
   assert.equal(icons.get("a"), "https://cdn.example.test/first.jpg");
 });

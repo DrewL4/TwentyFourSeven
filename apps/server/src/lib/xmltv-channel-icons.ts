@@ -1,5 +1,6 @@
 import { parsePlexImageReference } from "./plex-image";
 import { toPlaceholderIconUrl } from "./xmltv-static-cache";
+import { channelIconSource } from "./channel-icon-source";
 
 /** Absolute or protocol-relative URLs, plus locally stored artwork. */
 export const isAbsoluteImageUrl = (url?: string | null): boolean =>
@@ -15,11 +16,13 @@ type IconProgram = {
 /**
  * Picks each channel's guide icon: its own icon, then cached collection artwork, then the poster
  * of its first programme. `programs` must be ordered by start time within each channel.
+ * `scheme` completes protocol-relative icons (see channelIconSource).
  */
 export function channelIconsForGuide(
   channels: IconChannel[],
   programs: IconProgram[],
   link: (url: string) => string,
+  scheme: string,
 ): Map<string, string> {
   const firstProgramByChannel = new Map<string, IconProgram>();
   for (const p of programs) {
@@ -28,9 +31,10 @@ export function channelIconsForGuide(
 
   const icons = new Map<string, string>();
   for (const channel of channels) {
-    if (isAbsoluteImageUrl(channel.icon)) {
+    const own = channelIconSource(channel.icon, scheme);
+    if (own) {
       try {
-        icons.set(channel.id, link(new URL(channel.icon as string).toString()));
+        icons.set(channel.id, link(own));
         continue;
       } catch {}
     }

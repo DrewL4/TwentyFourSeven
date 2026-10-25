@@ -6,6 +6,7 @@ import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
 import { keyParam } from "@/lib/espg-service-access";
 import { createCollectionIconResolver } from "@/lib/plex-collection-icons";
 import { firstProgramPosters } from "@/lib/first-program-posters";
+import { channelIconSource, schemeOf } from "@/lib/channel-icon-source";
 
 export async function GET(request: NextRequest) {
   const access = await authorizePlayer(request, { scope: "guide", resource: "m3u" });
@@ -28,6 +29,7 @@ export async function GET(request: NextRequest) {
     // Links use the address the player actually used (scheme, host and port),
     // or the reverse proxy's public address when there is one.
     const baseUrl = getPublicBaseUrl(request.headers, request.url);
+    const scheme = schemeOf(baseUrl);
 
 
     // Helpers
@@ -63,13 +65,11 @@ export async function GET(request: NextRequest) {
     await Promise.all(
       channels.map(async (channel) => {
         // Prefer existing absolute channel icon if present and not a Plex URL with token
-        if (isAbsolute(channel.icon)) {
+        const own = channelIconSource(channel.icon, scheme);
+        if (own && !new URL(own, baseUrl).searchParams.has('X-Plex-Token')) {
           try {
-            const u = new URL(channel.icon as string);
-            if (!u.searchParams.has('X-Plex-Token')) {
-              channelIconMap.set(channel.id, toPlexProxy(channel.icon as string));
-              return;
-            }
+            channelIconMap.set(channel.id, toPlexProxy(own));
+            return;
           } catch {}
         }
 
@@ -107,10 +107,11 @@ export async function GET(request: NextRequest) {
         extinf += ` group-title="${channel.groupTitle}"`;
       }
       
-      const iconUrl = channelIconMap.get(channel.id) || (isAbsolute(channel.icon) ? (() => {
+      // A tokenised own icon is used only when there is no collection art or poster.
+      const own = channelIconSource(channel.icon, scheme);
+      const iconUrl = channelIconMap.get(channel.id) || (own ? (() => {
         try {
-          const u = new URL(channel.icon as string);
-          return toPlexProxy(u.toString());
+          return toPlexProxy(own);
         } catch {
           return undefined;
         }

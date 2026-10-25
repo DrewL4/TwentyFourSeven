@@ -8,6 +8,7 @@ import {
   XMLTV_BASE_URL_PLACEHOLDER,
   XMLTV_IMAGE_PASS_PLACEHOLDER,
   XMLTV_LINK_KEY_PLACEHOLDER,
+  XMLTV_SCHEME_PLACEHOLDER,
   xmlTvCacheGeneration,
 } from "@/lib/xmltv-static-cache";
 import { getPublicBaseUrl } from "@/lib/public-base-url";
@@ -15,6 +16,7 @@ import { createPlayerImageLinker } from "@/lib/plex-image";
 import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
 import { createBuildOnce } from "@/lib/xmltv-build-once";
 import { channelIconsForGuide, isAbsoluteImageUrl } from "@/lib/xmltv-channel-icons";
+import { schemeOf } from "@/lib/channel-icon-source";
 
 /** Guides cached by an older build lack the per-client link placeholders; rebuild once per boot. */
 let rebuiltSinceBoot = false;
@@ -167,7 +169,7 @@ async function buildGuideFile(): Promise<void> {
   }
 
   // Channel icons: own icon, then collection artwork, then the first programme's poster.
-  const channelIconMap = channelIconsForGuide(channels, programs, (url) => toPlexProxy(baseUrl, url));
+  const channelIconMap = channelIconsForGuide(channels, programs, (url) => toPlexProxy(baseUrl, url), XMLTV_SCHEME_PLACEHOLDER);
 
   // Lines go to disk in batches as they are built, so the guide never sits in memory whole.
   await writeXmlTvCacheStreaming(async (write) => {
@@ -201,14 +203,8 @@ async function buildGuideFile(): Promise<void> {
     }
     // Emit a single display-name without attributes to avoid list/dict parsing in xmltodict
     xmltvParts.push(`    <display-name>${escapeXml(channel.name)}</display-name>`);
-    const iconUrl = channelIconMap.get(channel.id) || (isAbsolute(channel.icon) ? (() => {
-      try {
-        const u = new URL(channel.icon as string);
-        return toPlexProxy(baseUrl, u.toString());
-      } catch {
-        return undefined;
-      }
-    })() : undefined);
+    // channelIconsForGuide already tried the channel's own icon.
+    const iconUrl = channelIconMap.get(channel.id);
     if (iconUrl) {
       xmltvParts.push(`    <icon src="${escapeXml(iconUrl)}" />`);
     }
@@ -461,12 +457,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const bypassCache = searchParams.get('bypass-cache') === 'true' || !rebuiltSinceBoot;
     const links = (await linkParamsFor(access.auth));
-    const perClient = {
+    const perClient: Record<string, string> = {
       [XMLTV_LINK_KEY_PLACEHOLDER]: links.k,
       [XMLTV_IMAGE_PASS_PLACEHOLDER]: links.imagePass,
     };
     // Links use the address this client actually used (scheme, host and port).
     const publicBaseUrl = escapeXml(getPublicBaseUrl(request.headers, request.url));
+    perClient[XMLTV_SCHEME_PLACEHOLDER] = schemeOf(publicBaseUrl);
 
     if (!bypassCache) {
       const cachedStream = await openXmlTvCacheStreamIfFresh(CACHE_DURATION);
