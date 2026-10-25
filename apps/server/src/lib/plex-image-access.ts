@@ -64,3 +64,34 @@ export async function decidePlexImageAccess(input: {
 
   return { ok: true, upstreamUrl: `${target.origin}${target.path}`, token: server.token, via, target };
 }
+
+export type PlexImageFetch =
+  | { ok: true; contentType: string; body: ArrayBuffer }
+  | { ok: false; status: 404 | 502; error: string };
+
+/**
+ * Fetch one artwork image from the configured Plex server. Redirects are not followed:
+ * fetch() would resend the X-Plex-Token header to wherever the redirect points.
+ */
+export async function fetchPlexImage(
+  upstreamUrl: string,
+  token: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<PlexImageFetch> {
+  const res = await fetchImpl(upstreamUrl, {
+    headers: { "X-Plex-Token": token, Accept: "image/*" },
+    redirect: "manual",
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (res.status >= 300 && res.status < 400) {
+    return { ok: false, status: 502, error: "Image not available (redirect not followed)" };
+  }
+  if (!res.ok) {
+    return { ok: false, status: res.status === 404 ? 404 : 502, error: "Image not available" };
+  }
+  const contentType = res.headers.get("content-type") || "image/jpeg";
+  if (!contentType.toLowerCase().startsWith("image/")) {
+    return { ok: false, status: 502, error: "Upstream did not return an image" };
+  }
+  return { ok: true, contentType, body: await res.arrayBuffer() };
+}

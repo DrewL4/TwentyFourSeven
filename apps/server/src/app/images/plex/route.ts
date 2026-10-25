@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authorizePlayer } from "@/lib/player-access";
-import { decidePlexImageAccess } from "@/lib/plex-image-access";
+import { decidePlexImageAccess, fetchPlexImage } from "@/lib/plex-image-access";
 
 /**
  * Proxy Plex artwork without exposing the Plex token to clients.
@@ -35,24 +35,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: decision.error }, { status: decision.status });
     }
 
-    const upstreamRes = await fetch(decision.upstreamUrl, {
-      headers: { "X-Plex-Token": decision.token, Accept: "image/*" },
-      signal: AbortSignal.timeout(20_000),
-    });
-
-    if (!upstreamRes.ok) {
-      return NextResponse.json({ error: "Image not available" }, { status: upstreamRes.status === 404 ? 404 : 502 });
+    const image = await fetchPlexImage(decision.upstreamUrl, decision.token);
+    if (!image.ok) {
+      return NextResponse.json({ error: image.error }, { status: image.status });
     }
 
-    const contentType = upstreamRes.headers.get("content-type") || "image/jpeg";
-    if (!contentType.toLowerCase().startsWith("image/")) {
-      return NextResponse.json({ error: "Upstream did not return an image" }, { status: 502 });
-    }
-    const buffer = await upstreamRes.arrayBuffer();
-
-    return new NextResponse(buffer, {
+    return new NextResponse(image.body, {
       headers: {
-        "Content-Type": contentType,
+        "Content-Type": image.contentType,
         // Session-authorized images must not be stored by shared caches/CDNs.
         "Cache-Control": access.auth.via === "session" ? "private, max-age=86400" : "public, max-age=86400",
         "X-Content-Type-Options": "nosniff",

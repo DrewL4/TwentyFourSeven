@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decidePlexImageAccess } from "./plex-image-access";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
+import { decidePlexImageAccess, fetchPlexImage } from "./plex-image-access";
 import {
   createPlayerImageLinker,
   normalizePlexImageTarget,
@@ -168,4 +170,57 @@ test("with an image pass, links carry t= (no sig, no token); old sig links can b
   const legacy = params({ origin: ORIGIN, path: target.path, sig: signPlexImageTarget(target, TOKEN) });
   const refused = await decidePlexImageAccess({ searchParams: legacy, servers, hasSession: signedOut, acceptSignature: false });
   assert.equal(refused.ok, false);
+});
+
+// --- fetchPlexImage: real HTTP servers, so this checks what fetch() actually does ---
+
+async function serve(handler: http.RequestListener) {
+  const server = http.createServer(handler);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return { url: `http://127.0.0.1:${port}`, close: () => new Promise<void>((r) => server.close(() => r())) };
+}
+
+test("fetchPlexImage does not follow a redirect, so the Plex token is not sent on", async () => {
+  const seenTokens: Array<string | undefined> = [];
+  const elsewhere = await serve((req, res) => {
+    seenTokens.push(req.headers["x-plex-token"] as string | undefined);
+    res.writeHead(200, { "content-type": "image/png" }).end("png");
+  });
+  const plex = await serve((_req, res) => {
+    res.writeHead(302, { location: `${elsewhere.url}/steal.png` }).end();
+  });
+  try {
+    const r = await fetchPlexImage(`${plex.url}/library/metadata/1/thumb/1`, TOKEN);
+    assert.deepEqual(r, { ok: false, status: 502, error: "Image not available (redirect not followed)" });
+    assert.deepEqual(seenTokens, []);
+  } finally {
+    await plex.close();
+    await elsewhere.close();
+  }
+});
+
+test("fetchPlexImage returns images and refuses other content", async () => {
+  let sentToken: string | undefined;
+  const plex = await serve((req, res) => {
+    sentToken = req.headers["x-plex-token"] as string | undefined;
+    if (req.url?.includes("/thumb/")) res.writeHead(200, { "content-type": "image/jpeg" }).end("jpg");
+    else if (req.url?.includes("/missing/")) res.writeHead(404).end();
+    else res.writeHead(200, { "content-type": "text/html" }).end("<html>");
+  });
+  try {
+    const ok = await fetchPlexImage(`${plex.url}/library/metadata/1/thumb/1`, TOKEN);
+    assert.equal(ok.ok, true);
+    assert.equal(ok.ok && ok.contentType, "image/jpeg");
+    assert.equal(ok.ok && Buffer.from(ok.body).toString(), "jpg");
+    assert.equal(sentToken, TOKEN);
+    assert.deepEqual(await fetchPlexImage(`${plex.url}/missing/1`, TOKEN), { ok: false, status: 404, error: "Image not available" });
+    assert.deepEqual(await fetchPlexImage(`${plex.url}/library/metadata/1/art`, TOKEN), {
+      ok: false,
+      status: 502,
+      error: "Upstream did not return an image",
+    });
+  } finally {
+    await plex.close();
+  }
 });
