@@ -5,6 +5,7 @@ import { createPlayerImageLinker } from "@/lib/plex-image";
 import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
 import { keyParam } from "@/lib/espg-service-access";
 import { createCollectionIconResolver } from "@/lib/plex-collection-icons";
+import { firstProgramPosters } from "@/lib/first-program-posters";
 
 export async function GET(request: NextRequest) {
   const access = await authorizePlayer(request, { scope: "guide", resource: "m3u" });
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
       toLink: (thumb, serverUrl) => toPlexProxy(new URL(thumb, serverUrl).toString()),
     });
 
+    const needPoster: string[] = [];
     await Promise.all(
       channels.map(async (channel) => {
         // Prefer existing absolute channel icon if present and not a Plex URL with token
@@ -85,22 +87,13 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Fallback: use the first available poster from current/any programme for this channel
-        const program = await prisma.program.findFirst({
-          where: { channelId: channel.id },
-          orderBy: { startTime: 'asc' },
-          include: {
-            episode: { include: { show: true } },
-            movie: true,
-          },
-        });
-
-        const poster = program?.episode?.show?.poster || program?.movie?.poster || null;
-        if (isAbsolute(poster)) {
-          channelIconMap.set(channel.id, toPlexProxy(poster as string));
-        }
+        // Fallback (resolved below in one batch): the first programme's poster.
+        needPoster.push(channel.id);
       })
     );
+    for (const [channelId, poster] of await firstProgramPosters(needPoster)) {
+      if (isAbsolute(poster)) channelIconMap.set(channelId, toPlexProxy(poster as string));
+    }
     
     // Include EPG URL hints for players that support different keys
     const guideUrl = links.k ? `${baseUrl}/media.xml?k=${links.k}` : `${baseUrl}/media.xml`;
