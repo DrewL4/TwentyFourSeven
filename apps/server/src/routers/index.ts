@@ -9,6 +9,7 @@ import { guideRouter } from "./guide-router";
 import { libraryRouter } from "./library-router";
 import { franchisesRouter } from "./franchises-router";
 import { resolvePlexCredentials, toPublicServer, tokenUpdate } from "../lib/media-server-public";
+import { searchLibraryFacet } from "../lib/library-facets";
 
 // Plex checks take either a token typed by the admin, or a saved server's id so the
 // stored token is used server-side and never sent to the browser.
@@ -594,259 +595,34 @@ export const appRouter = {
         return { success: true };
       }),
 
-    // Metadata endpoints for autocomplete
+    // Metadata endpoints for autocomplete (distinct values across movies and shows)
     getActors: adminProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
       }))
-      .handler(async ({ input }) => {
-        const { search, limit } = input;
-        
-        // Get unique actors from both movies and shows
-        const [movieActors, showActors] = await Promise.all([
-          prisma.mediaMovie.findMany({
-            where: {
-              actors: {
-                not: null
-              }
-            },
-            select: {
-              actors: true
-            }
-          }),
-          prisma.mediaShow.findMany({
-            where: {
-              actors: {
-                not: null
-              }
-            },
-            select: {
-              actors: true
-            }
-          })
-        ]);
-
-        // Extract and flatten all actors
-        const allActors = new Set<string>();
-        
-        [...movieActors, ...showActors].forEach(item => {
-          if (item.actors) {
-            try {
-              const actors = JSON.parse(item.actors);
-              if (Array.isArray(actors)) {
-                actors.forEach(actor => {
-                  if (typeof actor === 'string' && actor.trim()) {
-                    allActors.add(actor.trim());
-                  }
-                });
-              }
-            } catch (error) {
-              // Skip invalid JSON
-            }
-          }
-        });
-
-        // Convert to array and sort
-        let actorList = Array.from(allActors).sort();
-
-        // Apply search filter if provided
-        if (search && search.trim()) {
-          const searchTerm = search.toLowerCase();
-          actorList = actorList.filter(actor => 
-            actor.toLowerCase().includes(searchTerm)
-          );
-        }
-
-        return actorList.slice(0, limit);
-      }),
+      .handler(async ({ input }) => searchLibraryFacet("actors", input.search, input.limit)),
 
     getDirectors: adminProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
       }))
-      .handler(async ({ input }) => {
-        const { search, limit } = input;
-        
-        // Get unique directors from both movies and shows
-        const [movieDirectors, showDirectors] = await Promise.all([
-          prisma.mediaMovie.findMany({
-            where: {
-              directors: {
-                not: null
-              }
-            },
-            select: {
-              directors: true
-            }
-          }),
-          prisma.mediaShow.findMany({
-            where: {
-              directors: {
-                not: null
-              }
-            },
-            select: {
-              directors: true
-            }
-          })
-        ]);
-
-        // Extract and flatten all directors
-        const allDirectors = new Set<string>();
-        
-        [...movieDirectors, ...showDirectors].forEach(item => {
-          if (item.directors) {
-            try {
-              const directors = JSON.parse(item.directors);
-              if (Array.isArray(directors)) {
-                directors.forEach(director => {
-                  if (typeof director === 'string' && director.trim()) {
-                    allDirectors.add(director.trim());
-                  }
-                });
-              }
-            } catch (error) {
-              // Skip invalid JSON
-            }
-          }
-        });
-
-        // Convert to array and sort
-        let directorList = Array.from(allDirectors).sort();
-
-        // Apply search filter if provided
-        if (search && search.trim()) {
-          const searchTerm = search.toLowerCase();
-          directorList = directorList.filter(director => 
-            director.toLowerCase().includes(searchTerm)
-          );
-        }
-
-        return directorList.slice(0, limit);
-      }),
+      .handler(async ({ input }) => searchLibraryFacet("directors", input.search, input.limit)),
 
     getGenres: adminProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
       }))
-      .handler(async ({ input }) => {
-        const { search, limit } = input;
-        
-        // Get unique genres from both movies and shows
-        const [movieGenres, showGenres] = await Promise.all([
-          prisma.mediaMovie.findMany({
-            where: {
-              genres: {
-                not: null
-              }
-            },
-            select: {
-              genres: true
-            }
-          }),
-          prisma.mediaShow.findMany({
-            where: {
-              genres: {
-                not: null
-              }
-            },
-            select: {
-              genres: true
-            }
-          })
-        ]);
-
-        // Extract and flatten all genres
-        const allGenres = new Set<string>();
-        
-        [...movieGenres, ...showGenres].forEach(item => {
-          if (item.genres) {
-            try {
-              const genres = JSON.parse(item.genres);
-              if (Array.isArray(genres)) {
-                genres.forEach(genre => {
-                  if (typeof genre === 'string' && genre.trim()) {
-                    allGenres.add(genre.trim());
-                  }
-                });
-              }
-            } catch (error) {
-              // Skip invalid JSON
-            }
-          }
-        });
-
-        // Convert to array and sort
-        let genreList = Array.from(allGenres).sort();
-
-        // Apply search filter if provided
-        if (search && search.trim()) {
-          const searchTerm = search.toLowerCase();
-          genreList = genreList.filter(genre => 
-            genre.toLowerCase().includes(searchTerm)
-          );
-        }
-
-        return genreList.slice(0, limit);
-      }),
+      .handler(async ({ input }) => searchLibraryFacet("genres", input.search, input.limit)),
 
     getStudios: adminProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
       }))
-      .handler(async ({ input }) => {
-        const { search, limit } = input;
-        
-        // Get unique studios from both movies and shows
-        const [movieStudios, showStudios] = await Promise.all([
-          prisma.mediaMovie.findMany({
-            where: {
-              studio: {
-                not: null
-              }
-            },
-            select: {
-              studio: true
-            }
-          }),
-          prisma.mediaShow.findMany({
-            where: {
-              studio: {
-                not: null
-              }
-            },
-            select: {
-              studio: true
-            }
-          })
-        ]);
-
-        // Extract and flatten all studios
-        const allStudios = new Set<string>();
-        
-        [...movieStudios, ...showStudios].forEach(item => {
-          if (item.studio && item.studio.trim()) {
-            allStudios.add(item.studio.trim());
-          }
-        });
-
-        // Convert to array and sort
-        let studioList = Array.from(allStudios).sort();
-
-        // Apply search filter if provided
-        if (search && search.trim()) {
-          const searchTerm = search.toLowerCase();
-          studioList = studioList.filter(studio => 
-            studio.toLowerCase().includes(searchTerm)
-          );
-        }
-
-        return studioList.slice(0, limit);
-      }),
+      .handler(async ({ input }) => searchLibraryFacet("studio", input.search, input.limit)),
 
     reorderContent: adminProcedure
       .input(z.object({
