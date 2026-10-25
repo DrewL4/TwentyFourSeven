@@ -1967,7 +1967,18 @@ export const appRouter = {
           }
 
           return updatedSettings;
-        })
+        }),
+
+      /** The secret for the Plex webhook URL (admin only; Plex needs the full URL pasted in). */
+      webhookAccess: adminProcedure.handler(async () => {
+        const { getPlexWebhookStatus, prismaPlexWebhookStore } = await import('../lib/plex-webhook-token');
+        return getPlexWebhookStatus(prismaPlexWebhookStore());
+      }),
+
+      regenerateWebhookToken: adminProcedure.handler(async () => {
+        const { regeneratePlexWebhookToken, prismaPlexWebhookStore } = await import('../lib/plex-webhook-token');
+        return regeneratePlexWebhookToken(prismaPlexWebhookStore());
+      })
     },
 
     webhooks: {

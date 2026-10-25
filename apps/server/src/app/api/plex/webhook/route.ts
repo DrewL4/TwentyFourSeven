@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { badPlexWebhookKey, plexKeySegment } from '@/lib/plex-keys';
+import { checkPlexWebhookToken, notePlexWebhookCall, prismaPlexWebhookStore } from '@/lib/plex-webhook-token';
 
 interface PlexWebhookPayload {
   event: string;
@@ -52,7 +53,14 @@ interface PlexWebhookPayload {
 
 export async function POST(request: NextRequest) {
   try {
-    
+    // Plex cannot send headers, so the secret rides in the URL (?token=). Checked before anything is read or recorded.
+    const store = prismaPlexWebhookStore();
+    const gate = await checkPlexWebhookToken(request.nextUrl.searchParams.get('token'), store);
+    await notePlexWebhookCall(store, gate).catch(() => {});
+    if (!gate.ok) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Check if webhooks are enabled
     const plexSettings = await prisma.plexSettings.findUnique({
       where: { id: "singleton" }

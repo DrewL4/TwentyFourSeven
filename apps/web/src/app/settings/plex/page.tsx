@@ -103,11 +103,12 @@ export default function PlexSettingsPage() {
   const [librarySelectionServer, setLibrarySelectionServer] =
     useState<LibrarySelectionServer | null>(null);
   const libraryFetchRequestIdRef = useRef<string | null>(null);
-  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookBase, setWebhookBase] = useState('');
+  const [showWebhookToken, setShowWebhookToken] = useState(false);
 
   // Set webhook URL on client side
   useEffect(() => {
-    setWebhookUrl(`${window.location.origin}/api/plex/webhook`);
+    setWebhookBase(`${window.location.origin}/api/plex/webhook`);
   }, []);
 
   // Queries
@@ -115,6 +116,19 @@ export default function PlexSettingsPage() {
   const plexSettingsQuery = useQuery(orpc.settings.plex.get.queryOptions());
   const webhookStatsQuery = useQuery(orpc.settings.webhooks.getStats.queryOptions());
   const webhookActivityQuery = useQuery(orpc.settings.webhooks.getActivity.queryOptions({ input: { limit: 10 } }));
+  const webhookAccessQuery = useQuery(orpc.settings.plex.webhookAccess.queryOptions());
+  const webhookToken = webhookAccessQuery.data?.token ?? '';
+  const webhookUrl = webhookToken ? `${webhookBase}?token=${encodeURIComponent(webhookToken)}` : '';
+  const webhookUrlShown = webhookToken
+    ? showWebhookToken ? webhookUrl : `${webhookBase}?token=${'•'.repeat(12)}`
+    : 'Loading…';
+  const regenerateWebhookMutation = useMutation(orpc.settings.plex.regenerateWebhookToken.mutationOptions({
+    onSuccess: (data) => {
+      queryClient.setQueryData(orpc.settings.plex.webhookAccess.queryKey(), data);
+      toast.success('New webhook URL made. Paste it into Plex: the old one no longer works.');
+    },
+    onError: (error) => toast.error(`Could not make a new URL: ${error.message}`),
+  }));
 
   // Mutations
   const plexLoginMutation = useMutation({
@@ -1246,15 +1260,26 @@ export default function PlexSettingsPage() {
               <Badge variant="outline">Active</Badge>
             </div>
             
-            <div className="mt-3 flex items-center gap-2">
+            <div className="mt-3 flex items-center gap-2" data-testid="plex-webhook-url">
               <Input
-                value={webhookUrl}
+                value={webhookUrlShown}
                 readOnly
+                aria-label="Plex webhook URL"
                 className="font-mono text-sm"
               />
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={showWebhookToken ? 'Hide token' : 'Show token'}
+                disabled={!webhookToken}
+                onClick={() => setShowWebhookToken((v) => !v)}
+              >
+                {showWebhookToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm"
+                disabled={!webhookUrl}
                 onClick={() => {
                   if (typeof window !== 'undefined' && navigator.clipboard) {
                     navigator.clipboard.writeText(webhookUrl);
@@ -1264,7 +1289,45 @@ export default function PlexSettingsPage() {
               >
                 Copy
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!webhookToken || regenerateWebhookMutation.isPending}
+                onClick={() => {
+                  if (window.confirm('Make a new webhook URL? The URL saved in Plex stops working until you paste the new one.')) {
+                    regenerateWebhookMutation.mutate(undefined);
+                  }
+                }}
+              >
+                <RefreshCw className={`w-4 h-4 mr-1 ${regenerateWebhookMutation.isPending ? 'animate-spin' : ''}`} />
+                Regenerate
+              </Button>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              The URL contains a secret token. Treat it like a password: anyone with it can send library events.
+            </p>
+            {webhookAccessQuery.data?.graceUntil ? (
+              <Alert className="mt-3 border-amber-500/50" data-testid="plex-webhook-grace">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Action needed: update the URL in Plex.</strong> The webhook URL now includes a secret token.
+                  Until {new Date(webhookAccessQuery.data.graceUntil).toLocaleString()}, the old URL without the token still works so nothing breaks.
+                  Copy the URL above and replace the old one in Plex. After that date (or as soon as Plex uses the new URL), the old URL is refused.
+                  {webhookAccessQuery.data.lastOldUrlAt && (
+                    <> Plex last used the old URL on {new Date(webhookAccessQuery.data.lastOldUrlAt).toLocaleString()}.</>
+                  )}
+                </AlertDescription>
+              </Alert>
+            ) : webhookAccessQuery.data?.lastRefused ? (
+              <Alert variant="destructive" className="mt-3" data-testid="plex-webhook-refused">
+                <XCircle className="h-4 w-4" />
+                <AlertDescription>
+                  A webhook call was refused on {new Date(webhookAccessQuery.data.lastRefused.at).toLocaleString()} because
+                  {webhookAccessQuery.data.lastRefused.reason === 'missing' ? ' it had no token' : ' its token was wrong'}.
+                  If Plex updates stopped arriving, copy the URL above into Plex.
+                </AlertDescription>
+              </Alert>
+            ) : null}
           </div>
 
           <div className="space-y-4">
@@ -1413,8 +1476,8 @@ export default function PlexSettingsPage() {
                 <strong>Setup Instructions:</strong>
                 <ol className="list-decimal ml-4 mt-2 space-y-1">
                   <li>Open your Plex server settings</li>
-                  <li>Navigate to Settings → Network → Webhooks</li>
-                  <li>Add the webhook URL above</li>
+                  <li>Navigate to Settings → Webhooks (under your account)</li>
+                  <li>Add the webhook URL above (use Copy so the token is included)</li>
                   <li>Test by adding new content to your Plex server</li>
                 </ol>
               </AlertDescription>
