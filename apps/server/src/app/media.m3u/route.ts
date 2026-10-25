@@ -4,6 +4,7 @@ import { getPublicBaseUrl } from "@/lib/public-base-url";
 import { createPlayerImageLinker } from "@/lib/plex-image";
 import { authorizePlayer, linkParamsFor } from "@/lib/player-access";
 import { keyParam } from "@/lib/espg-service-access";
+import { createCollectionIconResolver } from "@/lib/plex-collection-icons";
 
 export async function GET(request: NextRequest) {
   const access = await authorizePlayer(request, { scope: "guide", resource: "m3u" });
@@ -41,35 +42,21 @@ export async function GET(request: NextRequest) {
     // Pre-compute best icon for each channel using Plex posters where available
     const channelIconMap = new Map<string, string>();
 
-    // Helper to resolve collection artwork via Plex and proxy it
-    const resolveCollectionIcon = async (collectionNames: string[]): Promise<string | null> => {
-      if (!collectionNames || collectionNames.length === 0) return null;
-      try {
+    // Collection artwork via Plex, proxied; one collection fetch per library per build.
+    const resolveCollectionIcon = createCollectionIconResolver({
+      listLibraries: async () => {
         const servers = await prisma.mediaServer.findMany({
           where: { type: 'PLEX', active: true },
           include: { libraries: true }
         });
-        for (const server of servers) {
-          if (!server.token) continue;
-          for (const lib of server.libraries) {
-            try {
-              const res = await fetch(`${server.url}/library/sections/${lib.key}/collections`, {
-                headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token }
-              });
-              if (!res.ok) continue;
-              const data = await res.json();
-              const directories = data?.MediaContainer?.Directory || [];
-              for (const d of directories) {
-                if (collectionNames.includes(d.title) && d.thumb) {
-                  return toPlexProxy(new URL(d.thumb, server.url).toString());
-                }
-              }
-            } catch {}
-          }
-        }
-      } catch {}
-      return null;
-    };
+        return servers.flatMap((server) =>
+          server.token
+            ? server.libraries.map((lib) => ({ url: server.url, token: server.token as string, key: lib.key }))
+            : [],
+        );
+      },
+      toLink: (thumb, serverUrl) => toPlexProxy(new URL(thumb, serverUrl).toString()),
+    });
 
     await Promise.all(
       channels.map(async (channel) => {

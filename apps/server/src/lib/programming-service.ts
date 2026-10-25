@@ -3,6 +3,7 @@ import { TimingService } from './timing-service';
 import { invalidateXmlTvCache } from './xmltv-static-cache';
 import { scheduleXmlTvWarm } from './xmltv-warm';
 import { buildPlexImageLink, normalizePlexImageTarget } from './plex-image';
+import { createCollectionIconResolver, type PlexLibraryRef } from './plex-collection-icons';
 
 async function invalidateXmlTvCacheSafe() {
   try {
@@ -1056,6 +1057,14 @@ export class ProgrammingService {
 
     // Store a relative /images/plex link; /media.xml adds the caller's address.
     const baseUrl = '';
+    // One collection fetch per Plex library for the whole pass, not one per channel.
+    const resolveCollectionIcon = createCollectionIconResolver({
+      listLibraries: () => this.activePlexLibraries(),
+      toLink: (thumb, serverUrl) => {
+        const target = normalizePlexImageTarget(new URL(serverUrl).origin, thumb);
+        return target ? buildPlexImageLink(target, { baseUrl }) : null;
+      },
+    });
 
     for (const channel of channels) {
       try {
@@ -1068,7 +1077,7 @@ export class ProgrammingService {
         if (collections.length === 0) continue;
 
         // Resolve collection icon
-        const iconUrl = await this.resolveCollectionIcon(collections, baseUrl);
+        const iconUrl = await resolveCollectionIcon(collections);
 
         if (iconUrl) {
           await prisma.channel.update({
@@ -1083,34 +1092,16 @@ export class ProgrammingService {
 
   }
 
-  private async resolveCollectionIcon(collectionNames: string[], baseUrl: string): Promise<string | null> {
-    try {
-      const servers = await prisma.mediaServer.findMany({
-        where: { type: 'PLEX', active: true },
-        include: { libraries: true }
-      });
-
-      for (const server of servers) {
-        if (!server.token) continue;
-        for (const lib of server.libraries) {
-          try {
-            const res = await fetch(`${server.url}/library/sections/${lib.key}/collections`, {
-              headers: { 'Accept': 'application/json', 'X-Plex-Token': server.token }
-            });
-            if (!res.ok) continue;
-            const data = await res.json();
-            const directories = data?.MediaContainer?.Directory || [];
-            for (const d of directories) {
-              if (collectionNames.includes(d.title) && d.thumb) {
-                const target = normalizePlexImageTarget(new URL(server.url).origin, d.thumb);
-                if (target) return buildPlexImageLink(target, { baseUrl });
-              }
-            }
-          } catch {}
-        }
-      }
-    } catch {}
-    return null;
+  private async activePlexLibraries(): Promise<PlexLibraryRef[]> {
+    const servers = await prisma.mediaServer.findMany({
+      where: { type: 'PLEX', active: true },
+      include: { libraries: true }
+    });
+    return servers.flatMap((server) =>
+      server.token
+        ? server.libraries.map((lib) => ({ url: server.url, token: server.token as string, key: lib.key }))
+        : [],
+    );
   }
 }
 
