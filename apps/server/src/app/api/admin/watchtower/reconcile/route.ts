@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/context';
 import { WatchTowerHubService } from '@/lib/watchtower-hub-service';
+import { signOutEverywhere } from '@/lib/user-access';
 import { integrationTokenMatches } from '@/lib/integration-token';
 
 function extractToken(request: NextRequest): string | null {
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
           where: { id: existing.id },
           data: { isActive: false, updatedAt: new Date() },
         });
+        await signOutEverywhere(db, existing.id);
         const { emitUserUpdate } = await import('@/lib/socket-io');
         emitUserUpdate(existing.email, 'updated');
         deactivated += 1;
@@ -90,6 +92,7 @@ export async function POST(request: NextRequest) {
         where: { id: orphan.id },
         data: { isActive: false, updatedAt: new Date() },
       });
+      await signOutEverywhere(db, orphan.id);
       const { emitUserUpdate } = await import('@/lib/socket-io');
       emitUserUpdate(orphan.email, 'updated');
       deactivated += 1;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/context';
+import { signOutIfLostAccess } from '@/lib/user-access';
 
 // Helper function to check admin permissions or allow initial setup
 async function checkAdminAuthOrInitialSetup(request: NextRequest) {
@@ -250,6 +251,7 @@ export async function POST(request: NextRequest) {
               updatedAt: new Date()
             }
           });
+          await signOutIfLostAccess(db, existingUser.id, existingUser, { isActive: userData.isActive, role: userData.role });
           syncStats.updated++;
           console.log(`Updated movie service user: ${watchTowerUser.email}${isExpired ? ' (EXPIRED)' : ''}`);
         } else {

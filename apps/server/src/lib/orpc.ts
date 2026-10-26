@@ -1,13 +1,16 @@
 import { ORPCError, os } from "@orpc/server";
 import type { Context } from "./context";
 import { ADMIN_REQUIRED_MESSAGE, isAdmin } from "./admin-auth";
+import { isActiveUser } from "./user-access";
 
 export const o = os.$context<Context>();
 
 export const publicProcedure = o;
 
 const requireAuth = o.middleware(async ({ context, next }) => {
-  if (!context.session?.user) {
+  const userId = context.session?.user?.id;
+  // Deactivated users are signed out: an old session cookie is not enough.
+  if (!userId || !(await isActiveUser(userId, context.db))) {
     throw new ORPCError("UNAUTHORIZED");
   }
   return next({
@@ -24,7 +27,7 @@ export const protectedProcedure = publicProcedure.use(requireAuth);
 // from the DB on every call so a WT demotion applies without a new session.
 const requireAdmin = o.middleware(async ({ context, next }) => {
   const userId = context.session?.user?.id;
-  if (!userId) {
+  if (!userId || !(await isActiveUser(userId, context.db))) {
     throw new ORPCError("UNAUTHORIZED");
   }
   if (!(await isAdmin(userId, context.db))) {

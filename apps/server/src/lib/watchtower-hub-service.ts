@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { db } from './context';
+import { signOutEverywhere, signOutIfLostAccess } from './user-access';
 
 interface WatchTowerUser {
   id: number;
@@ -267,6 +268,9 @@ export class WatchTowerHubService {
         }
       });
 
+      // Deactivated or demoted: sign out of every TFS session now.
+      await signOutIfLostAccess(db, user.id, user, { isActive: shouldBeActive, role: userData.is_admin ? 'ADMIN' : 'USER' });
+
       if (!shouldBeActive && user.isActive) {
         console.log(`[Webhook] Deactivated user ${userData.email} - lost movie service access`);
         // Emit Socket.io event
@@ -337,6 +341,7 @@ export class WatchTowerHubService {
           updatedAt: new Date()
         }
       });
+      await signOutEverywhere(db, user.id);
 
       // Option 2: Hard delete (uncomment if preferred)
       // await db.user.delete({
@@ -484,6 +489,11 @@ export class WatchTowerHubService {
    * Other users must have a valid movie_donation_due date
    */
   private _shouldHaveMovieServiceAccess(userData: any): boolean {
+    // A deactivated WatchTower account has no access, admins and family included
+    if (userData.is_active === false) {
+      return false;
+    }
+
     // Admins always have access
     if (userData.is_admin) {
       return true;

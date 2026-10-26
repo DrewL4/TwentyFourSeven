@@ -16,6 +16,7 @@ import {
 } from "./link-security";
 import { playlistLogins, type Login } from "./playlist-login";
 import { hasSessionCookie, homeNetworkFallback, type SessionCheck } from "./home-network-fallback";
+import { isActiveUser } from "./user-access";
 import { isEspgCaller } from "./espg-caller";
 import { ESPG_SERVICE_IMAGE_PASS_SECONDS, ESPG_SERVICE_SUBJECT, espgServiceCaller } from "./espg-service-access";
 
@@ -178,7 +179,7 @@ export async function authorizePlayer(
   if (request.headers.get("cookie")) {
     try {
       const found = await auth.api.getSession({ headers: request.headers });
-      if (found?.user?.id) {
+      if (found?.user?.id && (await isActiveUser(found.user.id, prisma))) {
         return { ok: true, auth: { via: "session", keyId: null, userId: found.user.id, email: found.user.email ?? null } };
       }
       if (hasSessionCookie(request.headers.get("cookie"))) session = "dead";

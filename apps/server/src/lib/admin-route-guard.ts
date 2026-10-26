@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { auth } from './auth';
 import { prisma } from './prisma';
 import { ADMIN_REQUIRED_MESSAGE, isAdmin } from './admin-auth';
+import { isActiveUser } from './user-access';
 
 type GuardOptions = {
   /** First-run bootstrap: allow the call while TFS has no users at all. */
@@ -22,7 +23,7 @@ export async function guardAdminRoute(
 
   const session = await auth.api.getSession({ headers: request.headers });
   const userId = session?.user?.id;
-  if (!userId) {
+  if (!userId || !(await isActiveUser(userId, prisma))) {
     return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
   }
   if (!(await isAdmin(userId, prisma))) {

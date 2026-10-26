@@ -139,6 +139,11 @@ export async function POST(request: NextRequest) {
     // Based on WatchTower logic: admins and family users always have access
     // Other users must have a valid movie_donation_due date
     const hasMovieServiceAccess = (() => {
+      // A deactivated WatchTower account has no access, admins included
+      if (watchTowerUser.is_active === false) {
+        return false;
+      }
+
       // Admins always have access
       if (watchTowerUser.is_admin) {
         return true;

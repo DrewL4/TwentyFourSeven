@@ -8,7 +8,7 @@ import { appRouter } from '../routers';
 const fakeDb = (roles: Record<string, string>) => ({
   user: {
     findUnique: async ({ where }: { where: { id: string } }) =>
-      roles[where.id] ? { role: roles[where.id] } : null,
+      roles[where.id] ? { role: roles[where.id], isActive: true } : null,
   },
 });
 
