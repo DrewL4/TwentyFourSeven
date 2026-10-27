@@ -9,6 +9,7 @@ import { PassThrough } from 'stream';
 import { streamMonitorService, resumeSeekSeconds } from '@/lib/stream-monitor-service';
 import { streamRecoveryService } from '@/lib/stream-recovery-service';
 import { viewingHistoryService } from '@/lib/viewing-history-service';
+import { viewingActivity } from '@/lib/viewing-activity-runtime';
 import { CatchupService } from '@/lib/catchup-service';
 import { shouldRejectNewTranscode } from '@/lib/stream-limit';
 import { finalizeStreamSession } from '@/lib/finalize-stream-session';
@@ -529,6 +530,13 @@ export async function GET(request: NextRequest) {
         // Don't block streaming on history logging errors
       });
     }
+
+    // Tell WatchTower who is watching (throttled, fire-and-forget; never slows the stream).
+    viewingActivity.emit({
+      playlistUsername: access.auth.login?.username,
+      email: access.auth.email,
+      clientIp,
+    });
 
     // Shared passthrough for the lifetime of the HTTP response
     const passthrough = new PassThrough({
