@@ -25,7 +25,7 @@ export default function Home() {
   const healthCheck = useQuery(orpc.healthCheck.queryOptions());
   const channelsQuery = useQuery(orpc.channels.listSummary.queryOptions());
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
-  const { isAdmin, isLoading: roleLoading } = useAdmin();
+  const { isAdmin, canManage, isLoading: roleLoading } = useAdmin();
   // Media servers (and their tokens) are admin-only.
   const serversQuery = useQuery({ ...orpc.servers.list.queryOptions(), enabled: isAdmin });
   const serverUrl = getServerUrl();
@@ -86,7 +86,7 @@ export default function Home() {
       )}
 
       {/* Navigation Cards */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${isAdmin ? "lg:grid-cols-4" : ""} gap-6 mb-8`}>
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${canManage ? "lg:grid-cols-4" : ""} gap-6 mb-8`}>
         <Card className="hover:shadow-lg transition-shadow cursor-pointer">
           <Link href="/guide">
             <CardHeader className="pb-3">
@@ -103,7 +103,7 @@ export default function Home() {
           </Link>
         </Card>
 
-        {isAdmin && (<>
+        {canManage && (<>
         <Card className="hover:shadow-lg transition-shadow cursor-pointer">
           <Link href="/channels">
             <CardHeader className="pb-3">
@@ -140,16 +140,16 @@ export default function Home() {
         </Card>
 
         <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <Link href="/settings">
+          <Link href={isAdmin ? "/settings" : "/settings/franchises"}>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Settings className="w-5 h-5 text-accent-text" />
-                <CardTitle className="text-lg">Settings</CardTitle>
+                <CardTitle className="text-lg">{isAdmin ? "Settings" : "Franchises"}</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               <CardDescription>
-                Configure servers, streaming, and preferences
+                {isAdmin ? "Configure servers, streaming, and preferences" : "Set the watch order for movie franchises"}
               </CardDescription>
             </CardContent>
           </Link>
@@ -243,7 +243,7 @@ export default function Home() {
                     <Badge variant="outline">{channel.number}</Badge>
                     <span className="font-medium">{channel.name}</span>
                   </div>
-                  {isAdmin && (
+                  {canManage && (
                     <Button variant="ghost" size="sm" asChild>
                       <Link href={`/channels/${channel.id}`}>
                         Configure

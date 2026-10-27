@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { TFS_USER_UPDATES_EVENT } from "@/constants/userRealtime";
 
 /**
- * Hook to check if current user is admin
+ * Hook to read the signed-in user's role (ADMIN, MANAGER or USER)
  * Fetches role from custom API endpoint since Better Auth doesn't include it in session
  */
 export function useAdmin() {
@@ -53,9 +53,14 @@ export function useAdmin() {
   }, [fetchRole]);
 
   const isAdmin = userRole === 'ADMIN';
+  // Managers edit channels, franchises and programming; Admins can do that and more.
+  const isManager = userRole === 'MANAGER';
+  const canManage = isAdmin || isManager;
 
   return {
     isAdmin,
+    isManager,
+    canManage,
     isLoading: sessionPending || roleFor !== userId,
     session: session ? {
       ...session,

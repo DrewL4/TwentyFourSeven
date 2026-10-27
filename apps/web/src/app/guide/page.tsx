@@ -56,7 +56,7 @@ export default function GuidePage() {
   });
   const [isMobileView, setIsMobileView] = useState(false);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
-  const { isAdmin } = useAdmin();
+  const { canManage } = useAdmin();
   const [playingChannel, setPlayingChannel] = useState<{ number: number; name: string; icon?: string | null } | null>(null);
   // Catchup state
   const [isCatchupMode, setIsCatchupMode] = useState(false);
@@ -445,7 +445,7 @@ export default function GuidePage() {
         isCatchupEligible={isCatchupEligible}
         onPlayLive={handlePlayLive}
         onPlayCatchup={playCatchup}
-        onRegenerate={isAdmin ? handleRegenerateChannel : undefined}
+        onRegenerate={canManage ? handleRegenerateChannel : undefined}
         isRegeneratePending={generateForChannelMutation.isPending}
       />
     ),
@@ -457,7 +457,7 @@ export default function GuidePage() {
       generateForChannelMutation.isPending,
       handlePlayLive,
       handleRegenerateChannel,
-      isAdmin,
+      canManage,
       playCatchup,
       isPastProgram,
       isCatchupEligible,
@@ -521,7 +521,7 @@ export default function GuidePage() {
                     >
                         <Play className="w-4 h-4" />
                     </Button>
-                    {isAdmin && (
+                    {canManage && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -668,7 +668,7 @@ export default function GuidePage() {
           </p>
         </div>
         
-        {isAdmin && (
+        {canManage && (
         <div className="flex items-center gap-2 flex-wrap">
           <Button 
             onClick={() => maintainProgramsMutation.mutate({})}
@@ -728,12 +728,12 @@ export default function GuidePage() {
             <h3 className="text-lg sm:text-xl font-semibold mb-2">No programs scheduled</h3>
             <p className="text-muted-foreground mb-4 text-sm sm:text-base">
               {channelsQuery.data && channelsQuery.data.length > 0 
-                ? (isAdmin ? "Generate programs for your channels to see the TV guide" : "Programs haven't been scheduled yet. Check back soon.")
-                : (isAdmin ? "Create some channels and add content to see the TV guide" : "No channels yet. A TFS admin needs to set them up.")
+                ? (canManage ? "Generate programs for your channels to see the TV guide" : "Programs haven't been scheduled yet. Check back soon.")
+                : (canManage ? "Create some channels and add content to see the TV guide" : "No channels yet. A TFS admin needs to set them up.")
               }
             </p>
             <div className="flex flex-col sm:flex-row gap-2 justify-center">
-              {!isAdmin ? null : channelsQuery.data && channelsQuery.data.length > 0 ? (
+              {!canManage ? null : channelsQuery.data && channelsQuery.data.length > 0 ? (
                 <>
                   <Button 
                     onClick={() => generateProgramsMutation.mutate({})}

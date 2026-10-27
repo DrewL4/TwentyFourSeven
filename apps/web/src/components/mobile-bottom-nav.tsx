@@ -12,12 +12,13 @@ import {
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useAdmin } from "@/hooks/use-admin";
-import { isAdminOnlyPath } from "@/lib/admin-routes";
+import { canOpenPath } from "@/lib/admin-routes";
 
 export default function MobileBottomNav() {
   const pathname = usePathname();
   const { data: session } = authClient.useSession();
-  const { isAdmin } = useAdmin();
+  const { isAdmin, isManager } = useAdmin();
+  const role = isAdmin ? "ADMIN" : isManager ? "MANAGER" : "USER";
 
   // Core navigation items for mobile (limited to 5 for best UX)
   const navigationLinks = [
@@ -26,7 +27,10 @@ export default function MobileBottomNav() {
     { to: "/channels", label: "Channels", icon: Radio },
     { to: "/library", label: "Library", icon: Library },
     { to: "/settings", label: "Settings", icon: Settings },
-  ].filter((link) => isAdmin || !isAdminOnlyPath(link.to));
+  ]
+    // Managers have no Settings page; their one settings page is the franchise orders.
+    .map((link) => (role === "MANAGER" && link.to === "/settings" ? { ...link, to: "/settings/franchises", label: "Franchises" } : link))
+    .filter((link) => canOpenPath(role, link.to));
 
   if (!session) return null;
 

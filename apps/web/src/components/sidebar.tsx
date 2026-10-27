@@ -22,7 +22,7 @@ import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "./ui/skeleton";
 import { useAdmin } from "@/hooks/use-admin";
-import { isAdminOnlyPath } from "@/lib/admin-routes";
+import { canOpenPath } from "@/lib/admin-routes";
 import { AppVersion } from "@/components/app-version";
 import { ModeToggle } from "@/components/mode-toggle";
 
@@ -31,7 +31,8 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
-  const { isAdmin } = useAdmin();
+  const { isAdmin, isManager } = useAdmin();
+  const role = isAdmin ? "ADMIN" : isManager ? "MANAGER" : "USER";
 
   const navigationLinks = [
     { to: "/", label: "Home", icon: Home },
@@ -41,7 +42,10 @@ export default function Sidebar() {
     { to: "/users", label: "Users", icon: Users },
     { to: "/viewers", label: "Viewers", icon: Eye },
     { to: "/settings", label: "Settings", icon: Settings },
-  ].filter((link) => isAdmin || !isAdminOnlyPath(link.to));
+  ]
+    // Managers have no Settings page; their one settings page is the franchise orders.
+    .map((link) => (role === "MANAGER" && link.to === "/settings" ? { ...link, to: "/settings/franchises", label: "Franchises" } : link))
+    .filter((link) => canOpenPath(role, link.to));
 
   const handleSignOut = () => {
     authClient.signOut({

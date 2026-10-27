@@ -1351,7 +1351,7 @@ export const appRouter = {
       // Home and Guide read this as viewers too; only admins get secrets.
       const userId = context.session?.user?.id;
       if (userId && (await isAdmin(userId, prisma))) {
-        return settings;
+        return { ...settings, tmdbKeyConfigured: Boolean(settings.tmdbApiKey) };
       }
       return redactSettingsSecrets(settings);
     }),

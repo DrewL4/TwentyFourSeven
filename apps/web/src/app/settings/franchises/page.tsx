@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useAdmin } from "@/hooks/use-admin";
 import { orpc } from "@/utils/orpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,8 @@ export default function FranchisesSettingsPage() {
 
   const franchisesQuery = useQuery(orpc.franchises.list.queryOptions());
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
+  // The TMDB key itself is Admin-only; Managers search through the server.
+  const { isAdmin } = useAdmin();
 
   const detailQuery = useQuery({
     ...orpc.franchises.get.queryOptions({ input: { id: selectedId ?? "" } }),
@@ -50,7 +53,7 @@ export default function FranchisesSettingsPage() {
   });
 
   const savedTmdbApiKey = settingsQuery.data?.tmdbApiKey?.trim() ?? "";
-  const hasSavedTmdbKey = savedTmdbApiKey.length > 0;
+  const hasSavedTmdbKey = savedTmdbApiKey.length > 0 || settingsQuery.data?.tmdbKeyConfigured === true;
   const isReplacingTmdbKey = tmdbApiKey.length > 0;
   const isTmdbKeyReadOnly = hasSavedTmdbKey && !showTmdbApiKey && !isReplacingTmdbKey;
 
@@ -200,9 +203,9 @@ export default function FranchisesSettingsPage() {
       <div className={cn("space-y-3", showEditor && "max-md:hidden")}>
         <div className="flex items-center gap-2 min-w-0">
           <Button variant="ghost" size="sm" className="shrink-0 -ml-2 touch-manipulation" asChild>
-            <Link href="/settings">
+            <Link href={isAdmin ? "/settings" : "/"}>
               <ArrowLeft className="w-4 h-4 mr-1" />
-              <span className="sr-only sm:not-sr-only sm:inline">Settings</span>
+              <span className="sr-only sm:not-sr-only sm:inline">{isAdmin ? "Settings" : "Home"}</span>
             </Link>
           </Button>
           <h1 className="text-lg md:text-xl font-semibold tracking-[-0.03em] truncate">Franchise watch order</h1>
@@ -231,6 +234,7 @@ export default function FranchisesSettingsPage() {
         </div>
       )}
 
+      {isAdmin && (
       <details
         className={cn(
           "rounded-lg border group",
@@ -295,6 +299,7 @@ export default function FranchisesSettingsPage() {
           </div>
         </div>
       </details>
+      )}
 
       <section
         className={cn("space-y-3", showEditor && "max-md:hidden")}

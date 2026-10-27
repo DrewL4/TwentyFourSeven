@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Loader from "./loader";
 import { useAdmin } from "@/hooks/use-admin";
-import { isAdminOnlyPath } from "@/lib/admin-routes";
+import { canOpenPath, isStaffPath } from "@/lib/admin-routes";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -20,9 +20,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const pathname = usePathname();
 
   const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
-  const { isAdmin, isLoading: roleLoading } = useAdmin();
-  const adminOnly = isAdminOnlyPath(pathname);
-  const blockedForRole = !!session && adminOnly && !roleLoading && !isAdmin;
+  const { isAdmin, isManager, isLoading: roleLoading } = useAdmin();
+  const role = isAdmin ? "ADMIN" : isManager ? "MANAGER" : "USER";
+  const adminOnly = isStaffPath(pathname);
+  const allowed = canOpenPath(role, pathname);
+  const blockedForRole = !!session && adminOnly && !roleLoading && !allowed;
 
   useEffect(() => {
     if (!isPending) {
@@ -38,7 +40,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         return;
       }
 
-      // Viewers (WatchTower non-admins) can't open admin pages
+      // Viewers can't open staff pages, and Managers can't open Admin-only pages
       if (blockedForRole) {
         router.replace("/");
         return;
@@ -61,7 +63,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   }
 
   // Show protected content only if authenticated (and, for admin pages, admin)
-  if (session && adminOnly && (roleLoading || !isAdmin)) {
+  if (session && adminOnly && (roleLoading || !allowed)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader />

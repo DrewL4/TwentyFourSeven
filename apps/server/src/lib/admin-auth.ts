@@ -104,11 +104,13 @@ type SettingsWithSecrets = {
 };
 
 /** Blank credentials before returning settings to a non-admin or anonymous caller. */
-export function redactSettingsSecrets<T extends SettingsWithSecrets>(settings: T): T {
+export function redactSettingsSecrets<T extends SettingsWithSecrets>(settings: T): T & { tmdbKeyConfigured: boolean } {
   return {
     ...settings,
     watchTowerPassword: '',
     tmdbApiKey: '',
+    // Managers search TMDB through the server; they only need to know a key is set.
+    tmdbKeyConfigured: Boolean(settings.tmdbApiKey),
     plexSettings: settings.plexSettings ? { ...settings.plexSettings, token: '' } : null,
   };
 }
