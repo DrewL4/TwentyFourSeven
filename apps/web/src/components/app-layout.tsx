@@ -7,6 +7,7 @@ import { ModeToggle } from "./mode-toggle";
 import Sidebar from "./sidebar";
 import { AppVersion } from "./app-version";
 import MobileBottomNav from "./mobile-bottom-nav";
+import RoutePrefetcher from "./route-prefetcher";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -55,8 +56,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </h1>
           </header>
           <main className="flex-1 overflow-auto px-4 pt-4 pb-24 md:p-4 lg:px-8 lg:py-8">
-            {children}
+            {/* Fade the new page in; the loading spinners inside pages are untouched. */}
+            <div key={pathname} className="tfs-page-fade">
+              {children}
+            </div>
           </main>
+          <RoutePrefetcher routes={["/", "/guide"]} />
           <div className="md:hidden">
             <MobileBottomNav />
           </div>
