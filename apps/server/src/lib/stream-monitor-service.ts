@@ -26,12 +26,33 @@ export interface StreamSession {
   restartedToSoftware: boolean;
   streamUrl?: string;
   seekSeconds: number;
+  /** Wall-clock ms at which `seekSeconds` was the live position (resume anchor). */
+  seekAnchorMs: number;
   /** Live shared hub — capacity is per channel, not per episode. */
   sharedLive: boolean;
   /** Remux (`copy=1`) — excluded from the transcode cap. */
   copyRemux: boolean;
   /** Who is watching (viewer-limit key), when known. */
   viewer?: string | null;
+}
+
+/**
+ * Where a respawned FFmpeg must seek so the stream picks up at the live
+ * position instead of replaying from where the first spawn started.
+ * `seekSeconds` was the schedule position at `seekAnchorMs`; a live stream
+ * plays in real time, so the schedule has advanced by the wall-clock time
+ * since. Catchup is paced by the viewer (pause/backpressure), so it keeps
+ * its recorded seek.
+ */
+export function resumeSeekSeconds(
+  session: Pick<StreamSession, 'seekSeconds' | 'seekAnchorMs' | 'sharedLive'>,
+  nowMs: number = Date.now(),
+): number {
+  if (!session.sharedLive) {
+    return session.seekSeconds;
+  }
+  const elapsed = Math.max(0, nowMs - session.seekAnchorMs);
+  return session.seekSeconds + Math.floor(elapsed / 1000);
 }
 
 export class StreamMonitorService {
@@ -81,6 +102,7 @@ export class StreamMonitorService {
       errorHistory: [],
       restartedToSoftware: false,
       seekSeconds: 0,
+      seekAnchorMs: now.getTime(),
       sharedLive: options?.sharedLive === true,
       copyRemux: options?.copyRemux === true,
       viewer: options?.viewer ?? null,
@@ -226,6 +248,9 @@ export class StreamMonitorService {
     const session = this.sessions.get(sessionId);
     if (session) {
       Object.assign(session, updates);
+      if (updates.seekSeconds !== undefined) {
+        session.seekAnchorMs = Date.now();
+      }
       session.lastActivity = new Date();
     }
   }

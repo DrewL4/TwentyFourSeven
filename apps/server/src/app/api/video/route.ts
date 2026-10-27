@@ -6,7 +6,7 @@ import { TimingService } from '@/lib/timing-service';
 import { PlexAPI } from '@/lib/plex';
 import { spawn, ChildProcess } from 'child_process';
 import { PassThrough } from 'stream';
-import { streamMonitorService } from '@/lib/stream-monitor-service';
+import { streamMonitorService, resumeSeekSeconds } from '@/lib/stream-monitor-service';
 import { streamRecoveryService } from '@/lib/stream-recovery-service';
 import { viewingHistoryService } from '@/lib/viewing-history-service';
 import { CatchupService } from '@/lib/catchup-service';
@@ -1064,7 +1064,11 @@ export async function GET(request: NextRequest) {
       if (!activeStreamUrl) {
         return null;
       }
-      const activeSeekSeconds = currentSession?.seekSeconds || seekSeconds;
+      // A respawn (encoder step-down, copy failure, recovery) must continue
+      // at the live position, not replay from the first spawn's offset.
+      const activeSeekSeconds = currentSession
+        ? resumeSeekSeconds(currentSession)
+        : seekSeconds;
 
       encodeMode = mode;
       encoderStepInFlight = false;

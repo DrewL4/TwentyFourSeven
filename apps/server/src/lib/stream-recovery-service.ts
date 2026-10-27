@@ -1,4 +1,4 @@
-import { streamMonitorService } from './stream-monitor-service';
+import { streamMonitorService, resumeSeekSeconds } from './stream-monitor-service';
 import type { StreamSession, ProgramInfo } from './stream-monitor-service';
 import { ChildProcess, spawn } from 'child_process';
 import { PassThrough } from 'stream';
@@ -305,7 +305,7 @@ export class StreamRecoveryService {
 
       // Build FFmpeg args
       const streamUrl = session.streamUrl || '';
-      const seekSeconds = session.seekSeconds || 0;
+      const seekSeconds = resumeSeekSeconds(session);
       const ffmpegArgs = await buildFfmpegArgs(streamUrl, seekSeconds, {
         forceSoftware,
         // Replacement encoder is a new MPEG-TS timeline — players need PAT/PMT.
