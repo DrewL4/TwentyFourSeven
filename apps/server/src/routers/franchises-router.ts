@@ -3,6 +3,11 @@ import { ORPCError } from '@orpc/server';
 import { managerProcedure } from '../lib/orpc';
 import { prisma } from '../lib/prisma';
 import { applyFranchiseToChannel } from '../lib/franchise-channel-service';
+import {
+  FRANCHISE_GROUP_TITLE,
+  franchiseChannelName,
+  nextFreeChannelNumber,
+} from '../lib/franchise-channel-plan';
 import { syncFranchise, syncAllFranchises } from '../lib/franchise-sync-service';
 import { previewFranchiseSortForChannel } from '../lib/franchise-sort-service';
 import { fetchTmdbCollection, searchTmdbCollections } from '../lib/tmdb-service';
@@ -281,6 +286,57 @@ export const franchisesRouter = {
     }),
 
   /** Link channel to franchise: TMDB-based automation + timeline autoSortMethod */
+  /**
+   * One click: make a channel for a franchise (next free number from 100, grouped under
+   * "Franchises", movies in watch order). If the franchise already has a channel, return it.
+   */
+  createChannel: managerProcedure
+    .input(
+      z.object({
+        franchiseId: z.string(),
+        number: z.number().int().positive().optional(),
+        name: z.string().trim().min(1).optional(),
+      }),
+    )
+    .handler(async ({ input }) => {
+      const franchise = await prisma.franchise.findUnique({ where: { id: input.franchiseId } });
+      if (!franchise) {
+        throw new ORPCError('NOT_FOUND', { message: 'Franchise not found' });
+      }
+      const existing = await prisma.channel.findFirst({
+        where: { franchiseId: franchise.id },
+        select: { id: true, number: true, name: true },
+      });
+      if (existing) {
+        return { ...existing, created: false as const };
+      }
+      const entryCount = await prisma.franchiseEntry.count({ where: { franchiseId: franchise.id } });
+      if (entryCount === 0) {
+        throw new ORPCError('BAD_REQUEST', {
+          message: 'This franchise has no movies yet. Sync or edit it first, then create the channel.',
+        });
+      }
+      const used = await prisma.channel.findMany({ select: { number: true } });
+      const usedNumbers = used.map((c) => c.number);
+      if (input.number !== undefined && usedNumbers.includes(input.number)) {
+        throw new ORPCError('BAD_REQUEST', { message: `Channel ${input.number} is already taken` });
+      }
+      const number = input.number ?? nextFreeChannelNumber(usedNumbers);
+      const name = input.name ?? franchiseChannelName(franchise.name);
+      const channel = await prisma.channel.create({
+        data: { number, name, groupTitle: FRANCHISE_GROUP_TITLE },
+        select: { id: true, number: true, name: true },
+      });
+      await applyFranchiseToChannel(channel.id, franchise.id);
+      try {
+        const { programmingService } = await import('@/lib/programming-service');
+        await programmingService.generateProgramsForChannel(channel.id, 24);
+      } catch {
+        // best-effort; the scheduler fills the guide on its next pass
+      }
+      return { ...channel, created: true as const };
+    }),
+
   applyToChannel: managerProcedure
     .input(
       z.object({

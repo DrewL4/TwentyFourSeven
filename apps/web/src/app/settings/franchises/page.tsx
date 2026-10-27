@@ -20,6 +20,7 @@ import {
   Save,
   Search,
   Trash2,
+  Radio,
   Check,
   X,
 } from "lucide-react";
@@ -90,6 +91,21 @@ export default function FranchisesSettingsPage() {
         setIsAdding(false);
         toast.success("Franchise deleted");
       },
+    }),
+  );
+
+  const createChannelMutation = useMutation(
+    orpc.franchises.createChannel.mutationOptions({
+      onSuccess: (result) => {
+        queryClient.invalidateQueries({ queryKey: orpc.franchises.list.queryOptions().queryKey });
+        queryClient.invalidateQueries({ queryKey: orpc.channels.list.queryOptions().queryKey });
+        toast.success(
+          result.created
+            ? `Channel ${result.number} "${result.name}" created`
+            : `Already on channel ${result.number} "${result.name}"`,
+        );
+      },
+      onError: (error: Error) => toast.error(error.message || "Could not create the channel"),
     }),
   );
 
@@ -361,6 +377,18 @@ export default function FranchisesSettingsPage() {
                   onClick={() => startEdit(f.id)}
                 >
                   <Pencil className="w-4 h-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 rounded-none touch-manipulation"
+                  aria-label={`Create channel for ${f.name}`}
+                  disabled={createChannelMutation.isPending || f.channelCount > 0}
+                  title={f.channelCount > 0 ? "This franchise already has a channel" : "Create a channel for this franchise"}
+                  onClick={() => createChannelMutation.mutate({ franchiseId: f.id })}
+                >
+                  <Radio className="w-4 h-4" />
                 </Button>
                 <Button
                   type="button"

@@ -167,3 +167,25 @@ describe('audit events from procedures', () => {
     assert.deepEqual(events.map((e) => [e.action, e.actor.role, e.ip]), [['auth.login', 'manager', '1.1.1.1'], ['auth.login', 'admin', undefined]]);
   });
 });
+
+describe('franchises.createChannel (wish 16)', () => {
+  it('a Manager makes one channel per franchise, numbered from 100 and grouped', async () => {
+    const f = await prisma.franchise.create({ data: { slug: 'star-wars-t', name: 'Star Wars Collection' } });
+    await prisma.channel.create({ data: { number: 100, name: 'Taken' } });
+    const proc = (routers as any).appRouter.franchises.createChannel;
+    await assert.rejects(call(proc, { franchiseId: f.id }, { context: ctx('mgr') }), /no movies yet/);
+    assert.equal(await prisma.channel.count({ where: { franchiseId: f.id } }), 0);
+    await prisma.franchiseEntry.create({ data: { franchiseId: f.id, position: 1, tmdbId: 11, label: 'A New Hope' } });
+    const first: any = await call(proc, { franchiseId: f.id }, { context: ctx('mgr') });
+    assert.equal(first.created, true);
+    assert.equal(first.number, 101);
+    assert.equal(first.name, 'Star Wars');
+    const row = await prisma.channel.findUnique({ where: { id: first.id } });
+    assert.equal(row?.groupTitle, 'Franchises');
+    assert.equal(row?.franchiseId, f.id);
+    const again: any = await call(proc, { franchiseId: f.id }, { context: ctx('mgr') });
+    assert.equal(again.created, false);
+    assert.equal(again.id, first.id);
+    await assert.rejects(call(proc, { franchiseId: f.id }, { context: ctx('usr') }), forbidden);
+  });
+});
