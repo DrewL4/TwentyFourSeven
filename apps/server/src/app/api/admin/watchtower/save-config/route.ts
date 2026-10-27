@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { guardAdminRoute } from '@/lib/admin-route-guard';
 import { db } from '@/lib/context';
 import crypto from 'crypto';
 
@@ -23,32 +23,12 @@ async function checkAdminAuthOrInitialSetup(request: NextRequest) {
       return null; // Allow initial configuration
     }
 
-    // For existing configurations, require admin auth
-    const session = await auth.api.getSession({
-      headers: request.headers,
-    });
-    
-    
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const user = await db.user.findUnique({
-      where: { id: session.user.id }
-    });
-
-
-    if (user?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin required' }, { status: 403 });
-    }
-
-    return null;
-    
+    // Everyone else needs an admin (WatchTower owner or admin, re-checked, fails closed)
+    return await guardAdminRoute(request);
   } catch (error) {
-    console.error('💥 Error in auth check:', error);
-    // If there's a database error, it might be initial setup
-    return null; // Allow setup to continue
+    // Can't tell whether this is first-time setup: refuse rather than open the route.
+    console.error('Error in auth check:', error instanceof Error ? error.message : 'error');
+    return NextResponse.json({ error: 'Could not check access. Try again.' }, { status: 503 });
   }
 }
 

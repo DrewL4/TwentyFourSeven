@@ -1,3 +1,4 @@
+import { isStaffRole, mapWtRole, withRoleFields } from '@/lib/wt-roles';
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { auth } from '@/lib/auth';
@@ -144,8 +145,8 @@ export async function POST(request: NextRequest) {
         return false;
       }
 
-      // Admins always have access
-      if (watchTowerUser.is_admin) {
+      // Staff (owner, admin, manager) always have access
+      if (isStaffRole(watchTowerUser)) {
         return true;
       }
 
@@ -186,7 +187,7 @@ export async function POST(request: NextRequest) {
 
     // Check if donation is expired (for error message)
     const isExpired = (() => {
-      if (watchTowerUser.is_admin || watchTowerUser.is_family) {
+      if (isStaffRole(watchTowerUser) || watchTowerUser.is_family) {
         return false;
       }
       if (!watchTowerUser.movie_donation_due) {
@@ -233,10 +234,9 @@ export async function POST(request: NextRequest) {
 
     
 
-    // Determine admin status - check multiple fields for compatibility
-    // WatchTower may return is_admin, or is_staff/is_superuser
-    const isAdmin = watchTowerUser.is_admin === true ||
-                    (watchTowerUser.is_staff === true && watchTowerUser.is_superuser === true);
+    // WatchTower decides the role: owner and admin are ADMIN, manager is MANAGER,
+    // everyone else USER. (Older WatchTower versions send only is_admin.)
+    const tfsRole = mapWtRole(watchTowerUser);
 
     const userData = {
       name: watchTowerUser.first_name && watchTowerUser.last_name 
@@ -248,9 +248,9 @@ export async function POST(request: NextRequest) {
       lastName: String(watchTowerUser.last_name || '').trim() || null,
       watchTowerUserId: watchTowerUser.id?.toString() || '',
       watchTowerUsername: watchTowerUser.username || '',
-      role: isAdmin ? 'ADMIN' : 'USER',
+      role: tfsRole,
       isActive: true, // Only allow active users with movie service access
-      watchTowerMetadata: {
+      watchTowerMetadata: withRoleFields({
         isAdmin: watchTowerUser.is_admin || false,
         isStaff: watchTowerUser.is_staff || false,
         isSuperuser: watchTowerUser.is_superuser || false,
@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
         is_movie_user: watchTowerUser.is_movie_user || false,
         movie_donation_due: watchTowerUser.movie_donation_due || null,
         movie_donation_amount: watchTowerUser.movie_donation_amount || null
-      }
+      }, watchTowerUser, Date.now())
     };
 
     let keptPlaylistLoginId: string | null = null;

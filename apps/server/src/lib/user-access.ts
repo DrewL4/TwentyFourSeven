@@ -1,8 +1,10 @@
 /**
  * Who may keep a TFS session. WatchTower decides roles and active status; when a
- * user is deactivated, deleted or demoted from ADMIN, every TFS session they have
+ * user is deactivated, deleted or demoted (any drop in role), every TFS session they have
  * is deleted so they are signed out everywhere (Drew's rule: demotion logs out).
  */
+
+import { lostRankOrActive } from './wt-roles';
 
 export type AccessState = { isActive: boolean; role: string };
 
@@ -16,8 +18,9 @@ type ActiveLookup = {
   };
 };
 
+/** Deactivated, or the role dropped a rank (ADMIN to MANAGER, MANAGER to USER, ADMIN to USER). */
 export function lostAccess(before: AccessState, after: AccessState): boolean {
-  return (before.isActive && !after.isActive) || (before.role === 'ADMIN' && after.role !== 'ADMIN');
+  return lostRankOrActive(before, after);
 }
 
 export async function signOutEverywhere(db: SessionStore, userId: string): Promise<void> {

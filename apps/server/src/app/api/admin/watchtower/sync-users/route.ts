@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { guardAdminRoute } from '@/lib/admin-route-guard';
 import { db } from '@/lib/context';
 import { signOutIfLostAccess } from '@/lib/user-access';
+import { isStaffRole, isStaleRoleVersion, mapWtRole, storedRoleVersion, withRoleFields } from '@/lib/wt-roles';
 
 // Helper function to check admin permissions or allow initial setup
 async function checkAdminAuthOrInitialSetup(request: NextRequest) {
@@ -13,29 +14,12 @@ async function checkAdminAuthOrInitialSetup(request: NextRequest) {
       return null; // Allow initial setup
     }
 
-    // For existing users, require admin auth
-    const session = await auth.api.getSession({
-      headers: request.headers,
-    });
-    
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const user = await db.user.findUnique({
-      where: { id: session.user.id }
-    });
-
-    if (user?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Admin required' }, { status: 403 });
-    }
-
-    return null;
+    // Everyone else needs an admin (WatchTower owner or admin, re-checked, fails closed)
+    return await guardAdminRoute(request);
   } catch (error) {
-    console.error('Error in auth check:', error);
-    // If there's a database error, it might be initial setup
-    return null; // Allow setup to continue
+    // Can't tell whether this is first-time setup: refuse rather than open the route.
+    console.error('Error in auth check:', error instanceof Error ? error.message : 'error');
+    return NextResponse.json({ error: 'Could not check access. Try again.' }, { status: 503 });
   }
 }
 
@@ -104,8 +88,8 @@ export async function POST(request: NextRequest) {
 
     // Filter to only users with movie services (including expired - we'll mark them)
     const movieServiceUsers = allUsers.filter((user: any) => {
-      // Admins always count as movie users
-      if (user.is_admin) {
+      // Staff (owner, admin, manager) always count as movie users
+      if (isStaffRole(user)) {
         return true;
       }
       // Family users always count as movie users
@@ -126,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Helper function to check if movie donation is expired
     const isMovieDonationExpired = (user: any): boolean => {
-      if (user.is_admin || user.is_family) {
+      if (isStaffRole(user) || user.is_family) {
         return false;
       }
       if (!user.movie_donation_due) {
@@ -145,8 +129,12 @@ export async function POST(request: NextRequest) {
     // Based on WatchTower logic: admins and family users always have access
     // Other users must have a valid movie_donation_due date
     const shouldHaveMovieServiceAccess = (user: any): boolean => {
-      // Admins always have access
-      if (user.is_admin) {
+      // A deactivated WatchTower account has no access, staff included
+      if (user.is_active === false) {
+        return false;
+      }
+      // Staff (owner, admin, manager) always have access
+      if (isStaffRole(user)) {
         return true;
       }
 
@@ -207,10 +195,14 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        // Determine admin status - check multiple fields for compatibility
-        // WatchTower may return is_admin, or is_staff/is_superuser
-        const isAdmin = watchTowerUser.is_admin === true || 
-                        (watchTowerUser.is_staff === true && watchTowerUser.is_superuser === true);
+        // WatchTower decides the role (owner/admin = ADMIN, manager = MANAGER, else USER)
+        const tfsRole = mapWtRole(watchTowerUser);
+
+        // An older copy of a person must not undo a newer demotion.
+        if (existingUser && isStaleRoleVersion(storedRoleVersion(existingUser.watchTowerMetadata), watchTowerUser.role_version)) {
+          syncStats.skipped++;
+          continue;
+        }
 
         const userData = {
           email: watchTowerUser.email,
@@ -221,11 +213,11 @@ export async function POST(request: NextRequest) {
           lastName: String(watchTowerUser.last_name || '').trim() || null,
           watchTowerUserId: watchTowerUser.id?.toString(),
           watchTowerUsername: watchTowerUser.username,
-          role: isAdmin ? 'ADMIN' : 'USER',
+          role: tfsRole,
           isActive: hasAccess, // Set to false if expired (will block login)
           watchTowerJoinDate: watchTowerUser.date_joined ? new Date(watchTowerUser.date_joined) : null,
           // Store additional WatchTower metadata including movie service info
-          watchTowerMetadata: {
+          watchTowerMetadata: withRoleFields({
             isAdmin: watchTowerUser.is_admin || false,
             isStaff: watchTowerUser.is_staff,
             isSuperuser: watchTowerUser.is_superuser,
@@ -239,7 +231,7 @@ export async function POST(request: NextRequest) {
             movie_donation_due: watchTowerUser.movie_donation_due || null,
             movie_donation_amount: watchTowerUser.movie_donation_amount || null,
             movie_donation_expired: isExpired
-          }
+          }, watchTowerUser, Date.now())
         };
 
         if (existingUser) {

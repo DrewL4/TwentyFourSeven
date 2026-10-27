@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getEffectiveRole } from "@/lib/admin-auth";
 
 /**
  * Custom session endpoint that includes role field
@@ -22,13 +23,15 @@ export async function GET(request: NextRequest) {
       where: { id: session.user.id },
       select: { role: true, isActive: true }
     });
+    // The role the server will act with (re-checked with WatchTower, fails closed).
+    const role = await getEffectiveRole(session.user.id, prisma);
 
     // Return enhanced session with role
     const enhancedSession = {
       ...session,
       user: {
         ...session.user,
-        role: dbUser?.role || 'USER',
+        role,
         isActive: dbUser?.isActive ?? true
       }
     };

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/context';
 import { WatchTowerHubService } from '@/lib/watchtower-hub-service';
 import { signOutEverywhere } from '@/lib/user-access';
+import { isStaffRole } from '@/lib/wt-roles';
 import { integrationTokenMatches } from '@/lib/integration-token';
 
 function extractToken(request: NextRequest): string | null {
@@ -12,7 +13,7 @@ function extractToken(request: NextRequest): string | null {
 }
 
 function shouldHaveMovieAccess(userData: Record<string, unknown>): boolean {
-  if (userData.is_admin || userData.is_family) return true;
+  if (isStaffRole(userData) || userData.is_family) return true;
   if (!userData.is_active) return false;
   if (!userData.movie_service && !userData.is_movie_user) return false;
   if (!userData.movie_donation_due) return false;

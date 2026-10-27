@@ -1,27 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { guardAdminRoute } from '@/lib/admin-route-guard';
 import { db } from "@/lib/context";
 
-// Helper function to check admin permissions
+// Admin gate (WatchTower owner or admin, re-checked with WatchTower, fails closed)
 async function checkAdminAuth(request: NextRequest) {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
-  
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // Check if user is admin
-  const user = await db.user.findUnique({
-    where: { id: session.user.id }
-  });
-
-  if (user?.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Admin required' }, { status: 403 });
-  }
-
-  return null;
+  return guardAdminRoute(request);
 }
 
 // Helper function to get WatchTower config

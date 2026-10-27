@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { db } from './context';
 import { signOutEverywhere, signOutIfLostAccess } from './user-access';
+import { isStaffRole, isStaleRoleVersion, mapWtRole, storedRoleVersion, withRoleFields } from './wt-roles';
 
 interface WatchTowerUser {
   id: number;
@@ -9,6 +10,9 @@ interface WatchTowerUser {
   first_name?: string;
   last_name?: string;
   is_admin: boolean;
+  /** owner | admin | manager | user (newer WatchTower). */
+  role?: string;
+  role_version?: number;
   is_active: boolean;
   is_staff?: boolean;
   is_superuser?: boolean;
@@ -84,6 +88,29 @@ export class WatchTowerHubService {
     return !!(this.watchTowerUrl && this.apiToken);
   }
 
+  /**
+   * WatchTower's current copy of one person (the canonical user detail), or null when it
+   * can't be read: not set up, WatchTower down, no answer in 5 s, or an error reply.
+   */
+  async fetchUserById(watchTowerUserId: string): Promise<any | null> {
+    if (!(await this.isConfigured())) return null;
+    try {
+      const response = await fetch(
+        `${this.watchTowerUrl}/api/api/v1/users/${encodeURIComponent(watchTowerUserId)}/`,
+        {
+          headers: { Authorization: `Token ${this.apiToken}` },
+          signal: AbortSignal.timeout(5000),
+          cache: 'no-store',
+        },
+      );
+      if (!response.ok) return null;
+      const body = await response.json();
+      return body?.user || body;
+    } catch {
+      return null;
+    }
+  }
+
   verifyWebhookSignature(payload: string, signature: string): boolean {
     if (!this.webhookSecret) {
       console.error('No webhook secret configured');
@@ -142,7 +169,7 @@ export class WatchTowerHubService {
   private async handleUserCreated(userData: any): Promise<void> {
     try {
       // Check if user has movie service (regardless of expiration)
-      const hasMovieService = !!(userData.movie_service || userData.is_movie_user || userData.is_admin || userData.is_family);
+      const hasMovieService = !!(userData.movie_service || userData.is_movie_user || isStaffRole(userData) || userData.is_family);
       
       if (!hasMovieService) {
         console.log(`User ${userData.email} does not have movie service - skipping creation`);
@@ -176,13 +203,13 @@ export class WatchTowerHubService {
           name: userData.username || userData.email,
           watchTowerUserId: userData.user_id?.toString(),
           watchTowerUsername: userData.username,
-          role: userData.is_admin ? 'ADMIN' : 'USER',
+          role: mapWtRole(userData),
           isActive: hasAccess, // Set to false if expired (will block login)
           password: `watchtower_sso_${Date.now()}`, // Placeholder
           emailVerified: true,
           createdAt: new Date(),
           updatedAt: new Date(),
-          watchTowerMetadata: {
+          watchTowerMetadata: withRoleFields({
             services: userData.services || [],
             tvDonationDue: userData.tv_donation_due,
             movieDonationDue: userData.movie_donation_due,
@@ -193,7 +220,7 @@ export class WatchTowerHubService {
             movie_donation_due: userData.movie_donation_due || null,
             movie_donation_expired: isExpired,
             is_family: userData.is_family || false
-          }
+          }, userData, Date.now()) as any
         }
       });
 
@@ -224,7 +251,7 @@ export class WatchTowerHubService {
       });
 
       // Check if user has movie service (regardless of expiration)
-      const hasMovieService = !!(userData.movie_service || userData.is_movie_user || userData.is_admin || userData.is_family);
+      const hasMovieService = !!(userData.movie_service || userData.is_movie_user || isStaffRole(userData) || userData.is_family);
       const isExpired = this._isMovieDonationExpired(userData);
       const hasMovieServiceAccess = this._shouldHaveMovieServiceAccess(userData);
 
@@ -239,20 +266,27 @@ export class WatchTowerHubService {
         return;
       }
 
+      // A change older than the one we already have must not undo a newer demotion.
+      if (isStaleRoleVersion(storedRoleVersion(user.watchTowerMetadata), userData.role_version)) {
+        console.warn(`[Webhook] Ignored stale update for ${userData.email} (role_version ${userData.role_version} is older than ${storedRoleVersion(user.watchTowerMetadata)})`);
+        return;
+      }
+
       // Update existing user
       // If they lost movie service access, deactivate them
       // If they gained access, activate them
       const shouldBeActive = hasMovieServiceAccess;
+      const nextRole = mapWtRole(userData);
 
       await db.user.update({
         where: { id: user.id },
         data: {
           name: userData.username || userData.email,
           watchTowerUsername: userData.username,
-          role: userData.is_admin ? 'ADMIN' : 'USER',
+          role: nextRole,
           isActive: shouldBeActive,
           updatedAt: new Date(),
-          watchTowerMetadata: {
+          watchTowerMetadata: withRoleFields({
             ...user.watchTowerMetadata as any,
             services: userData.services || [],
             tvDonationDue: userData.tv_donation_due,
@@ -264,12 +298,12 @@ export class WatchTowerHubService {
             movie_donation_due: userData.movie_donation_due || null,
             movie_donation_expired: isExpired,
             is_family: userData.is_family || false
-          }
+          }, userData, Date.now()) as any
         }
       });
 
       // Deactivated or demoted: sign out of every TFS session now.
-      await signOutIfLostAccess(db, user.id, user, { isActive: shouldBeActive, role: userData.is_admin ? 'ADMIN' : 'USER' });
+      await signOutIfLostAccess(db, user.id, user, { isActive: shouldBeActive, role: nextRole });
 
       if (!shouldBeActive && user.isActive) {
         console.log(`[Webhook] Deactivated user ${userData.email} - lost movie service access`);
@@ -462,8 +496,8 @@ export class WatchTowerHubService {
    * Check if movie donation is expired
    */
   private _isMovieDonationExpired(userData: any): boolean {
-    // Admins and family users never expire
-    if (userData.is_admin || userData.is_family) {
+    // Staff (owner, admin, manager) and family users never expire
+    if (isStaffRole(userData) || userData.is_family) {
       return false;
     }
 
@@ -494,8 +528,8 @@ export class WatchTowerHubService {
       return false;
     }
 
-    // Admins always have access
-    if (userData.is_admin) {
+    // Staff (owner, admin, manager) always have access
+    if (isStaffRole(userData)) {
       return true;
     }
 
