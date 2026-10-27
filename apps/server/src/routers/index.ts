@@ -1,6 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { z } from "zod";
-import { adminProcedure, protectedProcedure, publicProcedure } from "../lib/orpc";
+import { adminProcedure, managerProcedure, protectedProcedure, publicProcedure } from "../lib/orpc";
 import { prisma } from "../lib/prisma";
 import { isAdmin, redactSettingsSecrets, requireAdminAsync } from "../lib/admin-auth";
 import { viewingHistoryService } from "../lib/viewing-history-service";
@@ -82,7 +82,7 @@ export const appRouter = {
       return buildChannelsListSummary();
     }),
 
-    createFromCollections: adminProcedure
+    createFromCollections: managerProcedure
       .input(z.object({
         collections: z.array(z.string()).optional(),
         groupTitle: z.string().optional(),
@@ -306,7 +306,7 @@ export const appRouter = {
         return getChannelShowEpisodes(input.channelId, input.showId);
       }),
 
-    create: adminProcedure
+    create: managerProcedure
       .input(z.object({
         number: z.number(),
         name: z.string(),
@@ -347,7 +347,7 @@ export const appRouter = {
         });
       }),
 
-    update: adminProcedure
+    update: managerProcedure
       .input(z.object({
         id: z.string(),
         number: z.number().optional(),
@@ -391,7 +391,7 @@ export const appRouter = {
         });
       }),
 
-    delete: adminProcedure
+    delete: managerProcedure
       .input(z.object({ id: z.string() }))
       .handler(async ({ input }) => {
         return await prisma.channel.delete({
@@ -399,7 +399,7 @@ export const appRouter = {
         });
       }),
 
-    addShow: adminProcedure
+    addShow: managerProcedure
       .input(z.object({
         channelId: z.string(),
         showId: z.string(),
@@ -423,7 +423,7 @@ export const appRouter = {
         return result;
       }),
 
-    removeShow: adminProcedure
+    removeShow: managerProcedure
       .input(z.object({
         channelId: z.string(),
         showId: z.string()
@@ -449,7 +449,7 @@ export const appRouter = {
         return result;
       }),
 
-    addMovie: adminProcedure
+    addMovie: managerProcedure
       .input(z.object({
         channelId: z.string(),
         movieId: z.string(),
@@ -471,7 +471,7 @@ export const appRouter = {
         return result;
       }),
 
-          removeMovie: adminProcedure
+          removeMovie: managerProcedure
       .input(z.object({
         channelId: z.string(),
         movieId: z.string()
@@ -497,7 +497,7 @@ export const appRouter = {
         return result;
       }),
 
-    generatePrograms: adminProcedure
+    generatePrograms: managerProcedure
       .input(z.object({
         channelId: z.string(),
         hours: z.number().default(24)
@@ -508,7 +508,7 @@ export const appRouter = {
         return { success: true };
       }),
 
-    updateShowOrder: adminProcedure
+    updateShowOrder: managerProcedure
       .input(z.object({
         channelId: z.string(),
         showId: z.string(),
@@ -528,7 +528,7 @@ export const appRouter = {
         });
       }),
 
-    updateMovieOrder: adminProcedure
+    updateMovieOrder: managerProcedure
       .input(z.object({
         channelId: z.string(),
         movieId: z.string(),
@@ -549,7 +549,7 @@ export const appRouter = {
       }),
 
     // Channel automation endpoints
-    processAutomation: adminProcedure
+    processAutomation: managerProcedure
       .input(z.object({
         channelId: z.string()
       }))
@@ -559,14 +559,14 @@ export const appRouter = {
         return { success: true };
       }),
 
-    processAllAutomation: adminProcedure
+    processAllAutomation: managerProcedure
       .handler(async () => {
         const { channelAutomationService } = await import('@/lib/channel-automation-service');
         await channelAutomationService.processAutomatedChannels();
         return { success: true };
       }),
 
-    updateFilters: adminProcedure
+    updateFilters: managerProcedure
       .input(z.object({
         id: z.string(),
         autoFilterEnabled: z.boolean(),
@@ -596,35 +596,35 @@ export const appRouter = {
       }),
 
     // Metadata endpoints for autocomplete (distinct values across movies and shows)
-    getActors: adminProcedure
+    getActors: managerProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
       }))
       .handler(async ({ input }) => searchLibraryFacet("actors", input.search, input.limit)),
 
-    getDirectors: adminProcedure
+    getDirectors: managerProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
       }))
       .handler(async ({ input }) => searchLibraryFacet("directors", input.search, input.limit)),
 
-    getGenres: adminProcedure
+    getGenres: managerProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
       }))
       .handler(async ({ input }) => searchLibraryFacet("genres", input.search, input.limit)),
 
-    getStudios: adminProcedure
+    getStudios: managerProcedure
       .input(z.object({
         search: z.string().optional(),
         limit: z.number().default(50)
       }))
       .handler(async ({ input }) => searchLibraryFacet("studio", input.search, input.limit)),
 
-    reorderContent: adminProcedure
+    reorderContent: managerProcedure
       .input(z.object({
         channelId: z.string(),
         items: z.array(z.object({
@@ -685,7 +685,7 @@ export const appRouter = {
         return result;
       }),
 
-    reorderEpisodes: adminProcedure
+    reorderEpisodes: managerProcedure
       .input(z.object({
         channelId: z.string(),
         episodes: z.array(z.object({
@@ -738,7 +738,7 @@ export const appRouter = {
       }),
 
     // Quick Actions
-    regenerateSchedule: adminProcedure
+    regenerateSchedule: managerProcedure
       .input(z.object({ channelId: z.string() }))
       .handler(async ({ input }) => {
         try {
@@ -752,7 +752,7 @@ export const appRouter = {
         }
       }),
 
-    ensureAllChannelsHaveProgramming: adminProcedure
+    ensureAllChannelsHaveProgramming: managerProcedure
       .handler(async () => {
         try {
           const { programmingService } = await import('@/lib/programming-service');
@@ -765,7 +765,7 @@ export const appRouter = {
         }
       }),
 
-    cacheChannelCollectionIcons: adminProcedure
+    cacheChannelCollectionIcons: managerProcedure
       .handler(async () => {
         try {
           const { programmingService } = await import('@/lib/programming-service');
@@ -781,7 +781,7 @@ export const appRouter = {
         }
       }),
 
-    shuffleAllContent: adminProcedure
+    shuffleAllContent: managerProcedure
       .input(z.object({ channelId: z.string() }))
       .handler(async ({ input }) => {
         const { channelId } = input;
@@ -844,7 +844,7 @@ export const appRouter = {
       }),
 
     // Programming Rules
-    updateChannelSettings: adminProcedure
+    updateChannelSettings: managerProcedure
       .input(z.object({
         channelId: z.string(),
         settings: z.object({
@@ -867,7 +867,7 @@ export const appRouter = {
         });
       }),
 
-    updateShowSettings: adminProcedure
+    updateShowSettings: managerProcedure
       .input(z.object({
         channelId: z.string(),
         showId: z.string(),
@@ -894,7 +894,7 @@ export const appRouter = {
         });
       }),
 
-    updateMovieSettings: adminProcedure
+    updateMovieSettings: managerProcedure
       .input(z.object({
         channelId: z.string(),
         movieId: z.string(),
@@ -917,7 +917,7 @@ export const appRouter = {
         });
       }),
 
-    sortByFranchise: adminProcedure
+    sortByFranchise: managerProcedure
       .input(z.object({
         channelId: z.string(),
         franchiseSlug: z.string(),
@@ -956,7 +956,7 @@ export const appRouter = {
       return servers.map(toPublicServer);
     }),
 
-    listForLibrary: adminProcedure.handler(async () => {
+    listForLibrary: managerProcedure.handler(async () => {
       return await prisma.mediaServer.findMany({
         select: {
           id: true,
@@ -1256,7 +1256,7 @@ export const appRouter = {
 
   // Programming Management
   programming: {
-    generateForChannel: adminProcedure
+    generateForChannel: managerProcedure
       .input(z.object({
         channelId: z.string(),
         hours: z.number().optional()
@@ -1267,7 +1267,7 @@ export const appRouter = {
         return { success: true };
       }),
 
-    generateForAllChannels: adminProcedure
+    generateForAllChannels: managerProcedure
       .input(z.object({
         hours: z.number().optional()
       }))
@@ -1277,19 +1277,19 @@ export const appRouter = {
         return { success: true };
       }),
 
-    maintain: adminProcedure.handler(async () => {
+    maintain: managerProcedure.handler(async () => {
       const { programmingService } = await import('@/lib/programming-service');
       await programmingService.maintainPrograms();
       return { success: true };
     }),
 
-    cleanup: adminProcedure.handler(async () => {
+    cleanup: managerProcedure.handler(async () => {
       const { programmingService } = await import('@/lib/programming-service');
       await programmingService.cleanupOldPrograms();
       return { success: true };
     }),
 
-    cleanupOverlaps: adminProcedure.handler(async () => {
+    cleanupOverlaps: managerProcedure.handler(async () => {
       const { programmingService } = await import('@/lib/programming-service');
       const overlapsCleaned = await programmingService.cleanupAllOverlaps();
       return { success: true, overlapsCleaned };

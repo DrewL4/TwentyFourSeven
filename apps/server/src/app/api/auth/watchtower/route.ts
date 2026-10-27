@@ -1,4 +1,6 @@
-import { isStaffRole, mapWtRole, withRoleFields } from '@/lib/wt-roles';
+import { isStaffRole, mapWtRole, withRoleFields, type TfsRole } from '@/lib/wt-roles';
+import { auditElevatedLogin } from '@/lib/orpc-audit';
+import { clientAddress } from '@/lib/link-security';
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { auth } from '@/lib/auth';
@@ -363,6 +365,16 @@ export async function POST(request: NextRequest) {
         prisma.viewer.updateMany({ where: { userId: oldUserId }, data: { userId: newUserId } }),
       ]).catch((e: unknown) => console.warn("[watchtower] could not move user rows:", e instanceof Error ? e.message : "error"));
     }
+
+    // Managers and Admins signing in are always logged for WatchTower's Activity page.
+    await auditElevatedLogin({
+      userId: signUpResult.user.id,
+      role: userData.role as TfsRole,
+      db: prisma,
+      method: 'watchtower',
+      ip: clientAddress(request.headers),
+      userAgent: (request.headers.get('user-agent') || '').slice(0, 200),
+    });
 
     // Create response
     const response = NextResponse.json({

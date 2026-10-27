@@ -49,6 +49,10 @@ export class StartupService {
       // Local files: remember the source once, then index the mapped folders
       await this.initializeLocalMedia();
 
+      // Send waiting audit events to WatchTower every 30 seconds
+      const { startAuditFlusher } = await import('./audit-runtime');
+      startAuditFlusher();
+
       // Initialize WatchTower sync scheduler
       await this.initializeWatchTowerSync();
 

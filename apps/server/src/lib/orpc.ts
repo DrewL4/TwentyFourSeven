@@ -1,7 +1,13 @@
 import { ORPCError, os } from "@orpc/server";
 import type { Context } from "./context";
-import { ADMIN_REQUIRED_MESSAGE, isAdmin } from "./admin-auth";
+import {
+  ADMIN_REQUIRED_MESSAGE,
+  MANAGER_REQUIRED_MESSAGE,
+  getEffectiveRole,
+} from "./admin-auth";
 import { isActiveUser } from "./user-access";
+import { auditProcedureCall } from "./orpc-audit";
+import { roleRank, type TfsRole } from "./wt-roles";
 
 export const o = os.$context<Context>();
 
@@ -22,22 +28,38 @@ const requireAuth = o.middleware(async ({ context, next }) => {
 
 export const protectedProcedure = publicProcedure.use(requireAuth);
 
-// TFS roles come from WatchTower at sign-in (auth/watchtower/route.ts): WT admins
-// are ADMIN, everyone else is USER (viewer: home, guide, watch). The role is read
-// from the DB on every call so a WT demotion applies without a new session.
-const requireAdmin = o.middleware(async ({ context, next }) => {
-  const userId = context.session?.user?.id;
-  if (!userId || !(await isActiveUser(userId, context.db))) {
-    throw new ORPCError("UNAUTHORIZED");
-  }
-  if (!(await isAdmin(userId, context.db))) {
-    throw new ORPCError("FORBIDDEN", { message: ADMIN_REQUIRED_MESSAGE });
-  }
-  return next({
-    context: {
-      session: context.session,
-    },
+/**
+ * Roles come from WatchTower (owner/admin = ADMIN, manager = MANAGER, everyone else USER).
+ * The role is read on every call and re-checked with WatchTower every 5 minutes, failing
+ * closed, so a demotion applies without a new session.
+ *
+ * A Manager or Admin call that changes something, and any refused attempt by a signed-in
+ * user, goes to the audit outbox.
+ */
+function requireRole(needed: TfsRole, message: string) {
+  return o.middleware(async ({ context, next, path }, input) => {
+    const userId = context.session?.user?.id;
+    if (!userId || !(await isActiveUser(userId, context.db))) {
+      throw new ORPCError("UNAUTHORIZED");
+    }
+    const role = await getEffectiveRole(userId, context.db);
+    const call = { userId, role, db: context.db, path, input, ip: context.ip, userAgent: context.userAgent };
+    if (roleRank(role) < roleRank(needed)) {
+      await auditProcedureCall({ ...call, result: "denied" });
+      throw new ORPCError("FORBIDDEN", { message });
+    }
+    const output = await next({
+      context: {
+        session: context.session,
+      },
+    });
+    await auditProcedureCall({ ...call, result: "ok" });
+    return output;
   });
-});
+}
 
-export const adminProcedure = publicProcedure.use(requireAdmin);
+/** Admin only: users, viewers, settings, sources, integrations. */
+export const adminProcedure = publicProcedure.use(requireRole("ADMIN", ADMIN_REQUIRED_MESSAGE));
+
+/** Manager or Admin: channels, franchises, programming (EPG) and the library page. */
+export const managerProcedure = publicProcedure.use(requireRole("MANAGER", MANAGER_REQUIRED_MESSAGE));

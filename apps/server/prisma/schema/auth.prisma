@@ -70,3 +70,18 @@ model Verification {
 
   @@map("verification")
 }
+
+/// Audit events waiting to be sent to WatchTower's Activity page (signed `audit.batch`).
+/// Rows stay a week after sending so a lost reply can be checked. WatchTower ignores repeats by `eventId`.
+model AuditOutbox {
+  id        String    @id @default(cuid()) @map("_id")
+  eventId   String    @unique
+  payload   Json
+  attempts  Int       @default(0)
+  lastError String?
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+
+  @@index([sentAt, createdAt])
+  @@map("audit_outbox")
+}
