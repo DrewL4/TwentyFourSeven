@@ -8,6 +8,7 @@ import { buildChannelsListSummary, getChannelLineup, getChannelShowEpisodes } fr
 import { guideRouter } from "./guide-router";
 import { libraryRouter } from "./library-router";
 import { franchisesRouter } from "./franchises-router";
+import { youtubeRouter } from "./youtube-router";
 import { resolvePlexCredentials, toPublicServer, tokenUpdate } from "../lib/media-server-public";
 import { searchLibraryFacet } from "../lib/library-facets";
 
@@ -1200,6 +1201,7 @@ export const appRouter = {
   library: libraryRouter,
 
   franchises: franchisesRouter,
+  youtube: youtubeRouter,
 
   // Catchup / Timeshift
   catchup: {

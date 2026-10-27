@@ -571,3 +571,21 @@ enum FranchiseSortMode {
   CHRONOLOGICAL
   RELEASE
 } 
+
+/// A YouTube channel or playlist that the server downloads (yt-dlp) into a TV folder,
+/// so it shows up as a show that 24/7 channels can play.
+model YoutubeSource {
+  id         String   @id @default(cuid()) @map("_id")
+  name       String   @unique
+  url        String
+  maxVideos  Int      @default(10)
+  enabled    Boolean  @default(true)
+  lastRunAt  DateTime?
+  lastStatus String?
+  lastError  String?
+  channelId  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("youtube_source")
+}

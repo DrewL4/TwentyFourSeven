@@ -90,6 +90,8 @@ export class StartupService {
       }
       const { startLocalMediaScheduler } = await import('./local-media/scanner');
       startLocalMediaScheduler();
+      const { startYoutubeScheduler } = await import('./youtube/service');
+      startYoutubeScheduler();
     } catch (error) {
       console.error('Local files setup failed:', (error as Error).message);
     }

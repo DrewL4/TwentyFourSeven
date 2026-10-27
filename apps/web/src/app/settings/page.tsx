@@ -364,6 +364,27 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          {/* YouTube channels */}
+          <Card className="gap-0 py-0 overflow-hidden shadow-sm">
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Film className="w-4 h-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-tight">YouTube channels</p>
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    Download a YouTube channel or playlist and turn it into a 24/7 channel
+                  </p>
+                </div>
+              </div>
+              <Button asChild variant="outline" size="sm" className="shrink-0 h-9 touch-manipulation">
+                <Link href="/settings/youtube">
+                  Manage
+                  <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+                </Link>
+              </Button>
+            </div>
+          </Card>
+
           {/* Franchise timeline / TMDB */}
           <Card className="gap-0 py-0 overflow-hidden shadow-sm">
             <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">

@@ -127,6 +127,12 @@ RUN echo "deps refresh: ${DEPS_REFRESH:-none}" && apt-get update && apt-get upgr
 
 # ffmpeg is installed via Debian package and available at /usr/bin/ffmpeg and /usr/bin/ffprobe
 
+# yt-dlp (standalone build, no Python needed) for Settings > YouTube channels.
+# A failed download only disables that feature; it never fails the image build.
+RUN curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o /usr/local/bin/yt-dlp \
+    && chmod 0755 /usr/local/bin/yt-dlp \
+    || echo "WARNING: yt-dlp not installed; YouTube channels will report it as missing"
+
 # Copy package files for production install (monorepo-aware for cache)
 COPY package*.json ./
 COPY turbo.json ./
