@@ -50,7 +50,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
               {pathname === "/guide" && "TV Guide"}
               {pathname === "/channels" && "Channels"}
               {pathname === "/library" && "Library"}
-              {pathname === "/users" && "Users"}
+              {(pathname === "/users" || pathname.startsWith("/users/")) && "Users"}
               {pathname === "/settings" && "Settings"}
               {pathname.startsWith("/channels/") && "Channel Details"}
             </h1>

@@ -8,7 +8,7 @@ import { postSignedCall, type CallResult, type WatchTowerLink } from './wt-signe
  */
 
 /** The only actions the tab may send. Anything else is refused here before WatchTower is asked. */
-export const USERS_TAB_ACTIONS = ['set_role', 'approve', 'deny', 'edit_basic', 'set_app_access'] as const;
+export const USERS_TAB_ACTIONS = ['set_role', 'approve', 'deny', 'edit_basic', 'set_app_access', 'remove_playlist'] as const;
 export type UsersTabAction = (typeof USERS_TAB_ACTIONS)[number];
 
 export type UsersTabDeps = {
@@ -26,7 +26,7 @@ export function isUsersTabAction(value: unknown): value is UsersTabAction {
 
 export async function callUsersTab(
   caller: UsersTabCaller,
-  action: 'list' | UsersTabAction,
+  action: 'list' | 'user_page' | 'user_page_save' | UsersTabAction,
   args: Record<string, unknown>,
   deps: UsersTabDeps,
 ): Promise<CallResult> {
@@ -49,6 +49,8 @@ export async function callUsersTab(
     action,
     args,
   };
-  const post = deps.post ?? ((l, p) => postSignedCall(l, p));
+  // A page call goes WatchTower -> ESPG / 24/7 and back, so it gets longer than a list call.
+  const timeoutMs = action === 'user_page' || action === 'user_page_save' ? 60000 : undefined;
+  const post = deps.post ?? ((l, p) => postSignedCall(l, p, timeoutMs ? { timeoutMs } : {}));
   return post(link, payload);
 }

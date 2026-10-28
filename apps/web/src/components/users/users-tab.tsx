@@ -106,7 +106,7 @@ function EditRow({ row, busy, onSave, onCancel }: {
   )
 }
 
-export default function UsersTab({ api }: { api: UsersTabApi }) {
+export default function UsersTab({ api, onOpenUser = null }: { api: UsersTabApi; onOpenUser?: ((row: TabUser) => void) | null }) {
   const [data, setData] = useState<TabDirectory | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -231,7 +231,14 @@ export default function UsersTab({ api }: { api: UsersTabApi }) {
               <React.Fragment key={row.id}>
                 <tr data-testid={`user-row-${row.id}`} className="align-top">
                   <td className="px-3 py-2">
-                    <p className="font-medium">{[row.first_name, row.last_name].filter(Boolean).join(' ') || row.username}</p>
+                    {onOpenUser ? (
+                      <button type="button" data-testid={`user-open-${row.id}`} onClick={() => onOpenUser(row)}
+                        className="text-left font-medium text-blue-600 dark:text-blue-400 underline">
+                        {[row.first_name, row.last_name].filter(Boolean).join(' ') || row.username}
+                      </button>
+                    ) : (
+                      <p className="font-medium">{[row.first_name, row.last_name].filter(Boolean).join(' ') || row.username}</p>
+                    )}
                     <p className="text-xs text-gray-600 dark:text-gray-400">{row.username}</p>
                     <p className="text-xs text-gray-600 dark:text-gray-400">{row.email}</p>
                     {!row.is_active && <p className="text-xs text-red-700 dark:text-red-300">Account turned off</p>}

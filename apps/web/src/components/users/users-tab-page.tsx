@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import UsersTab from "./users-tab";
 import type { UsersTabApi } from "@/lib/users-tab-helpers";
 
@@ -38,6 +39,7 @@ const sharedApi: UsersTabApi = {
  * a Manager sees only the shared tab.
  */
 export default function UsersTabPage({ showManage, children }: { showManage: boolean; children: React.ReactNode }) {
+  const router = useRouter();
   const [view, setView] = useState<"users" | "manage">("users");
   const tabCls = (on: boolean) =>
     `px-4 py-2 text-sm font-medium border-b-2 ${
@@ -57,7 +59,7 @@ export default function UsersTabPage({ showManage, children }: { showManage: boo
           </button>
         </div>
       )}
-      {view === "users" || !showManage ? <UsersTab api={sharedApi} /> : children}
+      {view === "users" || !showManage ? <UsersTab api={sharedApi} onOpenUser={(row) => router.push(`/users/${row.id}/`)} /> : children}
     </div>
   );
 }

@@ -42,3 +42,28 @@ export async function usersTabAction(request: NextRequest): Promise<NextResponse
   const result = await callUsersTab(caller, action as UsersTabAction, args, { link: watchTowerLink });
   return NextResponse.json(result.body, { status: result.status, headers: noStore });
 }
+
+/** GET: one person's page (WatchTower builds it from its own data and from ESPG and 24/7). */
+export async function usersTabUserPage(request: NextRequest, userId: string): Promise<NextResponse> {
+  const caller = await currentCaller(request);
+  if (!caller) return NextResponse.json({ error: 'Sign in required' }, { status: 401, headers: noStore });
+  if (!/^\d+$/.test(userId)) return NextResponse.json({ error: 'Unknown person.' }, { status: 404, headers: noStore });
+  const result = await callUsersTab(caller, 'user_page', { user_id: Number(userId) }, { link: watchTowerLink });
+  return NextResponse.json(result.body, { status: result.status, headers: noStore });
+}
+
+/** POST: save every changed part of the page together. WatchTower checks and applies each part. */
+export async function usersTabUserPageSave(request: NextRequest, userId: string): Promise<NextResponse> {
+  const caller = await currentCaller(request);
+  if (!caller) return NextResponse.json({ error: 'Sign in required' }, { status: 401, headers: noStore });
+  if (!/^\d+$/.test(userId)) return NextResponse.json({ error: 'Unknown person.' }, { status: 404, headers: noStore });
+  let changes: Record<string, unknown> = {};
+  try {
+    const parsed = await request.json();
+    if (parsed && typeof parsed.changes === 'object' && parsed.changes && !Array.isArray(parsed.changes)) changes = parsed.changes;
+  } catch {
+    changes = {};
+  }
+  const result = await callUsersTab(caller, 'user_page_save', { user_id: Number(userId), changes }, { link: watchTowerLink });
+  return NextResponse.json(result.body, { status: result.status, headers: noStore });
+}

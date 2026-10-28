@@ -58,8 +58,8 @@ describe('callUsersTab', () => {
     assert.deepEqual(r, { status: 403, body: { error: 'Not allowed.' } });
   });
 
-  it('only the five known actions are allowed through', () => {
-    assert.deepEqual([...USERS_TAB_ACTIONS], ['set_role', 'approve', 'deny', 'edit_basic', 'set_app_access']);
+  it('only the six known actions are allowed through', () => {
+    assert.deepEqual([...USERS_TAB_ACTIONS], ['set_role', 'approve', 'deny', 'edit_basic', 'set_app_access', 'remove_playlist']);
     for (const a of USERS_TAB_ACTIONS) assert.equal(isUsersTabAction(a), true);
     for (const a of ['list', 'delete_user', '', null, 3, undefined]) assert.equal(isUsersTabAction(a), false);
   });

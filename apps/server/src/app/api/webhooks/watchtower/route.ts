@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WatchTowerHubService } from '@/lib/watchtower-hub-service';
+import { USER_PAGE_EVENT, createNonceStore, handleUserPage } from '@/lib/user-page-door';
+import { prismaUserPageStore } from '@/lib/user-page-store';
+
+// Single-use nonces for the per-user page door (kept in this process for ten minutes).
+const pageNonces = createNonceStore();
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,6 +46,12 @@ export async function POST(request: NextRequest) {
     const webhookEvent = JSON.parse(body);
     
     console.log(`[Webhook] Received webhook from WatchTower: ${webhookEvent.event_type}`);
+
+    // The per-user page door answers with data, so it is handled before the one-way sync events.
+    if (webhookEvent.event_type === USER_PAGE_EVENT) {
+      const reply = await handleUserPage(webhookEvent, { store: prismaUserPageStore, nonces: pageNonces });
+      return NextResponse.json(reply.body, { status: reply.status, headers: { 'Cache-Control': 'no-store' } });
+    }
     
     // Log event details for movie service filtering
     if (webhookEvent.event_type === 'user.created' || webhookEvent.event_type === 'user.updated') {
