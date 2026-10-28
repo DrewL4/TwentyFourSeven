@@ -263,7 +263,7 @@ function ActivitySection({ page }) {
             </div>
             <div data-testid="activity-log">
                 <p className="text-sm font-medium">Activity log</p>
-                {log === null ? <Empty>The activity log is for Admins and the Owner.</Empty>
+                {log === null ? <Empty>The activity log is not available for this person.</Empty>
                     : log.length === 0 ? <Empty>No activity logged for this person.</Empty> : (
                         <Table label="Activity log" head={['When', 'App', 'Who', 'What', 'Result']}>
                             {log.map((e) => (
