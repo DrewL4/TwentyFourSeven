@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { authClient } from "@/lib/auth-client";
-import { bundleIsStale, mayReload, scriptFiles, scriptPath } from "@/lib/stale-bundle";
+import { buildIdFrom, bundleIsStale, mayReload } from "@/lib/stale-bundle";
 
 const RELOAD_KEY = "tfs:bundle-reload-at";
 const CHECK_EVERY_MS = 2 * 60 * 1000;
@@ -33,11 +33,13 @@ export default function BundleWatch() {
           credentials: "same-origin",
         });
         if (!res.ok || !(res.headers.get("content-type") || "").includes("text/html")) return;
-        const fresh = scriptFiles(await res.text());
-        const running = Array.from(document.querySelectorAll("script[src]"))
-          .map((s) => scriptPath(s.getAttribute("src") || ""))
-          .filter((p): p is string => !!p);
-        if (!bundleIsStale(running, fresh)) return;
+        const freshId = buildIdFrom(await res.text());
+        const runningId = buildIdFrom(
+          ((window as unknown as { __next_f?: unknown[][] }).__next_f ?? [])
+            .map((chunk) => (typeof chunk?.[1] === "string" ? chunk[1] : ""))
+            .join(""),
+        );
+        if (!bundleIsStale(runningId, freshId)) return;
 
         const playing = !!document.querySelector("video");
         const typing = Array.from(document.querySelectorAll("input, textarea")).some(

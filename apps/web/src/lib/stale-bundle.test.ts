@@ -1,26 +1,32 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { bundleIsStale, mayReload, scriptFiles } from './stale-bundle';
+import { buildIdFrom, bundleIsStale, mayReload } from './stale-bundle';
 
-const html = (files: string[]) => `<html><head></head><body>${files.map((f) => `<script src="${f}" async=""></script>`).join('')}<script>self.__next_f=[]</script></body></html>`;
-
-describe('scriptFiles', () => {
-  it('lists /_next/static scripts, ignoring host, query and inline scripts', () => {
-    const files = scriptFiles(html(['/_next/static/chunks/a-1.js', 'http://x:1/_next/static/chunks/b-2.js?dpl=9', '/other/x.js']));
-    assert.deepEqual(files, ['/_next/static/chunks/a-1.js', '/_next/static/chunks/b-2.js']);
+describe('buildIdFrom', () => {
+  it('reads the id from page HTML, where the quotes are escaped', () => {
+    const html = '<script>self.__next_f.push([1,"{\\"b\\":\\"kV_WlUPQNcFdiKuGDHfgi\\",\\"p\\":\\"\\"}"])</script>';
+    assert.equal(buildIdFrom(html), 'kV_WlUPQNcFdiKuGDHfgi');
+  });
+  it('reads the id from the running page data, where the quotes are plain', () => {
+    assert.equal(buildIdFrom('0:{"b":"00LPMrzBa5J7iZIx1IhEN","p":""}'), '00LPMrzBa5J7iZIx1IhEN');
+  });
+  it('null when there is no id (error page, empty reply)', () => {
+    assert.equal(buildIdFrom('<html>502 Bad Gateway</html>'), null);
+    assert.equal(buildIdFrom(''), null);
   });
 });
 
 describe('bundleIsStale', () => {
-  const running = ['/_next/static/chunks/a-1.js', '/_next/static/chunks/b-2.js', '/_next/static/chunks/extra-9.js'];
-  it('same build: not stale, even if the page loaded extra chunks since', () => {
-    assert.equal(bundleIsStale(running, ['/_next/static/chunks/a-1.js', '/_next/static/chunks/b-2.js']), false);
+  it('a different id is a new build', () => {
+    assert.equal(bundleIsStale('old', 'new'), true);
   });
-  it('a new hashed file: stale', () => {
-    assert.equal(bundleIsStale(running, ['/_next/static/chunks/a-1.js', '/_next/static/chunks/b-3.js']), true);
+  it('same id is not stale', () => {
+    assert.equal(bundleIsStale('same', 'same'), false);
   });
-  it('empty or unparseable reply is never treated as a new build', () => {
-    assert.equal(bundleIsStale(running, []), false);
+  it('an unknown id on either side is never treated as a new build', () => {
+    assert.equal(bundleIsStale(null, 'new'), false);
+    assert.equal(bundleIsStale('old', null), false);
+    assert.equal(bundleIsStale(null, null), false);
   });
 });
 
