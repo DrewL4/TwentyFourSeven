@@ -58,6 +58,12 @@ export function configuredLocalRoots(
     if (isSystemFolder(norm)) continue;
     if (!out.includes(norm)) out.push(norm);
   }
+  // The YouTube download folder is scanned too once it holds videos, so downloads reach the library.
+  const yt = (env.YOUTUBE_DOWNLOAD_DIR || "").trim();
+  if (yt && path.isAbsolute(yt)) {
+    const norm = path.resolve(yt);
+    if (!isSystemFolder(norm) && !out.includes(norm) && hasEntries(norm)) out.push(norm);
+  }
   return out;
 }
 

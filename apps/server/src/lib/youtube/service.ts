@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { accessSync, constants, mkdirSync } from 'node:fs';
 import { prisma } from '../prisma';
 import { configuredLocalRoots } from '../local-media/paths';
-import { buildYtDlpArgs, parseYoutubeUrl, pickDownloadRoot, safeFolderName } from './plan';
+import { buildYtDlpArgs, parseYoutubeUrl, pickDownloadRoot, safeFolderName, usesExplicitDownloadDir } from './plan';
 
 const RUN_TIMEOUT_MS = 60 * 60 * 1000;
 const running = new Set<string>();
@@ -30,6 +30,27 @@ function runProcess(bin: string, args: string[], timeoutMs: number): Promise<{ c
       resolve({ code, stderr, missing: false });
     });
   });
+}
+
+/**
+ * Create the show folder (and any missing parents) and check we can write into it.
+ * A read-only or missing media mapping is reported in plain words, never as a raw ENOENT.
+ */
+export function prepareShowFolder(root: string, folder: string, explicitDir = false, mkdir: (p: string) => void = (p) => void mkdirSync(p, { recursive: true })): string | null {
+  const showDir = `${root}/${folder}`;
+  try {
+    mkdir(showDir);
+    accessSync(showDir, constants.W_OK);
+    return null;
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'EROFS' || code === 'EACCES' || code === 'EPERM') {
+      return explicitDir
+        ? `TwentyFourSeven can't write to the YouTube download folder (${root}). Check that the folder is mapped to your container and is not read-only.`
+        : `TwentyFourSeven can't write to your TV folder (${root}). Check the folder mapping in your container settings.`;
+    }
+    return `TwentyFourSeven could not create the download folder inside ${root}${code ? ` (${code})` : ''}.`;
+  }
 }
 
 /** Download the newest videos of one source, then refresh the local library. */
@@ -60,10 +81,11 @@ export async function runYoutubeSource(id: string, opts: { timeoutMs?: number; s
     let args: string[];
     try {
       args = buildYtDlpArgs({ root, name: source.name, url: parsed.url, maxVideos: source.maxVideos });
-      mkdirSync(`${root}/${safeFolderName(source.name)}`, { recursive: true });
     } catch (e) {
       return await finish({ ok: false, status: 'failed', error: (e as Error).message });
     }
+    const folderProblem = prepareShowFolder(root, safeFolderName(source.name), usesExplicitDownloadDir());
+    if (folderProblem) return await finish({ ok: false, status: 'failed', error: folderProblem });
     const out = await runProcess(ytDlpBinary(), args, opts.timeoutMs ?? RUN_TIMEOUT_MS);
     if (out.missing) {
       return await finish({ ok: false, status: 'failed', error: 'yt-dlp is not installed on this server (set YTDLP_PATH or use the updated image).' });

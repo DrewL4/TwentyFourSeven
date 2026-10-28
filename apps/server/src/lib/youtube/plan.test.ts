@@ -5,13 +5,24 @@ import { buildYtDlpArgs, parseYoutubeUrl, pickDownloadRoot, safeFolderName } fro
 describe('youtube plan', () => {
   it('accepts only https YouTube addresses', () => {
     assert.equal(parseYoutubeUrl('https://www.youtube.com/@NASA').ok, true);
-    assert.equal(parseYoutubeUrl('https://youtu.be/abc').ok, true);
+    assert.equal(parseYoutubeUrl('https://youtu.be/abcde').ok, true);
     assert.equal(parseYoutubeUrl('http://youtube.com/watch?v=1').ok, false);
     assert.equal(parseYoutubeUrl('https://evil.example/youtube.com').ok, false);
     assert.equal(parseYoutubeUrl('https://youtube.com.evil.example/x').ok, false);
     assert.equal(parseYoutubeUrl('https://user:pw@youtube.com/x').ok, false);
     assert.equal(parseYoutubeUrl('file:///etc/passwd').ok, false);
     assert.equal(parseYoutubeUrl('--exec rm').ok, false);
+  });
+  it('requires a channel handle, channel ID, playlist or video', () => {
+    for (const bad of ['https://www.youtube.com/', 'https://www.youtube.com', 'https://youtube.com/@', 'https://www.youtube.com/@a', 'https://www.youtube.com/channel/', 'https://youtu.be/', 'https://www.youtube.com/playlist', 'https://www.youtube.com/watch', 'https://www.youtube.com/feed/trending']) {
+      const r = parseYoutubeUrl(bad);
+      assert.equal(r.ok, false, bad);
+      assert.match((r as any).reason, /@name|http|YouTube/, bad);
+    }
+    for (const good of ['https://www.youtube.com/@BlenderStudio', 'https://www.youtube.com/@BlenderStudio/videos', 'https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg', 'https://www.youtube.com/c/BlenderFoundation', 'https://www.youtube.com/user/blenderfoundation', 'https://www.youtube.com/playlist?list=PL123', 'https://www.youtube.com/watch?v=abc123', 'https://youtu.be/abc123def']) {
+      assert.equal(parseYoutubeUrl(good).ok, true, good);
+    }
+    assert.match((parseYoutubeUrl('https://www.youtube.com/') as any).reason, /@BlenderStudio/);
   });
   it('makes safe folder names', () => {
     assert.equal(safeFolderName('../../etc'), 'etc');

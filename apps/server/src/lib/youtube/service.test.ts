@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ORPCError, call } from '@orpc/server';
@@ -66,7 +66,7 @@ describe('runYoutubeSource', () => {
     assert.equal(row?.lastError, null);
   });
   it('records yt-dlp failures and a missing binary in plain words', async () => {
-    const s = await prisma.youtubeSource.create({ data: { name: 'Bad', url: 'https://youtu.be/x' } });
+    const s = await prisma.youtubeSource.create({ data: { name: 'Bad', url: 'https://youtu.be/xxxxx' } });
     process.env.YTDLP_PATH = failBin;
     const r = await svc.runYoutubeSource(s.id, { scan: false });
     assert.equal(r.ok, false);
@@ -74,6 +74,44 @@ describe('runYoutubeSource', () => {
     process.env.YTDLP_PATH = path.join(dir, 'nope');
     const r2 = await svc.runYoutubeSource(s.id, { scan: false });
     assert.match(r2.error!, /not installed/);
+  });
+  it('creates missing parent folders when it can', () => {
+    const deep = path.join(dir, 'deep', 'er');
+    assert.equal(svc.prepareShowFolder(deep, 'Show'), null);
+    assert.ok(statSync(path.join(deep, 'Show')).isDirectory());
+  });
+  it('explains an unwritable or missing media folder in plain words', () => {
+    // Node reports a recursive mkdir on a read-only mount as ENOENT, so that is what the fake throws.
+    const enoent = () => {
+      throw Object.assign(new Error("ENOENT: no such file or directory, mkdir '/tv/Blender Studio'"), { code: 'ENOENT' });
+    };
+    const msg = svc.prepareShowFolder('/tv', 'Blender Studio', false, enoent);
+    assert.equal(msg, "TwentyFourSeven can't write to your TV folder (/tv). Check the folder mapping in your container settings.");
+    assert.doesNotMatch(msg!, /ENOENT|mkdir/);
+    assert.match(svc.prepareShowFolder('/youtube', 'X', true, enoent)!, /YouTube download folder \(\/youtube\)/);
+  });
+  it('stores a plain message, not a raw error, when the show folder cannot be created', async () => {
+    const blocker = path.join(dir, 'a-file');
+    writeFileSync(blocker, 'x');
+    const saved = process.env.YOUTUBE_DOWNLOAD_DIR;
+    process.env.YOUTUBE_DOWNLOAD_DIR = blocker;
+    try {
+      process.env.YTDLP_PATH = okBin;
+      const s = await prisma.youtubeSource.create({ data: { name: 'Blender Studio', url: 'https://www.youtube.com/@BlenderStudio' } });
+      const r = await svc.runYoutubeSource(s.id, { scan: false });
+      assert.equal(r.ok, false);
+      assert.match(r.error!, /could not create the download folder/);
+      assert.doesNotMatch(r.error!, /mkdir|no such file/);
+    } finally {
+      if (saved === undefined) delete process.env.YOUTUBE_DOWNLOAD_DIR;
+      else process.env.YOUTUBE_DOWNLOAD_DIR = saved;
+    }
+  });
+  it('refuses a saved address that has no channel in it', async () => {
+    const s = await prisma.youtubeSource.create({ data: { name: 'Truncated', url: 'https://www.youtube.com/' } });
+    const r = await svc.runYoutubeSource(s.id, { scan: false });
+    assert.equal(r.ok, false);
+    assert.match(r.error!, /does not point to a channel/);
   });
   it('refuses a non-YouTube address stored in the database', async () => {
     const s = await prisma.youtubeSource.create({ data: { name: 'Evil', url: 'https://evil.example/x' } });
@@ -91,10 +129,12 @@ describe('youtube router', () => {
   });
   it('validates the address and the name', async () => {
     await assert.rejects(call(r().create, { name: 'X', url: 'http://youtube.com/x' }, { context: ctx('adm') }), /https/);
-    await assert.rejects(call(r().create, { name: '..', url: 'https://youtu.be/x' }, { context: ctx('adm') }), /letters or numbers/);
+    await assert.rejects(call(r().create, { name: 'Home', url: 'https://www.youtube.com/' }, { context: ctx('adm') }), /does not point to a channel/);
+    await assert.rejects(call(r().update, { id: 'x', url: 'https://www.youtube.com/' }, { context: ctx('adm') }), /does not point to a channel|not found|Not found/i);
+    await assert.rejects(call(r().create, { name: '..', url: 'https://youtu.be/xxxxx' }, { context: ctx('adm') }), /letters or numbers/);
     const made: any = await call(r().create, { name: 'Kurzgesagt', url: 'https://www.youtube.com/@kurzgesagt', maxVideos: 5 }, { context: ctx('adm') });
     assert.equal(made.name, 'Kurzgesagt');
-    await assert.rejects(call(r().create, { name: 'Kurzgesagt', url: 'https://youtu.be/x' }, { context: ctx('adm') }), /already exists/);
+    await assert.rejects(call(r().create, { name: 'Kurzgesagt', url: 'https://youtu.be/xxxxx' }, { context: ctx('adm') }), /already exists/);
   });
   it('makes a channel only once the show is in the library', async () => {
     const src = await prisma.youtubeSource.findFirstOrThrow({ where: { name: 'Kurzgesagt' } });

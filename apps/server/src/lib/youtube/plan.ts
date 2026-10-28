@@ -15,7 +15,26 @@ export function parseYoutubeUrl(input: string): { ok: true; url: string } | { ok
     return { ok: false, reason: 'Only YouTube addresses (youtube.com, youtu.be) are allowed.' };
   }
   if (u.username || u.password) return { ok: false, reason: 'The address cannot contain a login.' };
+  if (!pointsAtSomething(u)) {
+    return {
+      ok: false,
+      reason: 'That address does not point to a channel. Use the channel address with its @name, for example https://www.youtube.com/@BlenderStudio',
+    };
+  }
   return { ok: true, url: u.toString() };
+}
+
+/** A bare youtube.com address is not a channel: it needs a handle, a channel ID, a playlist or a video. */
+function pointsAtSomething(u: URL): boolean {
+  const parts = u.pathname.split('/').filter(Boolean);
+  const host = u.hostname.toLowerCase();
+  if (host === 'youtu.be') return parts.length >= 1 && parts[0].length >= 5;
+  const first = parts[0] ?? '';
+  if (first.startsWith('@')) return /^@[\p{L}\p{N}._-]{2,}$/u.test(first);
+  if (['channel', 'c', 'user', 'shorts', 'live'].includes(first)) return !!parts[1] && parts[1].length >= 2;
+  if (first === 'playlist') return !!u.searchParams.get('list');
+  if (first === 'watch') return !!u.searchParams.get('v');
+  return false;
 }
 
 /** A name that is safe as a folder: no slashes, dots-only names or control characters. */
@@ -29,6 +48,12 @@ export function safeFolderName(name: string): string {
     .slice(0, 80)
     .trim();
   return cleaned;
+}
+
+/** True when the folder comes from YOUTUBE_DOWNLOAD_DIR rather than a TV-looking media folder. */
+export function usesExplicitDownloadDir(env: Record<string, string | undefined> = process.env): boolean {
+  const explicit = (env.YOUTUBE_DOWNLOAD_DIR || '').trim();
+  return !!explicit && path.isAbsolute(explicit);
 }
 
 /** Pick the TV folder to download into: explicit setting first, then a root that looks like TV. */

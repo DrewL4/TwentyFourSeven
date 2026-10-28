@@ -12,6 +12,8 @@ services:
       # Remove these two lines if you only use Plex.
       - /path/to/Movies:/movies:ro
       - /path/to/TV:/tv:ro
+      # Optional, only for Settings > YouTube: a folder TFS may write to (also set YOUTUBE_DOWNLOAD_DIR=/youtube)
+      # - /path/to/YouTube:/youtube
     environment:
       # External domain configuration (set these if you use a reverse proxy / your own domain)
       # - EXTERNAL_DOMAIN=tv.example.com
@@ -27,6 +29,8 @@ services:
       
       # Video folders inside the container (optional; /movies and /tv are used by default)
       # - LOCAL_MEDIA_PATHS=/movies,/tv
+      # Where YouTube downloads go (needs a writable folder; /tv and /movies are read-only)
+      # - YOUTUBE_DOWNLOAD_DIR=/youtube
 
       # GPU settings (optional)
       - GPU_DETECTION_ENABLED=true

@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { cleanPickedFolders, findVideoFolders, guessKind, isHiddenFolder, listFolder, resolveBrowsePath } from "./browse";
@@ -174,4 +174,14 @@ test("a whole-server /media is not scanned until folders are picked", () => {
   const split = path.join(whole, "split", "media");
   mkdirSync(path.join(split, "Movies"), { recursive: true });
   assert.deepEqual(configuredLocalRoots("", {}, [split]), [split]);
+});
+
+test("the YouTube download folder is scanned once it holds videos", () => {
+  const dl = mkdtempSync(path.join(tmpdir(), "tfs-ytdl-"));
+  assert.deepEqual(configuredLocalRoots("", { YOUTUBE_DOWNLOAD_DIR: dl }, []), []);
+  writeFileSync(path.join(dl, "x.txt"), "x");
+  assert.deepEqual(configuredLocalRoots("", { YOUTUBE_DOWNLOAD_DIR: dl }, []), [dl]);
+  assert.deepEqual(configuredLocalRoots(dl, { YOUTUBE_DOWNLOAD_DIR: dl }, []), [dl]);
+  assert.deepEqual(configuredLocalRoots("", { YOUTUBE_DOWNLOAD_DIR: "relative/dir" }, []), []);
+  rmSync(dl, { recursive: true, force: true });
 });
