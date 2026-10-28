@@ -52,6 +52,15 @@ export type LiveFfmpegEnv = {
   gpuFrames?: boolean;
 };
 
+/**
+ * A respawn splices onto a stream the player is already decoding. Starting its
+ * timestamps at the end of the previous output keeps them increasing.
+ */
+function outputTsOffsetArgs(seconds: number | null | undefined): string[] {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return [];
+  return ["-output_ts_offset", seconds.toFixed(3)];
+}
+
 /** Pace live input at 1x so one encoder never races ahead of its viewers. */
 function pushLiveReadrate(args: string[], initialBurst: boolean): void {
   args.push("-readrate", "1");
@@ -174,6 +183,8 @@ export function buildCopyFfmpegArgs(
   seekSeconds: number,
   options?: {
     discontinuity?: boolean;
+    /** Continue the previous output's MPEG-TS timeline (seconds). */
+    outputTsOffset?: number | null;
     logLevel?: string | null;
     /** Local files whose audio is already stereo AAC: copy it too (no encode at all). */
     copyAudio?: boolean;
@@ -210,6 +221,7 @@ export function buildCopyFfmpegArgs(
     ...(options?.copyAudio ? ["-c:a", "copy"] : ["-c:a", "aac", "-ac", "2", "-b:a", "160k"]),
     "-max_interleave_delta",
     "0",
+    ...outputTsOffsetArgs(options?.outputTsOffset),
     "-f",
     "mpegts",
     "-mpegts_flags",
@@ -234,6 +246,8 @@ export function buildLiveFfmpegArgs(
   options: {
     mode: LiveEncodeMode;
     discontinuity?: boolean;
+    /** Continue the previous output's MPEG-TS timeline (seconds). */
+    outputTsOffset?: number | null;
     /** CPU fallback after a hardware encoder failed. Uses a cheap x264 preset. */
     fallback?: boolean;
     /** MWS opt-in remux even when transcoding is enabled. */
@@ -264,6 +278,7 @@ export function buildLiveFfmpegArgs(
   ) {
     return buildCopyFfmpegArgs(streamUrl, seekSeconds, {
       discontinuity: options.discontinuity,
+      outputTsOffset: options.outputTsOffset,
       logLevel: settings?.logLevel,
       readrateInitialBurst: env.readrateInitialBurst,
     });
@@ -463,6 +478,7 @@ export function buildLiveFfmpegArgs(
   }
 
   pushWords(args, settings?.outputOptions);
+  args.push(...outputTsOffsetArgs(options.outputTsOffset));
   args.push("-f", settings?.outputFormat || "mpegts");
   args.push("-flush_packets", "1");
   args.push("-muxdelay", "0");

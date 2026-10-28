@@ -7,6 +7,7 @@ import { PlexAPI } from '@/lib/plex';
 import { spawn, ChildProcess } from 'child_process';
 import { PassThrough } from 'stream';
 import { streamMonitorService, resumeSeekSeconds } from '@/lib/stream-monitor-service';
+import { TsTimeline } from '@/lib/ts-timeline';
 import { streamRecoveryService } from '@/lib/stream-recovery-service';
 import { viewingHistoryService } from '@/lib/viewing-history-service';
 import { viewingActivity } from '@/lib/viewing-activity-runtime';
@@ -150,6 +151,8 @@ async function buildFfmpegArgs(
   options?: {
     forceSoftware?: boolean;
     discontinuity?: boolean;
+    /** Continue the previous output's MPEG-TS timeline (seconds). */
+    outputTsOffset?: number | null;
     mode?: LiveEncodeMode;
     fallback?: boolean;
     copy?: boolean;
@@ -166,6 +169,7 @@ async function buildFfmpegArgs(
   if (options?.localCopy) {
     return buildCopyFfmpegArgs(streamUrl, seekSeconds, {
       discontinuity: options.discontinuity,
+      outputTsOffset: options.outputTsOffset,
       logLevel: ffmpegSettings?.logLevel,
       copyAudio: options.localCopy.copyAudio,
       readrateInitialBurst: ffmpegSupportsReadrateInitialBurst(),
@@ -181,6 +185,7 @@ async function buildFfmpegArgs(
     {
       mode,
       discontinuity: options?.discontinuity,
+      outputTsOffset: options?.outputTsOffset,
       fallback: options?.forceSoftware === true || options?.fallback === true,
       copy: options?.copy === true,
       browser: options?.browser === true,
@@ -648,6 +653,14 @@ export async function GET(request: NextRequest) {
     let isAborted = false;
     let sessionFinalized = false;
     let mpegtsDiscontinuity = false;
+    /**
+     * Every FFmpeg respawn (next program, encoder step-down, recovery) joins
+     * the same HTTP stream. Without a shared timeline the player sees time
+     * restart at ~0 and freezes until it catches up to the old end.
+     */
+    const tsTimeline = new TsTimeline();
+    const buildFfmpegArgsOnTimeline: typeof buildFfmpegArgs = (url, seek, opts) =>
+      buildFfmpegArgs(url, seek, { ...opts, outputTsOffset: tsTimeline.nextOffsetSeconds() });
     const ignoredClosePids = new Set<number>();
     /** A local file is being copied right now (no encode). */
     let autoCopyActive = false;
@@ -785,6 +798,10 @@ export async function GET(request: NextRequest) {
     };
 
     function bindFfmpegLifecycle(child: ChildProcess) {
+      tsTimeline.startNextOutput();
+      child.stdout?.on('data', (chunk: Buffer) => {
+        tsTimeline.push(chunk);
+      });
       if (liveHub) {
         sharedLiveTranscodePool.attachFfmpeg(liveHub, child);
         syncFfmpegToSessions(child);
@@ -855,7 +872,7 @@ export async function GET(request: NextRequest) {
           beginLiveEncoderGap();
           mpegtsDiscontinuity = true;
           streamRecoveryService
-            .attemptRecovery(lifecycleSessionId(), errorMessage, buildFfmpegArgs)
+            .attemptRecovery(lifecycleSessionId(), errorMessage, buildFfmpegArgsOnTimeline)
             .then((result) => {
               if (result.success && result.process) {
                 bindFfmpegLifecycle(result.process);
@@ -881,7 +898,7 @@ export async function GET(request: NextRequest) {
         beginLiveEncoderGap();
         mpegtsDiscontinuity = true;
         streamRecoveryService
-          .attemptRecovery(lifecycleSessionId(), error.message, buildFfmpegArgs)
+          .attemptRecovery(lifecycleSessionId(), error.message, buildFfmpegArgsOnTimeline)
           .then((result) => {
             if (result.success && result.process) {
               bindFfmpegLifecycle(result.process);
@@ -1098,7 +1115,7 @@ export async function GET(request: NextRequest) {
         if (hdr.log.level === 'warn') console.warn(line);
         else console.log(line);
       }
-      const ffmpegArgs = await buildFfmpegArgs(activeStreamUrl, activeSeekSeconds, {
+      const ffmpegArgs = await buildFfmpegArgsOnTimeline(activeStreamUrl, activeSeekSeconds, {
         toneMap: hdr.toneMap,
         mode,
         fallback: fallingBack,
