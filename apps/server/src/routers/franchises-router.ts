@@ -23,8 +23,10 @@ import {
   searchTmdbKeywords,
   searchTmdbMovies,
   searchTmdbTv,
+  getTmdbApiKeyFromSettings,
 } from '../lib/tmdb-service';
 import { normalizeTitle } from '../lib/title-normalize';
+import { dedupeLibraryRows } from '../lib/library-dedupe';
 import { findLibraryMovieForEntry } from '../lib/franchise-title-match';
 import { buildFranchiseCandidates, type FranchiseCandidate } from '../lib/franchise-candidates';
 import { entryKeyFor, entryLabelFor, orderEntries, type EntryKind, type OrderMode } from '../lib/franchise-order';
@@ -264,17 +266,18 @@ export const franchisesRouter = {
         where: { title: { contains: input.query } },
         select: { id: true, title: true, year: true, poster: true, tmdbId: true },
         orderBy: [{ title: 'asc' }],
-        take: 25,
+        take: 100,
       });
       const shows = input.includeShows
         ? await prisma.mediaShow.findMany({
             where: { title: { contains: input.query } },
             select: { id: true, title: true, year: true, poster: true },
             orderBy: [{ title: 'asc' }],
-            take: 25,
+            take: 100,
           })
         : [];
-      return { movies, shows };
+      // The same title can be in the library twice (Plex and a local folder): list it once.
+      return { movies: dedupeLibraryRows(movies).slice(0, 25), shows: dedupeLibraryRows(shows).slice(0, 25) };
     }),
 
   /** What a franchise would contain, marked in-library or missing, before anything is saved. */
@@ -645,13 +648,17 @@ export const franchisesRouter = {
         throw new ORPCError('BAD_REQUEST', { message: 'Nothing to request.' });
       }
 
+      const tmdbReady = !!(await getTmdbApiKeyFromSettings());
+      const unresolvedMessage = tmdbReady
+        ? 'TMDB has no match for this title yet, so it cannot be requested.'
+        : 'TMDB is not set up on this server, so this title cannot be looked up to request it. Ask an admin to add the TMDB key.';
       const results: Array<{ entryId: string | null; label: string; outcome: WtRequestOutcome | { ok: false; status: 'unresolved'; message: string } }> = [];
       for (const t of targets) {
         if (!t.item) {
           results.push({
             entryId: t.entryId,
             label: t.label,
-            outcome: { ok: false, status: 'unresolved', message: 'TMDB has no match for this title yet, so it cannot be requested.' },
+            outcome: { ok: false, status: 'unresolved', message: unresolvedMessage },
           });
           continue;
         }
@@ -849,7 +856,22 @@ async function addLibraryEntry(franchiseId: string, input: AddInput) {
     episodeEnd: input.kind === 'EPISODES' ? (input.episodeEnd ?? null) : null,
   };
   const entryKey = entryKeyFor(parts);
-  const existing = await prisma.franchiseEntry.findFirst({ where: { franchiseId, entryKey } });
+  let existing = await prisma.franchiseEntry.findFirst({ where: { franchiseId, entryKey } });
+  if (!existing) {
+    // Same title already in this franchise under a different key (one library copy has a TMDB id, the other does not).
+    const sameTitle = await prisma.franchiseEntry.findMany({
+      where: {
+        franchiseId,
+        kind: input.kind,
+        titlePattern: normalizeTitle(title),
+        seasonNumber: parts.seasonNumber,
+        episodeStart: parts.episodeStart,
+        episodeEnd: parts.episodeEnd,
+      },
+    });
+    existing =
+      sameTitle.find((e) => year == null || !e.releaseDate || e.releaseDate.getUTCFullYear() === year) ?? null;
+  }
   if (existing) {
     if (existing.excluded) return prisma.franchiseEntry.update({ where: { id: existing.id }, data: { excluded: false } });
     return existing;

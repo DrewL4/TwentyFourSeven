@@ -4,7 +4,10 @@
 // these lists only keep the UI from offering dead ends.
 
 /** Managers and Admins: channels, the library and franchise orders. */
-export const MANAGER_PATHS = ["/channels", "/library", "/settings/franchises"] as const;
+export const MANAGER_PATHS = ["/channels", "/library"] as const;
+
+/** Pages under a staff prefix that every signed-in user may open (old bookmarks that only redirect). */
+export const OPEN_PATHS = ["/settings/franchises"] as const;
 
 /** Admins only: users, viewers and all other settings (sources, integrations, ffmpeg). */
 export const ADMIN_ONLY_PATHS = ["/users", "/viewers", "/settings"] as const;
@@ -13,13 +16,18 @@ function matches(pathname: string, paths: readonly string[]): boolean {
   return paths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+function isOpenPath(pathname: string): boolean {
+  return matches(pathname, OPEN_PATHS);
+}
+
 export function isManagerPath(pathname: string): boolean {
+  if (isOpenPath(pathname)) return false;
   return matches(pathname, MANAGER_PATHS);
 }
 
 /** True when a Manager is NOT enough, i.e. only Admins may open it. */
 export function isAdminOnlyPath(pathname: string): boolean {
-  if (isManagerPath(pathname)) return false;
+  if (isOpenPath(pathname) || isManagerPath(pathname)) return false;
   return matches(pathname, ADMIN_ONLY_PATHS);
 }
 

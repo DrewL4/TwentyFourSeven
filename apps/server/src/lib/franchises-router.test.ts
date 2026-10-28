@@ -219,4 +219,43 @@ describe('franchises.requestMissing', () => {
     assert.equal(out.failed, 1);
     assert.equal(wtCalls.length, 1);
   });
+
+  it('lists a title that is in the library twice once, and adds it to a franchise once', async () => {
+    const withId = await movie('Elephants Dream', 2006, 4001);
+    const lib = await prisma.mediaLibrary.findFirstOrThrow();
+    const noId = await prisma.mediaMovie.create({
+      data: { libraryId: lib.id, title: 'Elephants Dream', year: 2006, tmdbId: null, ratingKey: 'rk-local', duration: 600_000 },
+    });
+    const found: any = await call(fr().searchLibrary, { query: 'Elephants' }, { context: ctx('ann') });
+    assert.equal(found.movies.length, 1);
+    assert.equal(found.movies[0].id, withId.id);
+    const created: any = await call(
+      fr().create,
+      { name: 'Dupes', libraryMovieIds: [noId.id, withId.id], sortMode: 'RELEASE' },
+      { context: ctx('ann') },
+    );
+    assert.equal(created.entries.length, 1);
+    const again: any = await call(
+      fr().addEntry,
+      { franchiseId: created.id, kind: 'MOVIE', libraryMovieId: withId.id },
+      { context: ctx('ann') },
+    );
+    assert.equal(again.entries.length, 1);
+  });
+
+  it('keeps remakes with the same title but a different year as separate entries', async () => {
+    const a = await movie('Total Recall', 1990, 861);
+    const b = await movie('Total Recall', 2012, 64635);
+    const created: any = await call(fr().create, { name: 'Recall', libraryMovieIds: [a.id, b.id], sortMode: 'RELEASE' }, { context: ctx('ann') });
+    assert.equal(created.entries.length, 2);
+  });
+
+  it('explains an unresolved title when TMDB is not set up', async () => {
+    const out: any = await call(
+      fr().requestMissing,
+      { items: [{ kind: 'MOVIE', label: 'Unknown', tmdbId: null }] },
+      { context: ctx('bob') },
+    );
+    assert.match(out.results[0].outcome.message, /TMDB/);
+  });
 });

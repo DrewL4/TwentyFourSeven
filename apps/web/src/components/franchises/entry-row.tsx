@@ -16,7 +16,6 @@ export type RowItem = {
   requested?: boolean;
   excluded?: boolean;
   manual?: boolean;
-  canRequest?: boolean;
 };
 
 export function EntryRow(props: {
@@ -76,8 +75,8 @@ export function EntryRow(props: {
         </div>
       </div>
       <div className="flex shrink-0 items-center">
-        {!item.excluded && !item.available && !item.requested && item.canRequest !== false && props.onRequest && (
-          <Button size="sm" variant="outline" className="min-h-9" disabled={props.requesting || props.busy} onClick={props.onRequest}>
+        {!item.excluded && !item.available && !item.requested && props.onRequest && (
+          <Button size="sm" variant="outline" className="min-h-9" data-testid="request-item" disabled={props.requesting || props.busy} onClick={props.onRequest}>
             {props.requesting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Request"}
           </Button>
         )}

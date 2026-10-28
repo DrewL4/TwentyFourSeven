@@ -116,12 +116,11 @@ export function CreateFranchise(props: { onClose: () => void; onCreated: (id: st
     available: i.inLibrary,
     requested: requestedLabels.has(i.label),
     note: i.libraryTitle && i.libraryTitle !== i.label ? `as "${i.libraryTitle}"` : null,
-    canRequest: i.tmdbId != null,
   }));
 
   const sendRequests = (list: typeof items) =>
     requestMissing.mutate(
-      { items: requestItems(list.filter((i) => i.tmdbId != null).slice(0, 60)) },
+      { items: requestItems(list.slice(0, 60)) },
       {
         onSuccess: (out) =>
           setRequestedLabels((prev) => {
@@ -254,7 +253,8 @@ export function CreateFranchise(props: { onClose: () => void; onCreated: (id: st
                 key={row.key}
                 item={row}
                 index={i}
-                requesting={requestMissing.isPending}
+                busy={requestMissing.isPending}
+                requesting={requestMissing.isPending && requestMissing.variables?.items?.some((r) => r.label === row.label) === true}
                 onRequest={() => sendRequests([items[i]])}
               />
             ))}

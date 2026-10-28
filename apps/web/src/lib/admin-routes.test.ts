@@ -12,7 +12,7 @@ describe('page access by role', () => {
     ['/channels/abc', false, true, true],
     ['/library', false, true, true],
     ['/franchises', true, true, true],
-    ['/settings/franchises', false, true, true],
+    ['/settings/franchises', true, true, true],
     ['/settings', false, false, true],
     ['/settings/plex', false, false, true],
     ['/settings/ffmpeg', false, false, true],
@@ -27,7 +27,8 @@ describe('page access by role', () => {
     });
   }
   it('classifies paths', () => {
-    assert.equal(isManagerPath('/settings/franchises'), true);
+    assert.equal(isManagerPath('/settings/franchises'), false);
+    assert.equal(isStaffPath('/settings/franchises'), false);
     assert.equal(isAdminOnlyPath('/settings/franchises'), false);
     assert.equal(isAdminOnlyPath('/settings/plex'), true);
     assert.equal(isStaffPath('/guide'), false);

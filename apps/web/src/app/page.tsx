@@ -104,6 +104,22 @@ export default function Home() {
           </Link>
         </Card>
 
+        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+          <Link href={FRANCHISES_PATH}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Film className="w-5 h-5 text-accent-text" />
+                <CardTitle className="text-lg">{FRANCHISES_LABEL}</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                {FRANCHISES_BLURB}
+              </CardDescription>
+            </CardContent>
+          </Link>
+        </Card>
+
         {canManage && (<>
         <Card className="hover:shadow-lg transition-shadow cursor-pointer">
           <Link href="/channels">
@@ -135,22 +151,6 @@ export default function Home() {
             <CardContent>
               <CardDescription>
                 Browse and manage your media libraries
-              </CardDescription>
-            </CardContent>
-          </Link>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <Link href={FRANCHISES_PATH}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Film className="w-5 h-5 text-accent-text" />
-                <CardTitle className="text-lg">{FRANCHISES_LABEL}</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                {FRANCHISES_BLURB}
               </CardDescription>
             </CardContent>
           </Link>

@@ -131,7 +131,6 @@ export function FranchiseDetail(props: { id: string; onBack: () => void }) {
     requested: !!e.requestedAt,
     excluded: e.excluded,
     manual: e.manual,
-    canRequest: e.tmdbId != null,
     note:
       e.kind !== "MOVIE" && !e.available && (e.haveEpisodes ?? 0) > 0
         ? `${e.haveEpisodes}${e.wantEpisodes != null ? ` of ${e.wantEpisodes}` : ""} episodes in your library`
@@ -241,7 +240,7 @@ export function FranchiseDetail(props: { id: string; onBack: () => void }) {
             item={toRow(e)}
             index={i}
             busy={busy}
-            requesting={requestMissing.isPending}
+            requesting={requestMissing.isPending && !!requestMissing.variables?.entryIds?.includes(e.id)}
             onRequest={() => requestMissing.mutate({ franchiseId: f.id, entryIds: [e.id] })}
             onMoveUp={canEdit && i > 0 ? () => moveEntry.mutate({ entryId: e.id, direction: "up" }) : undefined}
             onMoveDown={canEdit && i < live.length - 1 ? () => moveEntry.mutate({ entryId: e.id, direction: "down" }) : undefined}
