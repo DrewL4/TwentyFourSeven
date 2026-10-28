@@ -43,10 +43,14 @@ export function describeFetchError(error: unknown): string {
   return err?.message || 'network error';
 }
 
+export const APP_DISABLED_MESSAGE = 'Sign-in to 24/7 is turned off for your account. Ask your WatchTower admin.';
+
 export type WatchTowerLoginOutcome =
   | { kind: 'ok' }
   | { kind: 'bad_credentials'; message: string }
-  | { kind: 'not_watchtower'; message: string };
+  | { kind: 'not_watchtower'; message: string }
+  /** WatchTower says an Owner or Admin turned 24/7 sign-in off for this person. */
+  | { kind: 'app_disabled'; message: string };
 
 /**
  * Sort a non-2xx answer from WatchTower's /api/api/v1/auth/login/.
@@ -60,6 +64,17 @@ export function classifyWatchTowerLoginFailure(
   body: string,
 ): WatchTowerLoginOutcome {
   const isJson = (contentType || '').includes('application/json');
+  if (isJson && status === 403) {
+    let code = '';
+    try {
+      code = String(JSON.parse(body)?.code || '');
+    } catch {
+      code = '';
+    }
+    if (code === 'app_access_disabled') {
+      return { kind: 'app_disabled', message: APP_DISABLED_MESSAGE };
+    }
+  }
   if (isJson && (status === 400 || status === 401)) {
     let wtError = '';
     try {

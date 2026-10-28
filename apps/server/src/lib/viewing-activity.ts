@@ -22,6 +22,8 @@ export type ViewingActivity = {
   /** The signed-in person's e-mail, when known. */
   email?: string | null;
   clientIp?: string | null;
+  /** What they are watching, e.g. "Channel 5 Movies - Alien". Shown as "last used" in the Users tab. */
+  what?: string | null;
 };
 
 export type ViewingActivityEvent = {
@@ -31,12 +33,14 @@ export type ViewingActivityEvent = {
   playlist_username?: string;
   user_email?: string;
   client_ip?: string;
+  what?: string;
 };
 
 export function buildViewingActivityEvent(a: ViewingActivity, now: Date): ViewingActivityEvent | null {
   const playlist = (a.playlistUsername || '').trim();
   const email = (a.email || '').trim().toLowerCase();
   const ip = (a.clientIp || '').trim();
+  const what = (a.what || '').trim().slice(0, 200);
   if (!playlist && !email && !ip) return null;
   const iso = now.toISOString();
   return {
@@ -46,6 +50,7 @@ export function buildViewingActivityEvent(a: ViewingActivity, now: Date): Viewin
     ...(playlist ? { playlist_username: playlist } : {}),
     ...(email ? { user_email: email } : {}),
     ...(ip ? { client_ip: ip } : {}),
+    ...(what ? { what } : {}),
   };
 }
 

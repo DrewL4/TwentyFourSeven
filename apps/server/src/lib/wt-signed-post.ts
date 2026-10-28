@@ -38,3 +38,35 @@ export async function postSignedEvent(
     return { ok: false, error: error instanceof Error ? error.name : 'error' };
   }
 }
+
+export type CallResult = { status: number; body: any };
+
+/**
+ * Like postSignedEvent, but for a call whose answer we need (the Users tab): returns WatchTower's
+ * HTTP status and JSON body. A network failure is 502, so callers can show a plain message.
+ */
+export async function postSignedCall(
+  link: WatchTowerLink,
+  payload: unknown,
+  deps: { fetch?: typeof fetch; timeoutMs?: number } = {},
+): Promise<CallResult> {
+  const body = JSON.stringify(payload);
+  const doFetch = deps.fetch ?? fetch;
+  try {
+    const response = await doFetch(`${link.url.replace(/\/+$/, '')}${WT_EVENT_PATH}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Webhook-Signature': signBody(link.secret, body) },
+      body,
+      signal: AbortSignal.timeout(deps.timeoutMs ?? 15000),
+    });
+    let parsed: any;
+    try {
+      parsed = await response.json();
+    } catch {
+      parsed = { error: `WatchTower answered with HTTP ${response.status}.` };
+    }
+    return { status: response.status, body: parsed };
+  } catch {
+    return { status: 502, body: { error: 'Could not reach WatchTower.' } };
+  }
+}

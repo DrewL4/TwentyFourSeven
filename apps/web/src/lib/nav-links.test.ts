@@ -6,10 +6,10 @@ import { FRANCHISES_BLURB, FRANCHISES_LABEL, FRANCHISES_PATH, mobileLinksFor, si
 const labels = (role: NavRole, f: typeof sidebarLinksFor) => f(role).map((l) => l.label);
 
 describe('sidebar links by role', () => {
-  it('Manager: Home, TV Guide, Channels, Library, Franchises', () => {
-    assert.deepEqual(labels('MANAGER', sidebarLinksFor), ['Home', 'TV Guide', 'Channels', 'Library', 'Franchises']);
+  it('Manager: Home, TV Guide, Channels, Library, Franchises, Users', () => {
+    assert.deepEqual(labels('MANAGER', sidebarLinksFor), ['Home', 'TV Guide', 'Channels', 'Library', 'Franchises', 'Users']);
   });
-  it('Admin and Owner: everything a Manager has plus Users, Viewers, Settings', () => {
+  it('Admin and Owner: everything a Manager has plus Viewers, Settings', () => {
     assert.deepEqual(labels('ADMIN', sidebarLinksFor), [
       'Home', 'TV Guide', 'Channels', 'Library', 'Franchises', 'Users', 'Viewers', 'Settings',
     ]);

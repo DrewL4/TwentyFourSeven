@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import { useSocketContext } from "@/contexts/socket-context";
 import { TFS_USER_UPDATES_EVENT } from "@/constants/userRealtime";
 import PlaylistLoginsAdmin from "@/components/settings/playlist-logins-admin";
+import UsersTabPage from "@/components/users/users-tab-page";
+import { useAdmin } from "@/hooks/use-admin";
 
 interface User {
   _id: string;
@@ -35,7 +37,7 @@ interface WatchTowerUser {
   date_joined: string; // ISO date string from WatchTower
 }
 
-export default function UsersPage() {
+function LegacyUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -465,4 +467,15 @@ export default function UsersPage() {
       <PlaylistLoginsAdmin />
     </div>
   );
-} 
+}
+
+export default function UsersPage() {
+  const { isAdmin, isLoading } = useAdmin();
+  // A Manager sees only the shared Users tab; the import and playlist-login tools stay Admin-only.
+  if (isLoading) return null;
+  return (
+    <UsersTabPage showManage={isAdmin}>
+      {isAdmin ? <LegacyUsersPage /> : null}
+    </UsersTabPage>
+  );
+}

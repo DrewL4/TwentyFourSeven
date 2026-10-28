@@ -541,6 +541,9 @@ export async function GET(request: NextRequest) {
       playlistUsername: access.auth.login?.username,
       email: access.auth.email,
       clientIp,
+      what: [channelName ? `Channel ${channelNumber} ${channelName}` : `Channel ${channelNumber}`, programTitle]
+        .filter(Boolean)
+        .join(' - '),
     });
 
     // Shared passthrough for the lifetime of the HTTP response

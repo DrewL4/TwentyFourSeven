@@ -38,6 +38,8 @@ export type WtRolePayload = {
   is_active?: unknown;
   /** WatchTower: a Manager whose TV service or donation lapsed. They arrive with role 'user'. */
   role_lapsed?: unknown;
+  /** WatchTower's "may sign in to 24/7" switch (Users tab). Missing means on. */
+  tfs_access_enabled?: unknown;
 };
 
 export function mapWtRole(u: WtRolePayload | null | undefined): TfsRole {
@@ -97,6 +99,19 @@ export function roleCheckedAt(metadata: unknown): number | null {
   return Number.isFinite(t) ? t : null;
 }
 
+/**
+ * False when an Owner or Admin turned 24/7 sign-in off for this person in WatchTower. That only stops new
+ * sign-ins; playlist logins and streams that already exist are not tied to it and keep working.
+ */
+export function tfsAccessEnabled(metadata: unknown): boolean {
+  return metaOf(metadata).wt_tfs_access !== false;
+}
+
+/** The switch WatchTower just sent, or null when it did not say. */
+export function incomingTfsAccess(u: WtRolePayload | null | undefined): boolean | null {
+  return u && typeof u.tfs_access_enabled === 'boolean' ? u.tfs_access_enabled : null;
+}
+
 /** The copy of WatchTower's role fields kept in watchTowerMetadata, plus the time they were last confirmed. */
 export function withRoleFields(metadata: unknown, u: WtRolePayload, now: number): Meta {
   const prev = metaOf(metadata);
@@ -106,6 +121,7 @@ export function withRoleFields(metadata: unknown, u: WtRolePayload, now: number)
     wt_role: typeof u.role === 'string' ? u.role : prev.wt_role ?? null,
     wt_role_version: version ?? prev.wt_role_version ?? null,
     wt_perms: Array.isArray(u.perms) ? u.perms.filter((p) => typeof p === 'string') : prev.wt_perms ?? [],
+    wt_tfs_access: incomingTfsAccess(u) ?? prev.wt_tfs_access ?? true,
     wt_role_checked_at: new Date(now).toISOString(),
   };
 }
@@ -182,7 +198,8 @@ export function createRoleChecker(deps: RoleDeps) {
       ...(active ? {} : { isActive: false }),
       watchTowerMetadata: withRoleFields(user.watchTowerMetadata, wt, deps.now()),
     });
-    const lost = lostRankOrActive(before, after);
+    const switchedOff = tfsAccessEnabled(user.watchTowerMetadata) && incomingTfsAccess(wt) === false;
+    const lost = lostRankOrActive(before, after) || switchedOff;
     if (lost) await deps.signOut(user.id);
     return { role: active ? next : 'USER', verified: true, revoked: lost };
   }

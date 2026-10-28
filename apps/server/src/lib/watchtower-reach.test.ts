@@ -88,3 +88,16 @@ describe('checkWatchTowerReachable', () => {
     assert.match((r as { error: string }).error, /Create App Tokens/);
   });
 });
+
+describe('a switched-off 24/7 sign-in', () => {
+  it('is its own outcome, with a plain message, not "wrong password"', () => {
+    const body = JSON.stringify({ error: 'off', code: 'app_access_disabled' });
+    const out = classifyWatchTowerLoginFailure('http://wt', 403, 'application/json', body);
+    assert.equal(out.kind, 'app_disabled');
+    assert.match((out as any).message, /turned off for your account/);
+  });
+  it('another 403 is not mistaken for it', () => {
+    const out = classifyWatchTowerLoginFailure('http://wt', 403, 'application/json', JSON.stringify({ error: 'nope' }));
+    assert.notEqual(out.kind, 'app_disabled');
+  });
+});

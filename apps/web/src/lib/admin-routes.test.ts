@@ -16,7 +16,7 @@ describe('page access by role', () => {
     ['/settings', false, false, true],
     ['/settings/plex', false, false, true],
     ['/settings/ffmpeg', false, false, true],
-    ['/users', false, false, true],
+    ['/users', false, true, true],
     ['/viewers', false, false, true],
   ];
   for (const [p, user, manager, admin] of rows) {

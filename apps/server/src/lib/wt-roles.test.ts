@@ -10,6 +10,8 @@ import {
   lostRankOrActive,
   mapWtRole,
   needsRecheck,
+  incomingTfsAccess,
+  tfsAccessEnabled,
   RECHECK_AFTER_MS,
   roleRank,
   withRoleFields,
@@ -103,7 +105,7 @@ describe('role_version guard', () => {
   });
   it('stores the role copy with a check time and keeps other metadata', () => {
     const m = withRoleFields({ keep: 1 }, { role: 'manager', role_version: 7, perms: ['tfs.channels.edit', 3] }, Date.parse('2026-10-27T20:00:00Z'));
-    assert.deepEqual(m, { keep: 1, wt_role: 'manager', wt_role_version: 7, wt_perms: ['tfs.channels.edit'], wt_role_checked_at: '2026-10-27T20:00:00.000Z' });
+    assert.deepEqual(m, { keep: 1, wt_role: 'manager', wt_role_version: 7, wt_perms: ['tfs.channels.edit'], wt_tfs_access: true, wt_role_checked_at: '2026-10-27T20:00:00.000Z' });
   });
 });
 
@@ -290,5 +292,35 @@ describe('getEffectiveRole / role guards', () => {
     setRoleRefresher(async () => ({ role: 'ADMIN', verified: true, revoked: false }));
     assert.equal(await isAdmin('linked', db), true);
     setRoleRefresher(null);
+  });
+});
+
+describe('24/7 sign-in switch (tfs_access_enabled)', () => {
+  it('is on unless WatchTower says false', () => {
+    assert.equal(tfsAccessEnabled({}), true);
+    assert.equal(tfsAccessEnabled(null), true);
+    assert.equal(tfsAccessEnabled({ wt_tfs_access: true }), true);
+    assert.equal(tfsAccessEnabled({ wt_tfs_access: false }), false);
+    assert.equal(incomingTfsAccess({ tfs_access_enabled: false }), false);
+    assert.equal(incomingTfsAccess({ tfs_access_enabled: true }), true);
+    assert.equal(incomingTfsAccess({}), null);
+  });
+
+  it('is stored with the role fields, and kept when a payload does not mention it', () => {
+    const off = withRoleFields({}, { role: 'user', tfs_access_enabled: false }, 0);
+    assert.equal(off.wt_tfs_access, false);
+    const kept = withRoleFields({ wt_tfs_access: false }, { role: 'user' }, 0);
+    assert.equal(kept.wt_tfs_access, false);
+    assert.equal(withRoleFields({}, { role: 'user' }, 0).wt_tfs_access, true);
+  });
+
+  it('switching it off signs the person out everywhere, but a payload that leaves it on does not', async () => {
+    const off = checker({ wt: () => ({ role: 'manager', role_version: 3, is_active: true, tfs_access_enabled: false }) });
+    await off.ensureFreshRole(user());
+    assert.deepEqual(off.calls.signedOut, ['u1']);
+    assert.equal((off.calls.saved[0].watchTowerMetadata as any).wt_tfs_access, false);
+    const on = checker({ wt: () => ({ role: 'manager', role_version: 3, is_active: true, tfs_access_enabled: true }) });
+    await on.ensureFreshRole(user());
+    assert.deepEqual(on.calls.signedOut, []);
   });
 });

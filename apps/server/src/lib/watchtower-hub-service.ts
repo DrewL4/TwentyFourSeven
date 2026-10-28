@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { db } from './context';
 import { signOutEverywhere, signOutIfLostAccess } from './user-access';
-import { alwaysSignsIn, isStaleRoleVersion, mapWtRole, storedRoleVersion, withRoleFields } from './wt-roles';
+import { alwaysSignsIn, incomingTfsAccess, isStaleRoleVersion, mapWtRole, storedRoleVersion, tfsAccessEnabled, withRoleFields } from './wt-roles';
 
 interface WatchTowerUser {
   id: number;
@@ -304,6 +304,12 @@ export class WatchTowerHubService {
 
       // Deactivated or demoted: sign out of every TFS session now.
       await signOutIfLostAccess(db, user.id, user, { isActive: shouldBeActive, role: nextRole });
+      // An Owner or Admin turned 24/7 sign-in off: end this person's 24/7 sessions. Playlist logins and
+      // streams are not tied to sessions, so those keep working.
+      if (tfsAccessEnabled(user.watchTowerMetadata) && incomingTfsAccess(userData) === false) {
+        await signOutEverywhere(db, user.id);
+        console.log(`[Webhook] 24/7 sign-in turned off for ${userData.email}: sessions ended`);
+      }
 
       if (!shouldBeActive && user.isActive) {
         console.log(`[Webhook] Deactivated user ${userData.email} - lost movie service access`);
@@ -670,7 +676,8 @@ export class WatchTowerHubService {
       const response = await fetch(`${this.watchTowerUrl}/api/api/v1/auth/login/`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-WatchTower-App': 'twentyfourseven'
         },
         body: JSON.stringify({ email, password })
       });

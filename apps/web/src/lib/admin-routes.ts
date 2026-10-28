@@ -3,14 +3,14 @@
 // its player) and their dashboard. The server enforces the same split on its APIs;
 // these lists only keep the UI from offering dead ends.
 
-/** Managers and Admins: channels, the library and franchise orders. */
-export const MANAGER_PATHS = ["/channels", "/library"] as const;
+/** Managers and Admins: channels, the library, franchise orders and the Users tab (a Manager can see it, not edit). */
+export const MANAGER_PATHS = ["/channels", "/library", "/users"] as const;
 
 /** Pages under a staff prefix that every signed-in user may open (old bookmarks that only redirect). */
 export const OPEN_PATHS = ["/settings/franchises"] as const;
 
-/** Admins only: users, viewers and all other settings (sources, integrations, ffmpeg). */
-export const ADMIN_ONLY_PATHS = ["/users", "/viewers", "/settings"] as const;
+/** Admins only: viewers and all other settings (sources, integrations, ffmpeg). */
+export const ADMIN_ONLY_PATHS = ["/viewers", "/settings"] as const;
 
 function matches(pathname: string, paths: readonly string[]): boolean {
   return paths.some((p) => pathname === p || pathname.startsWith(`${p}/`));

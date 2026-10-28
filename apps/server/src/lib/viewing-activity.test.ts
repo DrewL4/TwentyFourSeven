@@ -27,6 +27,18 @@ function harness(result: { ok: boolean; error?: string } = { ok: true }) {
   return { emitter, posted, advance: (ms: number) => (clock += ms), set: (r: typeof result) => (result = r) };
 }
 
+describe('what was watched', () => {
+  it('carries a trimmed, capped description of what they watched', () => {
+    const e = buildViewingActivityEvent({ email: 'a@b.com', what: '  Channel 5 Movies - Alien  ' }, new Date('2026-10-27T20:00:00Z'));
+    assert.equal(e?.what, 'Channel 5 Movies - Alien');
+    assert.equal(buildViewingActivityEvent({ email: 'a@b.com', what: 'x'.repeat(500) }, new Date())?.what?.length, 200);
+  });
+  it('leaves the field out when there is nothing to say', () => {
+    const e = buildViewingActivityEvent({ email: 'a@b.com', what: '  ' }, new Date());
+    assert.equal('what' in (e as object), false);
+  });
+});
+
 describe('buildViewingActivityEvent', () => {
   it('carries the playlist login and the viewer address', () => {
     const e = buildViewingActivityEvent({ playlistUsername: ' drew.l ', clientIp: '203.0.113.9' }, new Date('2026-10-27T20:00:00Z'));

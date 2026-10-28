@@ -1,4 +1,6 @@
-import { alwaysSignsIn, mapWtRole, withRoleFields, type TfsRole } from '@/lib/wt-roles';
+import { alwaysSignsIn, incomingTfsAccess, mapWtRole, withRoleFields, type TfsRole } from '@/lib/wt-roles';
+import { reportAppLogin } from '@/lib/app-login-report';
+import { watchTowerLink } from '@/lib/wt-link';
 import { auditElevatedLogin } from '@/lib/orpc-audit';
 import { clientAddress } from '@/lib/link-security';
 import { NextRequest, NextResponse } from 'next/server';
@@ -8,6 +10,7 @@ import { startSessionForExistingUser } from '@/lib/wt-sso-session';
 import { prisma } from '@/lib/prisma';
 import { sealWatchTowerToken } from '@/lib/wt-user-token';
 import {
+  APP_DISABLED_MESSAGE,
   classifyWatchTowerLoginFailure,
   describeFetchError,
   watchTowerUnreachableMessage,
@@ -72,7 +75,10 @@ export async function POST(request: NextRequest) {
       authResponse = await fetch(`${config.url}/api/api/v1/auth/login/`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          // Tells WatchTower this is a 24/7 sign-in: it checks the "may sign in to 24/7" switch and does
+          // not count it as a WatchTower sign-in (24/7 reports its own below).
+          'X-WatchTower-App': 'twentyfourseven',
         },
         body: JSON.stringify({ email: login, password }),
         redirect: 'manual',
@@ -92,6 +98,9 @@ export async function POST(request: NextRequest) {
         authResponse.headers.get('content-type'),
         await authResponse.text(),
       );
+      if (failure.kind === 'app_disabled') {
+        return NextResponse.json({ error: failure.message, code: 'app_access_disabled' }, { status: 403 });
+      }
       return NextResponse.json(
         { error: failure.kind === 'ok' ? 'Sign in failed.' : failure.message },
         { status: failure.kind === 'bad_credentials' ? 401 : 502 }
@@ -138,6 +147,13 @@ export async function POST(request: NextRequest) {
         const canonicalBody = await canonicalResponse.json();
         watchTowerUser = canonicalBody.user || canonicalBody;
       }
+    }
+
+    // An Owner or Admin turned 24/7 sign-in off for this person. (WatchTower already refused above when
+    // the switch was off; this covers a switch read from the fresh profile.) Playlists and streams that
+    // already exist are not touched.
+    if (incomingTfsAccess(watchTowerUser) === false) {
+      return NextResponse.json({ error: APP_DISABLED_MESSAGE, code: 'app_access_disabled' }, { status: 403 });
     }
 
     // Check if user has movie service access
@@ -362,6 +378,12 @@ export async function POST(request: NextRequest) {
       ip: clientAddress(request.headers),
       userAgent: (request.headers.get('user-agent') || '').slice(0, 200),
     });
+
+    // Tell WatchTower this person signed in to 24/7 (best effort, never blocks the sign-in).
+    await reportAppLogin(
+      { watchTowerUserId: userData.watchTowerUserId, email: userData.email },
+      { link: watchTowerLink },
+    );
 
     // Create response
     const response = NextResponse.json({

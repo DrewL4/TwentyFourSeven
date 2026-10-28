@@ -518,7 +518,8 @@ export class WatchTowerHubService {
       const response = await fetch(`${this.watchTowerUrl}/api/login/`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-WatchTower-App': 'twentyfourseven'
         },
         body: JSON.stringify({
           username_or_email: email,
