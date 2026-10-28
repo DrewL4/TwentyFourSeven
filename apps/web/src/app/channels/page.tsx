@@ -2234,7 +2234,7 @@ function ChannelsPageContent() {
         }
         setFranchisePreviewSlug(null);
         toast.success(
-          `Channel linked to ${data.franchiseSlug}. Movie automation uses franchise TMDB ids; timeline sort: ${data.autoSortMethod}.`,
+          `Channel linked to ${data.franchiseSlug}. Movie automation uses franchise TMDB ids; franchise order: ${data.autoSortMethod}.`,
           { duration: 6000 },
         );
       },
@@ -2697,7 +2697,7 @@ function ChannelsPageContent() {
     if (method.startsWith('timeline:')) {
       const slug = method.slice('timeline:'.length);
       const franchise = franchisesQuery.data?.find((f) => f.slug === slug);
-      return franchise ? `${franchise.name} (timeline)` : `Timeline: ${slug}`;
+      return franchise ? `${franchise.name} (franchise order)` : `Franchise order: ${slug}`;
     }
     
     return null;
@@ -3745,6 +3745,16 @@ function ChannelsPageContent() {
                           </div>
                         </SelectItem>
 
+                        {franchisesQuery.isSuccess && (franchisesQuery.data?.length ?? 0) === 0 && (
+                          <>
+                            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-2">
+                              Franchises
+                            </div>
+                            <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                              None yet. Add one in Settings, then pick it here.
+                            </div>
+                          </>
+                        )}
                         {(franchisesQuery.data?.length ?? 0) > 0 && (
                           <>
                             <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-2">
