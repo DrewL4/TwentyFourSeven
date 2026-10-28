@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AppLogo } from "@/components/app-logo";
-import { Library, Settings, Play, Radio, FileText, Tv } from "lucide-react";
+import { Library, Settings, Play, Radio, FileText, Tv, Film } from "lucide-react";
+import { FRANCHISES_BLURB, FRANCHISES_LABEL, FRANCHISES_PATH } from "@/lib/nav-links";
 import { getServerUrl } from "@/utils/server-url";
 import { useAdmin } from "@/hooks/use-admin";
 import PlaylistLoginCard from "@/components/settings/playlist-login-card";
@@ -86,7 +87,7 @@ export default function Home() {
       )}
 
       {/* Navigation Cards */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${canManage ? "lg:grid-cols-4" : ""} gap-6 mb-8`}>
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${isAdmin ? "lg:grid-cols-3 xl:grid-cols-5" : canManage ? "lg:grid-cols-4" : ""} gap-6 mb-8`}>
         <Card className="hover:shadow-lg transition-shadow cursor-pointer">
           <Link href="/guide">
             <CardHeader className="pb-3">
@@ -140,20 +141,38 @@ export default function Home() {
         </Card>
 
         <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <Link href={isAdmin ? "/settings" : "/settings/franchises"}>
+          <Link href={FRANCHISES_PATH}>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <Settings className="w-5 h-5 text-accent-text" />
-                <CardTitle className="text-lg">{isAdmin ? "Settings" : "Franchises"}</CardTitle>
+                <Film className="w-5 h-5 text-accent-text" />
+                <CardTitle className="text-lg">{FRANCHISES_LABEL}</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               <CardDescription>
-                {isAdmin ? "Configure servers, streaming, and preferences" : "Set the watch order for movie franchises"}
+                {FRANCHISES_BLURB}
               </CardDescription>
             </CardContent>
           </Link>
         </Card>
+
+        {isAdmin && (
+        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+          <Link href="/settings">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-accent-text" />
+                <CardTitle className="text-lg">Settings</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Configure servers, streaming, and preferences
+              </CardDescription>
+            </CardContent>
+          </Link>
+        </Card>
+        )}
         </>)}
       </div>
 

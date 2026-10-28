@@ -14,7 +14,6 @@ import {
   Radio,
   Video,
   Save,
-  ExternalLink,
   Calendar,
   Download,
   Rewind,
@@ -32,6 +31,8 @@ import WatchTowerConnectionSetup from "@/components/watchtower-connection-setup"
 import MediaSourceCard from "@/components/settings/media-source-card";
 import PlayerLinksCard from "@/components/settings/player-links-card";
 import PlaylistLoginCard from "@/components/settings/playlist-login-card";
+import { FRANCHISES_BLURB, FRANCHISES_LABEL, FRANCHISES_PATH } from "@/lib/nav-links";
+import { settingsPageIsLoading } from "@/lib/settings-ready";
 
 // The web UI and API are served by nginx on this port inside the container
 // (Dockerfile EXPOSE / Unraid webui label). The host port is set by the port mapping.
@@ -58,6 +59,9 @@ export default function SettingsPage() {
 
   const queryClient = useQueryClient();
   const settingsQuery = useQuery(orpc.settings.get.queryOptions());
+  // Same query the video-source card uses (shared cache). Waiting for it here keeps the
+  // cards from jumping down after the first paint.
+  const mediaStatusQuery = useQuery(orpc.settings.media.status.queryOptions());
 
   const savedTmdbApiKey = settingsQuery.data?.tmdbApiKey?.trim() ?? "";
   const hasSavedTmdbKey = savedTmdbApiKey.length > 0;
@@ -161,7 +165,7 @@ export default function SettingsPage() {
         </Button>
       </div>
 
-      {settingsQuery.isLoading ? (
+      {settingsPageIsLoading({ settingsLoading: settingsQuery.isLoading, mediaStatusLoading: mediaStatusQuery.isLoading }) ? (
         <div className="space-y-6">
           {[...Array(3)].map((_, i) => (
             <Card key={i}>
@@ -344,7 +348,7 @@ export default function SettingsPage() {
                 <Button asChild variant="outline">
                   <Link href="/settings/ffmpeg">
                     Configure FFMPEG
-                    <ExternalLink className="w-4 h-4 ml-2" />
+                    <ChevronRight className="w-4 h-4 ml-1" />
                   </Link>
                 </Button>
               </div>
@@ -379,28 +383,28 @@ export default function SettingsPage() {
               <Button asChild variant="outline" size="sm" className="shrink-0 h-9 touch-manipulation">
                 <Link href="/settings/youtube">
                   Manage
-                  <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+                  <ChevronRight className="w-3.5 h-3.5 ml-1" />
                 </Link>
               </Button>
             </div>
           </Card>
 
-          {/* Franchise timeline / TMDB */}
+          {/* Franchises (watch order) and the TMDB key it needs */}
           <Card className="gap-0 py-0 overflow-hidden shadow-sm">
             <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
               <div className="flex items-center gap-2 min-w-0">
                 <Film className="w-4 h-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-tight">Franchise timeline</p>
+                  <p className="text-sm font-semibold leading-tight">{FRANCHISES_LABEL}</p>
                   <p className="text-xs text-muted-foreground leading-snug">
-                    TMDB watch order for movie channels
+                    {FRANCHISES_BLURB}
                   </p>
                 </div>
               </div>
               <Button asChild variant="outline" size="sm" className="shrink-0 h-9 touch-manipulation">
-                <Link href="/settings/franchises">
+                <Link href={FRANCHISES_PATH}>
                   Manage
-                  <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+                  <ChevronRight className="w-3.5 h-3.5 ml-1" />
                 </Link>
               </Button>
             </div>
@@ -502,7 +506,7 @@ export default function SettingsPage() {
                 <Button asChild variant="outline">
                   <Link href="/settings/plex">
                     Configure Plex
-                    <ExternalLink className="w-4 h-4 ml-2" />
+                    <ChevronRight className="w-4 h-4 ml-1" />
                   </Link>
                 </Button>
               </div>

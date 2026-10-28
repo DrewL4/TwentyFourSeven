@@ -14,7 +14,8 @@ import {
   LogOut,
   Home,
   Users,
-  Eye
+  Eye,
+  Film
 } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "./ui/button";
@@ -22,9 +23,20 @@ import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "./ui/skeleton";
 import { useAdmin } from "@/hooks/use-admin";
-import { canOpenPath } from "@/lib/admin-routes";
+import { sidebarLinksFor, type NavKey } from "@/lib/nav-links";
 import { AppVersion } from "@/components/app-version";
 import { ModeToggle } from "@/components/mode-toggle";
+
+const NAV_ICONS: Record<NavKey, typeof Home> = {
+  home: Home,
+  guide: Calendar,
+  channels: Radio,
+  library: Library,
+  franchises: Film,
+  users: Users,
+  viewers: Eye,
+  settings: Settings,
+};
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -34,18 +46,7 @@ export default function Sidebar() {
   const { isAdmin, isManager } = useAdmin();
   const role = isAdmin ? "ADMIN" : isManager ? "MANAGER" : "USER";
 
-  const navigationLinks = [
-    { to: "/", label: "Home", icon: Home },
-    { to: "/guide", label: "TV Guide", icon: Calendar },
-    { to: "/channels", label: "Channels", icon: Radio },
-    { to: "/library", label: "Library", icon: Library },
-    { to: "/users", label: "Users", icon: Users },
-    { to: "/viewers", label: "Viewers", icon: Eye },
-    { to: "/settings", label: "Settings", icon: Settings },
-  ]
-    // Managers have no Settings page; their one settings page is the franchise orders.
-    .map((link) => (role === "MANAGER" && link.to === "/settings" ? { ...link, to: "/settings/franchises", label: "Franchises" } : link))
-    .filter((link) => canOpenPath(role, link.to));
+  const navigationLinks = sidebarLinksFor(role).map((link) => ({ ...link, icon: NAV_ICONS[link.key] }));
 
   const handleSignOut = () => {
     authClient.signOut({

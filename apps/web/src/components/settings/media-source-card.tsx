@@ -135,6 +135,15 @@ export default function MediaSourceCard() {
           })}
         </div>
 
+        {/* While the status loads, hold the space the status block will take so the
+            cards below do not jump down when it arrives. */}
+        {!data && (
+          <div className="space-y-3" data-testid="local-status-loading" aria-busy="true">
+            <div className="h-[68px] animate-pulse rounded-md border bg-muted" />
+            <div className="h-9 animate-pulse rounded-md bg-muted" />
+          </div>
+        )}
+
         {current === "LOCAL" && local && (
           <div className="space-y-3" data-testid="local-status">
             <div

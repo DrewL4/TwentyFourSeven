@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { useDebounce } from "use-debounce";
 import { cn } from "@/lib/utils";
+import { FRANCHISES_BLURB, FRANCHISES_LABEL } from "@/lib/nav-links";
 
 export default function FranchisesSettingsPage() {
   const queryClient = useQueryClient();
@@ -224,10 +225,10 @@ export default function FranchisesSettingsPage() {
               <span className="sr-only sm:not-sr-only sm:inline">{isAdmin ? "Settings" : "Home"}</span>
             </Link>
           </Button>
-          <h1 className="text-lg md:text-xl font-semibold tracking-[-0.03em] truncate">Franchise watch order</h1>
+          <h1 className="text-lg md:text-xl font-semibold tracking-[-0.03em] truncate">{FRANCHISES_LABEL}</h1>
         </div>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Link TMDB collections to a fixed movie order for channels; lists refresh daily and match your Plex library.
+          {FRANCHISES_BLURB}. Lists refresh daily and match the movies in your library.
         </p>
       </div>
 
@@ -321,7 +322,7 @@ export default function FranchisesSettingsPage() {
         className={cn("space-y-3", showEditor && "max-md:hidden")}
       >
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">Franchises</h2>
+          <h2 className="text-sm font-semibold">Your franchises</h2>
           <Button
             size="sm"
             variant="outline"

@@ -8,11 +8,20 @@ import {
   Radio, 
   Library, 
   Settings,
-  User
+  Film
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useAdmin } from "@/hooks/use-admin";
-import { canOpenPath } from "@/lib/admin-routes";
+import { mobileLinksFor, type NavKey } from "@/lib/nav-links";
+
+const NAV_ICONS: Partial<Record<NavKey, typeof Home>> = {
+  home: Home,
+  guide: Calendar,
+  channels: Radio,
+  library: Library,
+  franchises: Film,
+  settings: Settings,
+};
 
 export default function MobileBottomNav() {
   const pathname = usePathname();
@@ -20,17 +29,7 @@ export default function MobileBottomNav() {
   const { isAdmin, isManager } = useAdmin();
   const role = isAdmin ? "ADMIN" : isManager ? "MANAGER" : "USER";
 
-  // Core navigation items for mobile (limited to 5 for best UX)
-  const navigationLinks = [
-    { to: "/", label: "Home", icon: Home },
-    { to: "/guide", label: "Guide", icon: Calendar },
-    { to: "/channels", label: "Channels", icon: Radio },
-    { to: "/library", label: "Library", icon: Library },
-    { to: "/settings", label: "Settings", icon: Settings },
-  ]
-    // Managers have no Settings page; their one settings page is the franchise orders.
-    .map((link) => (role === "MANAGER" && link.to === "/settings" ? { ...link, to: "/settings/franchises", label: "Franchises" } : link))
-    .filter((link) => canOpenPath(role, link.to));
+  const navigationLinks = mobileLinksFor(role).map((link) => ({ ...link, icon: NAV_ICONS[link.key] }));
 
   if (!session) return null;
 
@@ -41,7 +40,7 @@ export default function MobileBottomNav() {
       aria-label="Main navigation"
     >
       <div className="flex h-16 items-center justify-around px-2 max-w-screen-sm mx-auto">
-        {navigationLinks.map(({ to, label, icon: Icon }) => {
+        {navigationLinks.map(({ to, label, icon: Icon = Home }) => {
           const isActive = pathname === to || (to !== "/" && pathname.startsWith(to));
           return (
             <Link

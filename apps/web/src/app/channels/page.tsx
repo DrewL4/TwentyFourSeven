@@ -2256,7 +2256,7 @@ function ChannelsPageContent() {
             { duration: 6000 },
           );
         } else {
-          toast.success('Franchise timeline order applied and saved for automation.');
+          toast.success('Franchise order applied and saved for automation.');
         }
         if (selectedChannelId) {
           updateFiltersMutation.mutate({
@@ -2272,7 +2272,7 @@ function ChannelsPageContent() {
         }
       },
       onError: () => {
-        toast.error('Failed to apply franchise timeline sort');
+        toast.error('Failed to apply franchise order');
       },
     }),
   );
@@ -3748,7 +3748,7 @@ function ChannelsPageContent() {
                         {(franchisesQuery.data?.length ?? 0) > 0 && (
                           <>
                             <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-2">
-                              Franchise timeline
+                              Franchises
                             </div>
                             {franchisesQuery.data?.map((franchise) => (
                               <SelectItem
