@@ -51,3 +51,20 @@ export function videoConfigChanged(previous: LiveVideoConfig | null, next: LiveV
   if (next.width == null || next.height == null) return false;
   return !(same('width') && same('height') && same('videoCodec') && same('sarNum') && same('sarDen'));
 }
+
+/**
+ * An HTTP refusal that retrying cannot fix. mpegts.js reports it as a network
+ * error with `info.code` set to the status; without this the player sat on a
+ * spinner forever when the viewer's sign-in had ended (for example after a
+ * second sign-in as the same user).
+ */
+export function liveAuthFailure(info: unknown): { signIn: boolean; message: string } | null {
+  const code = typeof info === 'object' && info !== null ? (info as { code?: unknown }).code : undefined;
+  if (code === 401) {
+    return { signIn: true, message: 'Your sign-in has ended. Sign in again to keep watching.' };
+  }
+  if (code === 403) {
+    return { signIn: false, message: 'This stream refused your access. Close the player and try again.' };
+  }
+  return null;
+}

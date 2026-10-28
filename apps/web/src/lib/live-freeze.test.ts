@@ -47,3 +47,24 @@ describe('videoConfigChanged', () => {
     assert.equal(videoConfigChanged(sintel, { videoCodec: 'avc1.64001f' }), false);
   });
 });
+
+import { liveAuthFailure } from './live-freeze';
+
+describe('liveAuthFailure', () => {
+  it('401 means sign in again, with no retry loop', () => {
+    const r = liveAuthFailure({ code: 401, msg: 'Unauthorized' });
+    assert.equal(r?.signIn, true);
+    assert.match(r!.message, /sign in/i);
+  });
+  it('403 is refused, not a sign-in prompt', () => {
+    const r = liveAuthFailure({ code: 403, msg: 'Forbidden' });
+    assert.equal(r?.signIn, false);
+  });
+  it('other codes and missing info keep the normal reconnect path', () => {
+    assert.equal(liveAuthFailure({ code: 503 }), null);
+    assert.equal(liveAuthFailure({ code: 0 }), null);
+    assert.equal(liveAuthFailure(undefined), null);
+    assert.equal(liveAuthFailure(null), null);
+    assert.equal(liveAuthFailure('x'), null);
+  });
+});

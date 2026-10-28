@@ -1,6 +1,6 @@
 "use client"
 
-import { FREEZE_TICKS_BEFORE_RESTART, isLivePictureFrozen, videoConfigChanged, type LiveVideoConfig } from '@/lib/live-freeze';
+import { FREEZE_TICKS_BEFORE_RESTART, isLivePictureFrozen, liveAuthFailure, videoConfigChanged, type LiveVideoConfig } from '@/lib/live-freeze';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, RefreshCw, AlertCircle, Loader2, Maximize, Minimize, Volume2, VolumeX, Play, Pause } from 'lucide-react';
@@ -49,6 +49,7 @@ export default function VideoPlayer({
   const [duration, setDuration] = useState(0);
   const [isBuffering, setIsBuffering] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [needsSignIn, setNeedsSignIn] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [isRecovering, setIsRecovering] = useState(false);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
@@ -113,7 +114,7 @@ export default function VideoPlayer({
       setCurrentUrl(getVideoUrl());
       setRetryCount(0);
       retryCountRef.current = 0;
-      setError(null);
+      setError(null); setNeedsSignIn(false);
       setIsRecovering(false);
       setRecoveryMessage(null);
       lastPlaybackTimeRef.current = Date.now();
@@ -190,7 +191,7 @@ export default function VideoPlayer({
       setIsBuffering(false);
       setIsRecovering(false);
       setRecoveryMessage(null);
-      setError(null);
+      setError(null); setNeedsSignIn(false);
       reconnectInFlightRef.current = false;
       lastPlaybackTimeRef.current = Date.now();
     };
@@ -550,8 +551,24 @@ export default function VideoPlayer({
           attemptReconnectRef.current('stalled', 0);
         }
       });
-      player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
-        if (session.cancelled || reconnectInFlightRef.current) {
+      player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string, errorInfo?: unknown) => {
+        if (session.cancelled) {
+          return;
+        }
+        // A refused request (sign-in ended, access refused) never succeeds on
+        // retry: say so instead of spinning forever.
+        const refused = liveAuthFailure(errorInfo);
+        if (refused) {
+          reconnectInFlightRef.current = false;
+          retryCountRef.current = MAX_RETRIES;
+          setRetryCount(MAX_RETRIES);
+          setNeedsSignIn(refused.signIn);
+          setError(refused.message);
+          setIsBuffering(false);
+          setIsRecovering(false);
+          return;
+        }
+        if (reconnectInFlightRef.current) {
           return;
         }
         if (
@@ -620,7 +637,7 @@ export default function VideoPlayer({
   const handleRetry = useCallback(() => {
     retryCountRef.current = 0;
     setRetryCount(0);
-    setError(null);
+    setError(null); setNeedsSignIn(false);
     reconnectInFlightRef.current = false;
     attemptReconnect('error');
   }, [attemptReconnect]);
@@ -832,6 +849,11 @@ export default function VideoPlayer({
           <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-20">
             <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
             <p className="text-white text-lg mb-4">{error}</p>
+            {needsSignIn && (
+              <Button onClick={() => { window.location.href = '/login/'; }} variant="default" className="mb-2">
+                Sign in again
+              </Button>
+            )}
             {retryCount < MAX_RETRIES && (
               <Button onClick={handleRetry} variant="default" className="mb-2">
                 <RefreshCw className="w-4 h-4 mr-2" />
