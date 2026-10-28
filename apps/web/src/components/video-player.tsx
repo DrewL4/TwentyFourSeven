@@ -1,6 +1,6 @@
 "use client"
 
-import { FREEZE_TICKS_BEFORE_RESTART, isLivePictureFrozen } from '@/lib/live-freeze';
+import { FREEZE_TICKS_BEFORE_RESTART, isLivePictureFrozen, videoConfigChanged, type LiveVideoConfig } from '@/lib/live-freeze';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, RefreshCw, AlertCircle, Loader2, Maximize, Minimize, Volume2, VolumeX, Play, Pause } from 'lucide-react';
@@ -522,6 +522,33 @@ export default function VideoPlayer({
       lastNetworkActivityRef.current = Date.now();
       player.on(mpegts.Events.STATISTICS_INFO, () => {
         lastNetworkActivityRef.current = Date.now();
+      });
+      // mpegts.js reports MEDIA_INFO each time it builds a video init segment.
+      // A different picture size or codec configuration in the middle of a live
+      // stream is what Chrome cannot continue, so rejoin the live edge at once
+      // (the freeze detector above stays as the fallback).
+      let firstVideoConfig: LiveVideoConfig | null = null;
+      player.on(mpegts.Events.MEDIA_INFO, (info: LiveVideoConfig) => {
+        if (session.cancelled || !live) return;
+        const next: LiveVideoConfig = {
+          width: info.width,
+          height: info.height,
+          videoCodec: info.videoCodec,
+          sarNum: info.sarNum,
+          sarDen: info.sarDen,
+        };
+        if (info.width == null || info.height == null) return;
+        if (!firstVideoConfig) {
+          firstVideoConfig = next;
+          return;
+        }
+        if (videoConfigChanged(firstVideoConfig, next) && !reconnectInFlightRef.current) {
+          console.warn(
+            `Live picture changed ${firstVideoConfig.width}x${firstVideoConfig.height} -> ${next.width}x${next.height} - restarting player`,
+          );
+          firstVideoConfig = next;
+          attemptReconnectRef.current('stalled', 0);
+        }
       });
       player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
         if (session.cancelled || reconnectInFlightRef.current) {

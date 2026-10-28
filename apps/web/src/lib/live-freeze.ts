@@ -28,3 +28,26 @@ export function isLivePictureFrozen(s: LivePlaybackSample): boolean {
     Math.abs(s.currentTime - s.previousTime) < 0.05
   );
 }
+
+/**
+ * What mpegts.js reports about the video track each time it builds a video
+ * init segment (its MEDIA_INFO event). A different picture size or codec
+ * configuration in the middle of a live stream is the exact case Chrome cannot
+ * continue, so the player restarts at once instead of waiting for the freeze.
+ * Audio-only changes (48k -> 44.1k) play fine and are ignored.
+ */
+export type LiveVideoConfig = {
+  width?: number;
+  height?: number;
+  videoCodec?: string;
+  sarNum?: number;
+  sarDen?: number;
+};
+
+export function videoConfigChanged(previous: LiveVideoConfig | null, next: LiveVideoConfig): boolean {
+  if (!previous) return false;
+  const same = <K extends keyof LiveVideoConfig>(key: K) => previous[key] === next[key];
+  // Ignore reports that do not describe the video yet.
+  if (next.width == null || next.height == null) return false;
+  return !(same('width') && same('height') && same('videoCodec') && same('sarNum') && same('sarDen'));
+}
