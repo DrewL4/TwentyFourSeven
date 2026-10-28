@@ -1,16 +1,16 @@
 // The links each role sees in the sidebar and the phone tab bar, and the one name
-// for the franchise watch-order page. Kept in one place so the two navs, the Home
+// for the franchise page. Everyone signed in can open it. Kept in one place so the two navs, the Home
 // cards and the Settings card cannot drift apart again.
 // Rule: an Admin (and the Owner, who is an Admin here) sees everything a Manager
 // sees, plus the Admin-only pages.
 
 import { canOpenPath, type NavRole } from "./admin-routes";
 
-export const FRANCHISES_PATH = "/settings/franchises";
+export const FRANCHISES_PATH = "/franchises";
 /** The one name for the franchise page, everywhere in the app. */
 export const FRANCHISES_LABEL = "Franchises";
 /** The one plain sentence that says what the page is for. */
-export const FRANCHISES_BLURB = "Set the order movies play in for franchises like Star Wars or Marvel";
+export const FRANCHISES_BLURB = "Build a franchise from your library, pick the order it plays in, and request what is missing";
 
 export type NavKey = "home" | "guide" | "channels" | "library" | "franchises" | "users" | "viewers" | "settings";
 export type NavLink = { key: NavKey; to: string; label: string };

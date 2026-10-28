@@ -84,6 +84,24 @@ const VIEWER_PROCEDURES = new Set([
   'stream.channel',
   'stream.m3u',
   'stream.xmltv',
+  // Franchises are for every signed-in user: anyone can make one from the library and request
+  // what is missing. The procedures check ownership themselves (owner or Manager edits).
+  'franchises.list',
+  'franchises.get',
+  'franchises.search',
+  'franchises.searchTitles',
+  'franchises.searchLibrary',
+  'franchises.preview',
+  'franchises.create',
+  'franchises.update',
+  'franchises.delete',
+  'franchises.addEntry',
+  'franchises.removeEntry',
+  'franchises.restoreEntry',
+  'franchises.moveEntry',
+  'franchises.resetOrder',
+  'franchises.resync',
+  'franchises.requestMissing',
 ]);
 
 type AnyNode = Record<string, unknown>;

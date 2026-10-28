@@ -18,6 +18,8 @@ model User {
   watchTowerUsername    String?
   watchTowerMetadata    Json?     // Store additional WatchTower data
   watchTowerJoinDate    DateTime? // Original join date from WatchTower
+  /// The user's own WatchTower API token, encrypted. Kept at sign-in so 24/7 can send requests as them.
+  watchTowerToken       String?
   
   sessions              Session[]
   accounts              Account[]

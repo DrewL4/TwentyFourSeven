@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { auth } from '@/lib/auth';
 import { startSessionForExistingUser } from '@/lib/wt-sso-session';
 import { prisma } from '@/lib/prisma';
+import { sealWatchTowerToken } from '@/lib/wt-user-token';
 import {
   classifyWatchTowerLoginFailure,
   describeFetchError,
@@ -322,10 +323,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Keep the user's own WatchTower token (encrypted) so the Franchises page can send their
+    // requests to WatchTower as them. If it cannot be sealed the sign-in still works.
+    let sealedWatchTowerToken: string | null = null;
+    try {
+      if (typeof authData.access_token === 'string' && authData.access_token) {
+        sealedWatchTowerToken = sealWatchTowerToken(authData.access_token);
+      }
+    } catch {
+      sealedWatchTowerToken = null;
+    }
+
     // Attach WatchTower fields after session is established
     await prisma.user.update({
       where: { id: account.id },
       data: {
+        ...(sealedWatchTowerToken ? { watchTowerToken: sealedWatchTowerToken } : {}),
         firstName: userData.firstName,
         lastName: userData.lastName,
         watchTowerUserId: userData.watchTowerUserId,

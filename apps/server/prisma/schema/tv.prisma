@@ -59,6 +59,7 @@ model MediaShow {
   
   episodes    MediaEpisode[]
   channelShows ChannelShow[]
+  franchiseEntries FranchiseEntry[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -147,6 +148,18 @@ model Franchise {
   /** Optional TMDB id lookup file URL (marvelorder listings.json format) */
   listingsUrl String?
   lastSyncedAt DateTime?
+
+  /// TFS user who created it (null for built-in or admin-seeded ones). Everyone can see every
+  /// franchise; only the owner or a Manager/Admin can change or delete it.
+  ownerId     String?
+  /// Show TV shows, seasons and episode ranges between the movies. Movies only by default.
+  includeShows Boolean @default(false)
+  /// Optional TMDB keyword id that adds its movies (and shows, when includeShows) as members.
+  tmdbKeywordId Int?
+  /// Key of a hand-authored story-order list in franchise-story-lists.ts (null = none).
+  storyListKey String?
+  /// True once someone hand-ordered the entries: syncs keep that order and only slot new entries in.
+  customOrder Boolean @default(false)
   
   entries     FranchiseEntry[]
   channels    Channel[]
@@ -168,11 +181,34 @@ model FranchiseEntry {
   movie        MediaMovie? @relation(fields: [movieId], references: [id], onDelete: SetNull)
   tmdbId       Int?
   titlePattern String?
+
+  /// MOVIE, SHOW (whole series), SEASON, or EPISODES (a range inside one season).
+  kind         String @default("MOVIE")
+  /// Stable identity used to merge a sync into the rows already saved, e.g. movie:603, tv:1399:s2.
+  entryKey     String?
+  showId       String?
+  show         MediaShow? @relation(fields: [showId], references: [id], onDelete: SetNull)
+  seasonNumber Int?
+  episodeStart Int?
+  episodeEnd   Int?
+  releaseDate  DateTime?
+  /// TMDB poster path, kept so a request to WatchTower carries the poster and the page can show it.
+  posterPath   String?
+  /// Index in the hand-authored (or inferred) story list; null when the story order is not known.
+  storyIndex   Int?
+  /// Added by hand. A sync never removes it.
+  manual       Boolean @default(false)
+  /// Removed by hand. A sync never adds it back.
+  excluded     Boolean @default(false)
+  /// Request sent to WatchTower from this franchise (so the page shows "Requested").
+  requestedAt  DateTime?
+  wtRequestId  Int?
   
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   
   @@index([franchiseId, position])
+  @@index([franchiseId, entryKey])
   @@map("franchise_entry")
 }
 
@@ -567,9 +603,11 @@ enum FranchiseSource {
   CUSTOM
 }
 
+/// CHRONOLOGICAL = story order. RECOMMENDED = story order where it is known, release order for the rest.
 enum FranchiseSortMode {
   CHRONOLOGICAL
   RELEASE
+  RECOMMENDED
 } 
 
 /// A YouTube channel or playlist that the server downloads (yt-dlp) into a TV folder,

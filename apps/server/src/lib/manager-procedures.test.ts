@@ -95,7 +95,7 @@ describe('real routes by role', () => {
   const managerAllowed: Array<[string, any]> = [
     ['channels.update', () => (routers.appRouter as any).channels.update],
     ['channels.delete', () => (routers.appRouter as any).channels.delete],
-    ['franchises.delete', () => (routers.appRouter as any).franchises.delete],
+    ['franchises.suggestFromCollection', () => (routers.appRouter as any).franchises.suggestFromCollection],
     ['programming.generateForChannel', () => (routers.appRouter as any).programming.generateForChannel],
   ];
   const adminOnly: Array<[string, any]> = [

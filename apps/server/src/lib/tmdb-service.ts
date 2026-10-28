@@ -182,3 +182,142 @@ export async function searchTmdbMovie(
   if (!first) return null;
   return { id: first.id, title: first.title, release_date: first.release_date };
 }
+
+async function requireKey(apiKey?: string): Promise<string> {
+  const key = apiKey ?? (await getTmdbApiKeyFromSettings());
+  if (!key) {
+    throw new Error('TMDB API key is not configured. Set TMDB_API_KEY or save tmdbApiKey in Settings.');
+  }
+  return key;
+}
+
+export type TmdbKeywordResult = { id: number; name: string };
+
+/** Search TMDB keywords (e.g. "marvel cinematic universe (mcu)"). */
+export async function searchTmdbKeywords(query: string, apiKey?: string): Promise<TmdbKeywordResult[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
+  const key = await requireKey(apiKey);
+  const data = await tmdbFetch<{ results?: Array<{ id: number; name: string }> }>(
+    `/search/keyword?query=${encodeURIComponent(trimmed)}`,
+    key,
+  );
+  return (data.results ?? []).slice(0, 15).map((row) => ({ id: row.id, name: row.name }));
+}
+
+export type TmdbTitleRow = {
+  id: number;
+  title: string;
+  releaseDate: string | null;
+  posterPath: string | null;
+  overview: string | null;
+};
+
+type DiscoverMovie = { id: number; title: string; release_date?: string; poster_path?: string | null; overview?: string };
+type DiscoverTv = { id: number; name: string; first_air_date?: string; poster_path?: string | null; overview?: string };
+
+/** Movies tagged with a TMDB keyword (first 2 pages, most popular first). */
+export async function fetchTmdbKeywordMovies(keywordId: number, apiKey?: string): Promise<TmdbTitleRow[]> {
+  const key = await requireKey(apiKey);
+  const rows: TmdbTitleRow[] = [];
+  for (let page = 1; page <= 2; page++) {
+    const data = await tmdbFetch<{ results?: DiscoverMovie[]; total_pages?: number }>(
+      `/discover/movie?with_keywords=${keywordId}&sort_by=popularity.desc&page=${page}`,
+      key,
+    );
+    for (const r of data.results ?? []) {
+      rows.push({
+        id: r.id,
+        title: r.title,
+        releaseDate: r.release_date || null,
+        posterPath: r.poster_path ?? null,
+        overview: r.overview ?? null,
+      });
+    }
+    if (page >= (data.total_pages ?? 1)) break;
+  }
+  return rows;
+}
+
+/** TV shows tagged with a TMDB keyword (first page). */
+export async function fetchTmdbKeywordShows(keywordId: number, apiKey?: string): Promise<TmdbTitleRow[]> {
+  const key = await requireKey(apiKey);
+  const data = await tmdbFetch<{ results?: DiscoverTv[] }>(
+    `/discover/tv?with_keywords=${keywordId}&sort_by=popularity.desc`,
+    key,
+  );
+  return (data.results ?? []).map((r) => ({
+    id: r.id,
+    title: r.name,
+    releaseDate: r.first_air_date || null,
+    posterPath: r.poster_path ?? null,
+    overview: r.overview ?? null,
+  }));
+}
+
+/** Search TMDB TV shows by name, optionally narrowed by first-air year. Returns the best matches. */
+export async function searchTmdbTv(title: string, year?: number | null, apiKey?: string): Promise<TmdbTitleRow[]> {
+  const key = await requireKey(apiKey);
+  const yearPart = year ? `&first_air_date_year=${year}` : '';
+  const data = await tmdbFetch<{ results?: DiscoverTv[] }>(
+    `/search/tv?query=${encodeURIComponent(title)}${yearPart}`,
+    key,
+  );
+  return (data.results ?? []).slice(0, 8).map((r) => ({
+    id: r.id,
+    title: r.name,
+    releaseDate: r.first_air_date || null,
+    posterPath: r.poster_path ?? null,
+    overview: r.overview ?? null,
+  }));
+}
+
+/** Search TMDB movies by name. Returns up to 8 matches (searchTmdbMovie returns only the first). */
+export async function searchTmdbMovies(title: string, year?: number | null, apiKey?: string): Promise<TmdbTitleRow[]> {
+  const key = await requireKey(apiKey);
+  const yearPart = year ? `&year=${year}` : '';
+  const data = await tmdbFetch<{ results?: DiscoverMovie[] }>(
+    `/search/movie?query=${encodeURIComponent(title)}${yearPart}`,
+    key,
+  );
+  return (data.results ?? []).slice(0, 8).map((r) => ({
+    id: r.id,
+    title: r.title,
+    releaseDate: r.release_date || null,
+    posterPath: r.poster_path ?? null,
+    overview: r.overview ?? null,
+  }));
+}
+
+export type TmdbTvDetails = {
+  id: number;
+  name: string;
+  firstAirDate: string | null;
+  posterPath: string | null;
+  overview: string | null;
+  seasons: Array<{ seasonNumber: number; episodeCount: number; airDate: string | null }>;
+};
+
+export async function fetchTmdbTv(tvId: number, apiKey?: string): Promise<TmdbTvDetails> {
+  const key = await requireKey(apiKey);
+  const data = await tmdbFetch<{
+    id: number;
+    name: string;
+    first_air_date?: string;
+    poster_path?: string | null;
+    overview?: string;
+    seasons?: Array<{ season_number: number; episode_count: number; air_date?: string | null }>;
+  }>(`/tv/${tvId}`, key);
+  return {
+    id: data.id,
+    name: data.name,
+    firstAirDate: data.first_air_date || null,
+    posterPath: data.poster_path ?? null,
+    overview: data.overview ?? null,
+    seasons: (data.seasons ?? []).map((s) => ({
+      seasonNumber: s.season_number,
+      episodeCount: s.episode_count,
+      airDate: s.air_date ?? null,
+    })),
+  };
+}

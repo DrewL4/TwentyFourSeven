@@ -85,7 +85,8 @@ export async function loadFranchiseEntries(
   const franchise = await prisma.franchise.findUnique({
     where: { slug: franchiseSlug },
     include: {
-      entries: { orderBy: { position: 'asc' } },
+      // Movie sorting only needs movie rows; hand-removed (excluded) rows stay out of channels.
+      entries: { where: { kind: 'MOVIE', excluded: false }, orderBy: { position: 'asc' } },
     },
   });
   if (!franchise) return [];

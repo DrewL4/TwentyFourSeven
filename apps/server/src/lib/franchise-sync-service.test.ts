@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { mergeCollectionOrphans } from './franchise-sync-service';
+import { mergeCollectionOrphans, pickLibraryShow } from './franchise-sync-service';
 
 describe('mergeCollectionOrphans', () => {
   it('inserts unknown collection movies by release date', () => {
@@ -31,5 +31,21 @@ describe('mergeCollectionOrphans', () => {
     assert.equal(merged[0].tmdbId, 1726);
     assert.equal(merged[1].tmdbId, 99999);
     assert.equal(merged[2].tmdbId, 24428);
+  });
+});
+
+describe('pickLibraryShow', () => {
+  const shows = [
+    { id: 'old', title: 'Daredevil', year: 1990 },
+    { id: 'new', title: 'Daredevil', year: 2015 },
+    { id: 'other', title: 'Loki', year: 2021 },
+  ];
+  it('finds a show by normalized title', () => {
+    assert.equal(pickLibraryShow(shows, 'loki', 2021), 'other');
+    assert.equal(pickLibraryShow(shows, 'nothing', 2021), null);
+  });
+  it('picks the same-title show closest to (and not after) the release year', () => {
+    assert.equal(pickLibraryShow(shows, 'daredevil', 2015), 'new');
+    assert.equal(pickLibraryShow(shows, 'daredevil', 1991), 'old');
   });
 });

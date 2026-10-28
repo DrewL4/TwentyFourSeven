@@ -11,6 +11,7 @@ describe('page access by role', () => {
     ['/channels', false, true, true],
     ['/channels/abc', false, true, true],
     ['/library', false, true, true],
+    ['/franchises', true, true, true],
     ['/settings/franchises', false, true, true],
     ['/settings', false, false, true],
     ['/settings/plex', false, false, true],

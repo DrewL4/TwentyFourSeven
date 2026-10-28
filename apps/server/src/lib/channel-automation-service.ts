@@ -203,7 +203,7 @@ export class ChannelAutomationService {
     // Franchise filter — match library movies by TMDB ids in franchise entries
     if (channel.franchiseId) {
       const entries = await prisma.franchiseEntry.findMany({
-        where: { franchiseId: channel.franchiseId },
+        where: { franchiseId: channel.franchiseId, kind: 'MOVIE', excluded: false },
         select: { tmdbId: true, titlePattern: true, label: true, movieId: true },
       });
       if (entries.length === 0) return [];

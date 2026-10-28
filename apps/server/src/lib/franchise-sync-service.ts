@@ -1,5 +1,4 @@
 import { prisma } from './prisma';
-import { fetchChecked } from './outbound-url';
 import {
   applyFranchiseSortToChannel,
   franchiseSortMethodForSlug,
@@ -8,15 +7,16 @@ import {
 import { LEGACY_TIMELINE_SORT_ALIASES } from './franchise-legacy-sort';
 import { normalizeTitle } from './title-normalize';
 import { scoreTitleMatch } from './franchise-title-match';
-import { fetchTmdbCollection, searchTmdbMovie } from './tmdb-service';
 import {
-  sortCollectionPartsForWatchOrder,
-  type FranchiseSortMode,
-} from './franchise-collection-order';
-import {
-  getSupplementsForCollection,
-  mergeStorySupplements,
-} from './franchise-story-supplements';
+  fetchTmdbCollection,
+  fetchTmdbKeywordMovies,
+  fetchTmdbKeywordShows,
+  searchTmdbMovies,
+  searchTmdbTv,
+} from './tmdb-service';
+import { buildFranchiseCandidates, type TmdbPort, type FranchiseCandidate } from './franchise-candidates';
+import { mergeFranchiseOrder, orderEntries, type OrderMode } from './franchise-order';
+import { findStoryListForSource, getStoryList, type StoryList } from './franchise-story-lists';
 
 export type ResolvedFranchiseOrderEntry = {
   position: number;
@@ -26,166 +26,225 @@ export type ResolvedFranchiseOrderEntry = {
   releaseDateMs: number | null;
 };
 
-type MarvelorderSheetRecord = {
-  TYPE?: string | Record<string, unknown>;
-  TITLE?: string;
-  RELEASE_DATE?: string;
-};
-
-type ListingRecord = {
-  id: number;
-  title?: string;
-  name?: string;
-  original_name?: string;
-};
-
-type FranchiseSyncSource = {
-  slug: string;
-  tmdbCollectionId: number | null;
-  timelineUrl: string | null;
-  listingsUrl: string | null;
-  sortMode: FranchiseSortMode;
-};
-
-let listingsIndexCache: Map<string, number> | null = null;
-let listingsIndexFetchedAt = 0;
-const LISTINGS_CACHE_MS = 6 * 60 * 60 * 1000;
-
-function isMovieType(type: MarvelorderSheetRecord['TYPE']): boolean {
-  if (type == null) return false;
-  if (typeof type === 'string') return type.toUpperCase() === 'MOVIE';
-  return false;
-}
-
 function parseReleaseMs(dateStr?: string | null): number | null {
   if (!dateStr) return null;
   const ms = Date.parse(dateStr);
   return Number.isNaN(ms) ? null : ms;
 }
 
-async function fetchJson<T>(url: string): Promise<T | null> {
-  if (!url?.trim()) return null;
-  try {
-    const response = await fetchChecked(url, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!response.ok) {
-      console.warn(`[franchise-sync] HTTP ${response.status} for ${url}`);
-      return null;
-    }
-    return (await response.json()) as T;
-  } catch (error) {
-    console.warn(`[franchise-sync] Failed to fetch ${url}:`, error);
-    return null;
-  }
+export function createTmdbPort(): TmdbPort {
+  const rows = (list: Array<{ id: number; title: string; releaseDate: string | null; posterPath: string | null }>) =>
+    list.map((r) => ({ id: r.id, title: r.title, releaseDate: r.releaseDate, posterPath: r.posterPath }));
+  return {
+    async collectionParts(id) {
+      const c = await fetchTmdbCollection(id);
+      return c.parts.map((p) => ({
+        id: p.id,
+        title: p.title,
+        releaseDate: p.release_date || null,
+        posterPath: p.poster_path ?? null,
+      }));
+    },
+    async keywordMovies(id) {
+      return rows(await fetchTmdbKeywordMovies(id));
+    },
+    async keywordShows(id) {
+      return rows(await fetchTmdbKeywordShows(id));
+    },
+    async searchMovies(title, year) {
+      return rows(await searchTmdbMovies(title, year));
+    },
+    async searchShows(title, year) {
+      return rows(await searchTmdbTv(title, year));
+    },
+  };
 }
 
-async function getListingsIndex(listingsUrl?: string | null): Promise<Map<string, number>> {
-  const now = Date.now();
-  if (listingsIndexCache && now - listingsIndexFetchedAt < LISTINGS_CACHE_MS) {
-    return listingsIndexCache;
-  }
+/** The story list a franchise uses: the one it chose, or the one its slug/collection belongs to. */
+export function storyListForFranchise(f: {
+  slug: string;
+  storyListKey: string | null;
+  tmdbCollectionId: number | null;
+}): StoryList | null {
+  return getStoryList(f.storyListKey) ?? findStoryListForSource({ slug: f.slug, tmdbCollectionId: f.tmdbCollectionId });
+}
 
-  const map = new Map<string, number>();
-  if (!listingsUrl?.trim()) {
-    listingsIndexCache = map;
-    listingsIndexFetchedAt = now;
-    return map;
-  }
+function candidateData(c: FranchiseCandidate) {
+  return {
+    kind: c.kind,
+    entryKey: c.entryKey,
+    label: c.label,
+    tmdbId: c.tmdbId,
+    titlePattern: c.titlePattern,
+    seasonNumber: c.seasonNumber,
+    episodeStart: c.episodeStart,
+    episodeEnd: c.episodeEnd,
+    releaseDate: c.releaseDate ? new Date(c.releaseDate) : null,
+    posterPath: c.posterPath,
+    storyIndex: c.storyIndex,
+  };
+}
 
-  const listings = await fetchJson<ListingRecord[]>(listingsUrl);
-  if (listings && Array.isArray(listings)) {
-    for (const item of listings) {
-      const keys = [item.title, item.name, item.original_name].filter(
-        (k): k is string => typeof k === 'string' && k.trim().length > 0,
-      );
-      for (const key of keys) {
-        map.set(normalizeTitle(key), item.id);
+function validDate<T extends { releaseDate: Date | null }>(row: T): T {
+  if (row.releaseDate && Number.isNaN(row.releaseDate.getTime())) return { ...row, releaseDate: null };
+  return row;
+}
+
+const MOVIE_LINK_MIN_SCORE = 800;
+
+async function linkEntriesToLibraryMovies(franchiseId: string): Promise<number> {
+  const entries = await prisma.franchiseEntry.findMany({
+    where: { franchiseId, kind: 'MOVIE', excluded: false },
+    select: { id: true, tmdbId: true, titlePattern: true, label: true, movieId: true },
+  });
+  if (entries.length === 0) return 0;
+
+  const tmdbIds = entries.map((e) => e.tmdbId).filter((id): id is number => id != null);
+  const movies = await prisma.mediaMovie.findMany({
+    where: tmdbIds.length > 0 ? { OR: [{ tmdbId: { in: tmdbIds } }, { tmdbId: null }] } : {},
+    select: { id: true, tmdbId: true, title: true, year: true },
+  });
+
+  const pairs: Array<{ entryId: string; movieId: string; score: number }> = [];
+  for (const entry of entries) {
+    for (const movie of movies) {
+      const score = scoreTitleMatch(movie, { ...entry, movieId: undefined });
+      if (score > 0) pairs.push({ entryId: entry.id, movieId: movie.id, score });
+    }
+  }
+  pairs.sort((a, b) => b.score - a.score);
+
+  const usedEntries = new Set<string>();
+  const usedMovies = new Set<string>();
+  const byEntry = new Map(entries.map((e) => [e.id, e]));
+  let changedLinks = 0;
+  for (const pair of pairs) {
+    if (usedEntries.has(pair.entryId) || usedMovies.has(pair.movieId)) continue;
+    if (pair.score < MOVIE_LINK_MIN_SCORE) continue;
+    usedEntries.add(pair.entryId);
+    usedMovies.add(pair.movieId);
+    if (byEntry.get(pair.entryId)?.movieId === pair.movieId) continue;
+    await prisma.franchiseEntry.update({ where: { id: pair.entryId }, data: { movieId: pair.movieId } });
+    changedLinks += 1;
+  }
+  // A movie that left the library un-links its entry (the entry itself stays, as "missing").
+  for (const entry of entries) {
+    if (entry.movieId && !usedEntries.has(entry.id)) {
+      await prisma.franchiseEntry.update({ where: { id: entry.id }, data: { movieId: null } });
+      changedLinks += 1;
+    }
+  }
+  return changedLinks;
+}
+
+/**
+ * Link show, season and episode-range entries to library shows by title. MediaShow has no TMDB id,
+ * so the match is by normalized title; when two library shows share a title the one whose year is
+ * closest to (and not after) the entry's release year wins.
+ */
+export function pickLibraryShow(
+  shows: ReadonlyArray<{ id: string; title: string; year: number | null }>,
+  titlePattern: string,
+  releaseYear: number | null,
+): string | null {
+  const same = shows.filter((s) => normalizeTitle(s.title) === titlePattern);
+  if (same.length === 0) return null;
+  if (same.length === 1 || releaseYear == null) return same[0].id;
+  const scored = same
+    .map((s) => ({ s, gap: s.year == null ? 1000 : releaseYear - s.year }))
+    .sort((a, b) => (a.gap < 0 ? 5000 : a.gap) - (b.gap < 0 ? 5000 : b.gap));
+  return scored[0].s.id;
+}
+
+async function linkEntriesToLibraryShows(franchiseId: string): Promise<number> {
+  const entries = await prisma.franchiseEntry.findMany({
+    where: { franchiseId, kind: { not: 'MOVIE' }, excluded: false },
+    select: { id: true, titlePattern: true, releaseDate: true, showId: true },
+  });
+  if (entries.length === 0) return 0;
+  const shows = await prisma.mediaShow.findMany({ select: { id: true, title: true, year: true } });
+  let changedLinks = 0;
+  for (const entry of entries) {
+    const year = entry.releaseDate ? entry.releaseDate.getUTCFullYear() : null;
+    const showId = entry.titlePattern ? pickLibraryShow(shows, entry.titlePattern, year) : null;
+    if (showId !== entry.showId) {
+      await prisma.franchiseEntry.update({ where: { id: entry.id }, data: { showId } });
+      changedLinks += 1;
+    }
+  }
+  return changedLinks;
+}
+
+/**
+ * Merge the freshly built list into the saved entries. Hand edits (added, removed, re-ordered
+ * entries) are kept; only entries that came from the source and left it are removed.
+ */
+async function mergeEntries(
+  franchiseId: string,
+  mode: OrderMode,
+  customOrder: boolean,
+  candidates: FranchiseCandidate[],
+): Promise<{ entryCount: number; changed: boolean }> {
+  const ordered = orderEntries(
+    candidates.map((c) => ({ ...c, releaseDate: c.releaseDate })),
+    mode,
+  );
+  const existing = await prisma.franchiseEntry.findMany({
+    where: { franchiseId },
+    orderBy: { position: 'asc' },
+  });
+  const plan = mergeFranchiseOrder(existing, ordered, { customOrder });
+
+  const before = JSON.stringify(
+    existing.filter((e) => !e.excluded).map((e) => [e.entryKey, e.position, e.label, e.tmdbId, e.storyIndex]),
+  );
+
+  await prisma.$transaction(async (tx) => {
+    for (const row of plan.remove) await tx.franchiseEntry.delete({ where: { id: row.id } });
+    const freshByRow = new Map(plan.update.map((u) => [u.row.id, u.fresh]));
+    let position = 0;
+    for (const item of plan.order) {
+      if ('row' in item) {
+        const fresh = freshByRow.get(item.row.id);
+        // Hand-added rows keep their own details; matched rows get refreshed metadata only.
+        const data = fresh && !item.row.manual ? validDate(candidateData(fresh)) : {};
+        await tx.franchiseEntry.update({ where: { id: item.row.id }, data: { ...data, position: position++ } });
+      } else {
+        await tx.franchiseEntry.create({
+          data: { franchiseId, ...validDate(candidateData(item.fresh)), position: position++, movieId: null },
+        });
       }
     }
-  }
+  });
 
-  listingsIndexCache = map;
-  listingsIndexFetchedAt = now;
-  return map;
+  const after = await prisma.franchiseEntry.findMany({
+    where: { franchiseId, excluded: false },
+    orderBy: { position: 'asc' },
+    select: { entryKey: true, position: true, label: true, tmdbId: true, storyIndex: true },
+  });
+  const changed =
+    before !== JSON.stringify(after.map((e) => [e.entryKey, e.position, e.label, e.tmdbId, e.storyIndex]));
+  return { entryCount: after.length, changed };
 }
 
-function resolveTmdbIdForTitle(
-  title: string,
-  listingsIndex: Map<string, number>,
-): number | null {
-  const norm = normalizeTitle(title);
-  if (listingsIndex.has(norm)) return listingsIndex.get(norm)!;
-
-  const withoutYear = norm.replace(/\s+\d{4}$/, '').trim();
-  if (listingsIndex.has(withoutYear)) return listingsIndex.get(withoutYear)!;
-
-  for (const [key, id] of listingsIndex.entries()) {
-    if (key.includes(withoutYear) || withoutYear.includes(key)) {
-      return id;
+/**
+ * Re-sort saved entries for a new order mode without any network call, using the story index
+ * and release date each entry already stores. Hand-placed order is replaced (the editor warns).
+ */
+export async function reorderFranchiseEntries(franchiseId: string, mode: OrderMode): Promise<void> {
+  const rows = await prisma.franchiseEntry.findMany({
+    where: { franchiseId },
+    orderBy: { position: 'asc' },
+  });
+  const live = rows.filter((r) => !r.excluded);
+  const sorted = orderEntries(live, mode);
+  await prisma.$transaction(async (tx) => {
+    let position = 0;
+    for (const row of sorted) await tx.franchiseEntry.update({ where: { id: row.id }, data: { position: position++ } });
+    for (const row of rows.filter((r) => r.excluded)) {
+      await tx.franchiseEntry.update({ where: { id: row.id }, data: { position: position++ } });
     }
-  }
-  return null;
-}
-
-async function resolveOrderFromTimelineUrl(
-  source: FranchiseSyncSource,
-): Promise<ResolvedFranchiseOrderEntry[]> {
-  if (!source.timelineUrl?.trim()) return [];
-
-  const sheet = await fetchJson<{ records?: MarvelorderSheetRecord[] }>(source.timelineUrl);
-  if (!sheet?.records?.length) return [];
-
-  const listingsIndex = await getListingsIndex(source.listingsUrl);
-  const entries: ResolvedFranchiseOrderEntry[] = [];
-  let position = 0;
-
-  for (const record of sheet.records) {
-    if (!isMovieType(record.TYPE)) continue;
-    const title = record.TITLE?.trim();
-    if (!title) continue;
-
-    let tmdbId = resolveTmdbIdForTitle(title, listingsIndex);
-    if (tmdbId == null) {
-      const yearMatch = title.match(/\((\d{4})\)/);
-      const year = yearMatch ? parseInt(yearMatch[1], 10) : undefined;
-      const cleanTitle = title.replace(/\s*\(\d{4}\)\s*$/, '').trim();
-      const searched = await searchTmdbMovie(cleanTitle, year);
-      tmdbId = searched?.id ?? null;
-    }
-
-    entries.push({
-      position: position++,
-      label: title,
-      tmdbId,
-      titlePattern: normalizeTitle(title),
-      releaseDateMs: parseReleaseMs(record.RELEASE_DATE),
-    });
-  }
-
-  return entries;
-}
-
-async function resolveOrderFromTmdbCollection(
-  collectionId: number,
-  sortMode: FranchiseSortMode,
-): Promise<ResolvedFranchiseOrderEntry[]> {
-  const collection = await fetchTmdbCollection(collectionId);
-  const parts = sortCollectionPartsForWatchOrder(collection.parts, sortMode);
-  let ordered = parts.map((part, position) => ({
-    position,
-    label: part.title,
-    tmdbId: part.id,
-    titlePattern: normalizeTitle(part.title),
-    releaseDateMs: parseReleaseMs(part.release_date),
-  }));
-  ordered = mergeStorySupplements(
-    ordered,
-    getSupplementsForCollection(collectionId),
-    sortMode,
-  );
-  return ordered;
+  });
 }
 
 /**
@@ -235,130 +294,6 @@ export function mergeCollectionOrphans(
   return result;
 }
 
-async function buildOrderForFranchise(
-  source: FranchiseSyncSource,
-): Promise<ResolvedFranchiseOrderEntry[]> {
-  let ordered = await resolveOrderFromTimelineUrl(source);
-
-  if (source.tmdbCollectionId) {
-    try {
-      const collection = await fetchTmdbCollection(source.tmdbCollectionId);
-      if (ordered.length === 0) {
-        ordered = await resolveOrderFromTmdbCollection(
-          source.tmdbCollectionId,
-          source.sortMode,
-        );
-      } else {
-        const sortedParts = sortCollectionPartsForWatchOrder(
-          collection.parts,
-          source.sortMode,
-        );
-        ordered = mergeCollectionOrphans(ordered, sortedParts);
-        for (const entry of ordered) {
-          if (entry.tmdbId != null && entry.releaseDateMs == null) {
-            const part = collection.parts.find((p) => p.id === entry.tmdbId);
-            entry.releaseDateMs = parseReleaseMs(part?.release_date);
-          }
-        }
-      }
-    } catch (error) {
-      console.warn(
-        `[franchise-sync] TMDB collection ${source.tmdbCollectionId} skipped for ${source.slug}:`,
-        error instanceof Error ? error.message : error,
-      );
-      if (ordered.length === 0) throw error;
-    }
-  }
-
-  return ordered;
-}
-
-async function linkEntriesToLibraryMovies(franchiseId: string): Promise<number> {
-  const entries = await prisma.franchiseEntry.findMany({
-    where: { franchiseId },
-    select: { id: true, tmdbId: true, titlePattern: true, label: true },
-  });
-  if (entries.length === 0) return 0;
-
-  const tmdbIds = entries.map((e) => e.tmdbId).filter((id): id is number => id != null);
-  const movies = await prisma.mediaMovie.findMany({
-    where: tmdbIds.length > 0 ? { OR: [{ tmdbId: { in: tmdbIds } }, { tmdbId: null }] } : {},
-    select: { id: true, tmdbId: true, title: true, year: true },
-  });
-  const movieByTmdb = new Map(
-    movies.filter((m) => m.tmdbId != null).map((m) => [m.tmdbId!, m.id]),
-  );
-
-  const pairs: Array<{ entryId: string; movieId: string; score: number }> = [];
-  for (const entry of entries) {
-    for (const movie of movies) {
-      const score = scoreTitleMatch(movie, entry);
-      if (score > 0) {
-        pairs.push({ entryId: entry.id, movieId: movie.id, score });
-      }
-    }
-  }
-  pairs.sort((a, b) => b.score - a.score);
-
-  const usedEntries = new Set<string>();
-  const usedMovies = new Set<string>();
-  let linked = 0;
-
-  for (const pair of pairs) {
-    if (usedEntries.has(pair.entryId) || usedMovies.has(pair.movieId)) continue;
-    if (pair.score < 800) continue;
-    await prisma.franchiseEntry.update({
-      where: { id: pair.entryId },
-      data: { movieId: pair.movieId },
-    });
-    usedEntries.add(pair.entryId);
-    usedMovies.add(pair.movieId);
-    linked += 1;
-  }
-
-  return linked;
-}
-
-async function upsertFranchiseEntries(
-  franchiseId: string,
-  ordered: ResolvedFranchiseOrderEntry[],
-): Promise<{ entryCount: number; changed: boolean }> {
-  const existing = await prisma.franchiseEntry.findMany({
-    where: { franchiseId },
-    orderBy: { position: 'asc' },
-    select: { tmdbId: true, titlePattern: true, position: true },
-  });
-
-  const signature = (rows: { tmdbId: number | null; titlePattern: string | null; position: number }[]) =>
-    JSON.stringify(rows.map((r) => [r.position, r.tmdbId, r.titlePattern]));
-
-  const nextRows = ordered.map((e, position) => ({
-    position,
-    tmdbId: e.tmdbId,
-    titlePattern: e.titlePattern,
-  }));
-
-  const changed = signature(existing) !== signature(nextRows);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.franchiseEntry.deleteMany({ where: { franchiseId } });
-    if (ordered.length > 0) {
-      await tx.franchiseEntry.createMany({
-        data: ordered.map((e) => ({
-          franchiseId,
-          position: e.position,
-          label: e.label,
-          tmdbId: e.tmdbId,
-          titlePattern: e.titlePattern,
-          movieId: null,
-        })),
-      });
-    }
-  });
-
-  return { entryCount: ordered.length, changed };
-}
-
 export async function resortChannelsUsingFranchise(slug: string): Promise<number> {
   const franchise = await prisma.franchise.findUnique({
     where: { slug },
@@ -398,83 +333,98 @@ export type FranchiseSyncResult = {
   slug: string;
   entryCount: number;
   linkedMovies: number;
+  linkedShows?: number;
   channelsResorted: number;
   changed: boolean;
   skipped?: string;
 };
 
+const SKIP = (slug: string, skipped: string): FranchiseSyncResult => ({
+  slug,
+  entryCount: 0,
+  linkedMovies: 0,
+  channelsResorted: 0,
+  changed: false,
+  skipped,
+});
+
 /**
- * Refresh franchise watch order from DB-configured TMDB collection + optional timeline URL.
+ * Refresh a franchise from TMDB (collection, keyword) and its story list, merging into the
+ * saved entries so hand edits survive. An empty or failed fetch never touches saved entries.
  */
-export async function syncFranchise(slug: string): Promise<FranchiseSyncResult> {
-  const franchise = await prisma.franchise.findUnique({ where: { slug } });
-  if (!franchise) {
-    return { slug, entryCount: 0, linkedMovies: 0, channelsResorted: 0, changed: false, skipped: 'not found' };
+export async function syncFranchise(slug: string, port: TmdbPort = createTmdbPort()): Promise<FranchiseSyncResult> {
+  let franchise = await prisma.franchise.findUnique({ where: { slug } });
+  if (!franchise) return SKIP(slug, 'not found');
+
+  // Franchises seeded by older versions (MCU, Star Wars) take their matching curated list once.
+  if (!franchise.storyListKey) {
+    const legacy = findStoryListForSource({ slug: franchise.slug, tmdbCollectionId: null });
+    if (legacy) {
+      franchise = await prisma.franchise.update({ where: { id: franchise.id }, data: { storyListKey: legacy.key } });
+    }
   }
 
-  if (!franchise.tmdbCollectionId && !franchise.timelineUrl?.trim()) {
-    return {
-      slug,
-      entryCount: 0,
-      linkedMovies: 0,
-      channelsResorted: 0,
-      changed: false,
-      skipped: 'no tmdbCollectionId or timelineUrl configured',
-    };
+  const storyList = storyListForFranchise(franchise);
+  if (!franchise.tmdbCollectionId && !franchise.tmdbKeywordId && !franchise.storyListKey) {
+    return SKIP(slug, 'no tmdbCollectionId, keyword or story list configured');
   }
 
-  const source: FranchiseSyncSource = {
-    slug: franchise.slug,
-    tmdbCollectionId: franchise.tmdbCollectionId,
-    timelineUrl: franchise.timelineUrl,
-    listingsUrl: franchise.listingsUrl,
-    sortMode: franchise.sortMode,
-  };
-
-  let ordered: ResolvedFranchiseOrderEntry[];
-  try {
-    ordered = await buildOrderForFranchise(source);
-  } catch (error) {
-    console.error(`[franchise-sync] build order failed for ${slug}:`, error);
-    return {
-      slug,
-      entryCount: 0,
-      linkedMovies: 0,
-      channelsResorted: 0,
-      changed: false,
-      skipped: 'sync failed',
-    };
-  }
-
-  if (ordered.length === 0) {
-    return {
-      slug,
-      entryCount: 0,
-      linkedMovies: 0,
-      channelsResorted: 0,
-      changed: false,
-      skipped: 'empty order',
-    };
-  }
-
-  const { entryCount, changed } = await upsertFranchiseEntries(franchise.id, ordered);
-  const linkedMovies = await linkEntriesToLibraryMovies(franchise.id);
-
-  await prisma.franchise.update({
-    where: { id: franchise.id },
-    data: { lastSyncedAt: new Date() },
+  const existing = await prisma.franchiseEntry.findMany({
+    where: { franchiseId: franchise.id },
+    select: { kind: true, tmdbId: true, titlePattern: true, manual: true },
   });
+  const knownIds = new Map<string, number>();
+  for (const e of existing) {
+    if (e.tmdbId != null && e.titlePattern) {
+      knownIds.set(`${e.kind === 'MOVIE' ? 'movie' : 'tv'}:${e.titlePattern}`, e.tmdbId);
+    }
+  }
+
+  let candidates: FranchiseCandidate[];
+  try {
+    candidates = await buildFranchiseCandidates(
+      {
+        tmdbCollectionId: franchise.tmdbCollectionId,
+        tmdbKeywordId: franchise.tmdbKeywordId,
+        includeShows: franchise.includeShows,
+        storyList,
+        addListItems: !!franchise.storyListKey,
+        knownIds,
+      },
+      port,
+    );
+  } catch (error) {
+    console.error(`[franchise-sync] build failed for ${slug}:`, error);
+    return SKIP(slug, 'sync failed');
+  }
+  if (candidates.length === 0) return SKIP(slug, 'empty result (kept saved entries)');
+
+  const { entryCount, changed } = await mergeEntries(
+    franchise.id,
+    franchise.sortMode as OrderMode,
+    franchise.customOrder,
+    candidates,
+  );
+  const linkedMovies = await linkEntriesToLibraryMovies(franchise.id);
+  const linkedShows = franchise.includeShows ? await linkEntriesToLibraryShows(franchise.id) : 0;
+
+  await prisma.franchise.update({ where: { id: franchise.id }, data: { lastSyncedAt: new Date() } });
 
   let channelsResorted = 0;
-  if (changed || linkedMovies > 0) {
+  if (changed || linkedMovies > 0 || linkedShows > 0) {
     channelsResorted = await resortChannelsUsingFranchise(slug);
   }
-
   console.info(
-    `[franchise-sync] ${slug}: ${entryCount} entries, ${linkedMovies} linked, ${channelsResorted} channels re-sorted`,
+    `[franchise-sync] ${slug}: ${entryCount} entries, ${linkedMovies} movie links, ${linkedShows} show links, ${channelsResorted} channels re-sorted`,
   );
+  return { slug, entryCount, linkedMovies, linkedShows, channelsResorted, changed };
+}
 
-  return { slug, entryCount, linkedMovies, channelsResorted, changed };
+/** Link library movies and shows to a franchise's saved entries, no TMDB call (used after edits). */
+export async function relinkFranchise(franchiseId: string): Promise<void> {
+  const f = await prisma.franchise.findUnique({ where: { id: franchiseId }, select: { includeShows: true } });
+  await linkEntriesToLibraryMovies(franchiseId);
+  if (f?.includeShows) await linkEntriesToLibraryShows(franchiseId);
 }
 
 /** @deprecated Use syncFranchise */
@@ -485,7 +435,8 @@ export async function syncAllFranchises(): Promise<FranchiseSyncResult[]> {
     where: {
       OR: [
         { tmdbCollectionId: { not: null } },
-        { timelineUrl: { not: null } },
+        { tmdbKeywordId: { not: null } },
+        { storyListKey: { not: null } },
       ],
     },
     select: { slug: true },

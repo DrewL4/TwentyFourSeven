@@ -1,3 +1,4 @@
+import { buildFranchiseLineup } from './franchise-lineup';
 import { prisma } from './prisma';
 import { removeOverlappingPrograms } from './remove-overlapping-programs';
 import { TimingService } from './timing-service';
@@ -405,6 +406,33 @@ export class ProgrammingService {
     }
   }
 
+  /**
+   * Play lineup for a franchise channel whose franchise includes TV shows. Returns null for every
+   * other channel (no franchise, movies-only franchise, nothing found in the library), which keeps
+   * the normal channel lineup untouched.
+   */
+  private async franchiseLineupFor(franchiseId: string | null | undefined) {
+    if (!franchiseId) return null;
+    const franchise = await prisma.franchise.findUnique({
+      where: { id: franchiseId },
+      select: { includeShows: true },
+    });
+    if (!franchise?.includeShows) return null;
+    const entries = await prisma.franchiseEntry.findMany({
+      where: { franchiseId, excluded: false },
+      orderBy: { position: 'asc' },
+      include: {
+        movie: true,
+        show: {
+          include: {
+            episodes: { orderBy: [{ seasonNumber: 'asc' }, { episodeNumber: 'asc' }] },
+          },
+        },
+      },
+    });
+    return buildFranchiseLineup(entries);
+  }
+
   private async _doGeneratePrograms(channelId: string, customHours?: number) {
       const guideDays = await this.getGuideDays();
       const hours = customHours || (guideDays * 24); // Use guideDays setting unless overridden
@@ -543,6 +571,13 @@ export class ProgrammingService {
         // Add this movie
         allContent.push(item.item);
       }
+    }
+
+    // A franchise with "Include TV shows" plays its own entries (movies, shows, seasons, episode ranges).
+    const franchiseContent = await this.franchiseLineupFor(channel.franchiseId);
+    if (franchiseContent) {
+      allContent.length = 0;
+      allContent.push(...franchiseContent);
     }
 
     if (allContent.length === 0) {
@@ -884,6 +919,11 @@ export class ProgrammingService {
       } else {
         allContent.push(item.item);
       }
+    }
+    const franchiseContent = await this.franchiseLineupFor(channel.franchiseId);
+    if (franchiseContent) {
+      allContent.length = 0;
+      allContent.push(...franchiseContent);
     }
     if (allContent.length === 0) return;
 

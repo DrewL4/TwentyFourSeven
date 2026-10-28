@@ -14,8 +14,8 @@ describe('sidebar links by role', () => {
       'Home', 'TV Guide', 'Channels', 'Library', 'Franchises', 'Users', 'Viewers', 'Settings',
     ]);
   });
-  it('regular user: Home and TV Guide only', () => {
-    assert.deepEqual(labels('USER', sidebarLinksFor), ['Home', 'TV Guide']);
+  it('regular user: Home, TV Guide and Franchises', () => {
+    assert.deepEqual(labels('USER', sidebarLinksFor), ['Home', 'TV Guide', 'Franchises']);
   });
   it('an Admin sees every link a Manager sees (sidebar and phone bar)', () => {
     for (const f of [sidebarLinksFor, mobileLinksFor]) {
@@ -33,6 +33,9 @@ describe('sidebar links by role', () => {
 });
 
 describe('phone bar by role', () => {
+  it('regular user gets Franchises too', () => {
+    assert.deepEqual(labels('USER', mobileLinksFor), ['Home', 'Guide', 'Franchises']);
+  });
   it('Manager gets Franchises, no Settings', () => {
     assert.deepEqual(labels('MANAGER', mobileLinksFor), ['Home', 'Guide', 'Channels', 'Library', 'Franchises']);
   });
@@ -44,7 +47,7 @@ describe('phone bar by role', () => {
 describe('franchise naming', () => {
   it('uses one plain name and no jargon', () => {
     assert.equal(FRANCHISES_LABEL, 'Franchises');
-    assert.equal(FRANCHISES_PATH, '/settings/franchises');
+    assert.equal(FRANCHISES_PATH, '/franchises');
     assert.ok(!/tmdb|timeline/i.test(FRANCHISES_BLURB));
     const sidebar = sidebarLinksFor('ADMIN').find((l) => l.to === FRANCHISES_PATH);
     assert.equal(sidebar?.label, FRANCHISES_LABEL);
