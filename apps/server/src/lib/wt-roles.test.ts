@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  alwaysSignsIn,
   createRoleChecker,
+  isLapsedManager,
   FAILURE_COOLDOWN_MS,
   isStaleRoleVersion,
   isStaffRole,
@@ -39,6 +41,52 @@ describe('mapWtRole', () => {
   it('managers count as staff (always have 24/7 access)', () => {
     assert.equal(isStaffRole({ role: 'manager' }), true);
     assert.equal(isStaffRole({ role: 'user' }), false);
+  });
+});
+
+describe('lapsed Manager', () => {
+  const lapsed = { role: 'user', role_lapsed: true, is_active: true };
+
+  it('is a plain USER with no staff powers, but can still sign in', () => {
+    assert.equal(mapWtRole(lapsed), 'USER');
+    assert.equal(isStaffRole(lapsed), false);
+    assert.equal(isLapsedManager(lapsed), true);
+    assert.equal(alwaysSignsIn(lapsed), true);
+  });
+
+  it('an ordinary user (not lapsed) still needs a movie service', () => {
+    assert.equal(alwaysSignsIn({ role: 'user' }), false);
+    assert.equal(alwaysSignsIn({ role: 'user', role_lapsed: false }), false);
+  });
+
+  it('a deactivated lapsed Manager cannot sign in', () => {
+    assert.equal(alwaysSignsIn({ ...lapsed, is_active: false }), false);
+  });
+
+  it('role_lapsed never grants anything to a role above user', () => {
+    assert.equal(isLapsedManager({ role: 'manager', role_lapsed: true }), false);
+    assert.equal(mapWtRole({ role: 'manager', role_lapsed: true }), 'MANAGER');
+  });
+
+  it('a Manager whose WatchTower payload turns lapsed is demoted and signed out by the re-check', async () => {
+    const saved: Array<{ role: string }> = [];
+    let signedOut = 0;
+    const now = 10 * RECHECK_AFTER_MS;
+    const checker = createRoleChecker({
+      fetchWtUser: async () => ({ ...lapsed, role_version: 5 }),
+      isLinked: async () => true,
+      save: async (_id, data) => { saved.push({ role: data.role }); },
+      signOut: async () => { signedOut += 1; },
+      now: () => now,
+    });
+    const result = await checker.ensureFreshRole({
+      id: 'u1', role: 'MANAGER', isActive: true, watchTowerUserId: '9',
+      watchTowerMetadata: { wt_role_version: 4, wt_role_checked_at: new Date(0).toISOString() },
+    });
+    assert.equal(result.role, 'USER');
+    assert.equal(result.revoked, true);
+    assert.deepEqual(saved, [{ role: 'USER' }]);
+    assert.equal(signedOut, 1);
   });
 });
 

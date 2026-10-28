@@ -36,6 +36,8 @@ export type WtRolePayload = {
   is_staff?: unknown;
   is_superuser?: unknown;
   is_active?: unknown;
+  /** WatchTower: a Manager whose TV service or donation lapsed. They arrive with role 'user'. */
+  role_lapsed?: unknown;
 };
 
 export function mapWtRole(u: WtRolePayload | null | undefined): TfsRole {
@@ -52,6 +54,19 @@ export function mapWtRole(u: WtRolePayload | null | undefined): TfsRole {
 /** Owner, admin or manager in WatchTower: staff always have 24/7 access, like admins before. */
 export function isStaffRole(u: WtRolePayload | null | undefined): boolean {
   return mapWtRole(u) !== 'USER';
+}
+
+/**
+ * A Manager who lapsed in WatchTower. WatchTower already sends them as role 'user', so they
+ * have no staff powers here; they can still sign in, with User rights only.
+ */
+export function isLapsedManager(u: WtRolePayload | null | undefined): boolean {
+  return !!u && u.role_lapsed === true && u.is_active !== false && mapWtRole(u) === 'USER';
+}
+
+/** Gets in without a movie service: staff, or a lapsed Manager (sign-in only, never staff powers). */
+export function alwaysSignsIn(u: WtRolePayload | null | undefined): boolean {
+  return isStaffRole(u) || isLapsedManager(u);
 }
 
 export function versionOf(value: unknown): number | null {

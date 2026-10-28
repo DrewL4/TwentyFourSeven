@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { db } from './context';
 import { signOutEverywhere, signOutIfLostAccess } from './user-access';
-import { isStaffRole, isStaleRoleVersion, mapWtRole, storedRoleVersion, withRoleFields } from './wt-roles';
+import { alwaysSignsIn, isStaleRoleVersion, mapWtRole, storedRoleVersion, withRoleFields } from './wt-roles';
 
 interface WatchTowerUser {
   id: number;
@@ -169,7 +169,7 @@ export class WatchTowerHubService {
   private async handleUserCreated(userData: any): Promise<void> {
     try {
       // Check if user has movie service (regardless of expiration)
-      const hasMovieService = !!(userData.movie_service || userData.is_movie_user || isStaffRole(userData) || userData.is_family);
+      const hasMovieService = !!(userData.movie_service || userData.is_movie_user || alwaysSignsIn(userData) || userData.is_family);
       
       if (!hasMovieService) {
         console.log(`User ${userData.email} does not have movie service - skipping creation`);
@@ -251,7 +251,7 @@ export class WatchTowerHubService {
       });
 
       // Check if user has movie service (regardless of expiration)
-      const hasMovieService = !!(userData.movie_service || userData.is_movie_user || isStaffRole(userData) || userData.is_family);
+      const hasMovieService = !!(userData.movie_service || userData.is_movie_user || alwaysSignsIn(userData) || userData.is_family);
       const isExpired = this._isMovieDonationExpired(userData);
       const hasMovieServiceAccess = this._shouldHaveMovieServiceAccess(userData);
 
@@ -497,7 +497,7 @@ export class WatchTowerHubService {
    */
   private _isMovieDonationExpired(userData: any): boolean {
     // Staff (owner, admin, manager) and family users never expire
-    if (isStaffRole(userData) || userData.is_family) {
+    if (alwaysSignsIn(userData) || userData.is_family) {
       return false;
     }
 
@@ -529,7 +529,7 @@ export class WatchTowerHubService {
     }
 
     // Staff (owner, admin, manager) always have access
-    if (isStaffRole(userData)) {
+    if (alwaysSignsIn(userData)) {
       return true;
     }
 

@@ -1,4 +1,4 @@
-import { isStaffRole, mapWtRole, withRoleFields, type TfsRole } from '@/lib/wt-roles';
+import { alwaysSignsIn, mapWtRole, withRoleFields, type TfsRole } from '@/lib/wt-roles';
 import { auditElevatedLogin } from '@/lib/orpc-audit';
 import { clientAddress } from '@/lib/link-security';
 import { NextRequest, NextResponse } from 'next/server';
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Staff (owner, admin, manager) always have access
-      if (isStaffRole(watchTowerUser)) {
+      if (alwaysSignsIn(watchTowerUser)) {
         return true;
       }
 
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
 
     // Check if donation is expired (for error message)
     const isExpired = (() => {
-      if (isStaffRole(watchTowerUser) || watchTowerUser.is_family) {
+      if (alwaysSignsIn(watchTowerUser) || watchTowerUser.is_family) {
         return false;
       }
       if (!watchTowerUser.movie_donation_due) {

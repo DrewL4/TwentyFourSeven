@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { guardAdminRoute } from '@/lib/admin-route-guard';
 import { db } from '@/lib/context';
 import { signOutIfLostAccess } from '@/lib/user-access';
-import { isStaffRole, isStaleRoleVersion, mapWtRole, storedRoleVersion, withRoleFields } from '@/lib/wt-roles';
+import { alwaysSignsIn, isStaleRoleVersion, mapWtRole, storedRoleVersion, withRoleFields } from '@/lib/wt-roles';
 
 // Helper function to check admin permissions or allow initial setup
 async function checkAdminAuthOrInitialSetup(request: NextRequest) {
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     // Filter to only users with movie services (including expired - we'll mark them)
     const movieServiceUsers = allUsers.filter((user: any) => {
       // Staff (owner, admin, manager) always count as movie users
-      if (isStaffRole(user)) {
+      if (alwaysSignsIn(user)) {
         return true;
       }
       // Family users always count as movie users
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Helper function to check if movie donation is expired
     const isMovieDonationExpired = (user: any): boolean => {
-      if (isStaffRole(user) || user.is_family) {
+      if (alwaysSignsIn(user) || user.is_family) {
         return false;
       }
       if (!user.movie_donation_due) {
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
         return false;
       }
       // Staff (owner, admin, manager) always have access
-      if (isStaffRole(user)) {
+      if (alwaysSignsIn(user)) {
         return true;
       }
 
