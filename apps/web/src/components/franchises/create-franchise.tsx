@@ -11,6 +11,8 @@ import { orpc } from "@/utils/orpc";
 import { OrderControls, type OrderMode } from "./order-controls";
 import { EntryRow, type RowItem } from "./entry-row";
 import { useRequestMissing } from "./use-request-missing";
+import { useRequestInfo } from "./use-request-info";
+import { statusView } from "./request-status";
 
 type Source =
   | { type: "story"; key: string; name: string }
@@ -64,7 +66,6 @@ export function CreateFranchise(props: { onClose: () => void; onCreated: (id: st
     retry: false,
   });
 
-  const requestMissing = useRequestMissing();
   const [requestedLabels, setRequestedLabels] = useState<Set<string>>(new Set());
 
   const create = useMutation(
@@ -82,7 +83,26 @@ export function CreateFranchise(props: { onClose: () => void; onCreated: (id: st
   );
 
   const items = previewQuery.data?.items ?? [];
+  const info = useRequestInfo(
+    items
+      .filter((i) => !i.inLibrary)
+      .map((i) => ({
+        key: i.entryKey,
+        kind: i.kind as "MOVIE" | "SHOW" | "SEASON" | "EPISODES",
+        tmdbId: i.tmdbId ?? null,
+        seasonNumber: i.seasonNumber ?? null,
+        releaseDate: i.releaseDate ? String(i.releaseDate).slice(0, 10) : null,
+      })),
+    !!source,
+  );
+  const requestMissing = useRequestMissing(info.noteRequested);
+  // Titles worth asking WatchTower for: nobody has asked, or an earlier request was declined or failed.
+  const canRequest = (i: (typeof items)[number]) => {
+    const { wt, checked } = info.infoFor(i.entryKey);
+    return statusView(wt, requestedLabels.has(i.label) && !checked).canRequest;
+  };
   const missing = items.filter((i) => !i.inLibrary);
+  const requestable = missing.filter(canRequest);
 
   const chooseSource = (s: Source) => {
     setSource(s);
@@ -115,6 +135,9 @@ export function CreateFranchise(props: { onClose: () => void; onCreated: (id: st
     posterPath: i.posterPath,
     available: i.inLibrary,
     requested: requestedLabels.has(i.label),
+    wt: info.infoFor(i.entryKey).wt,
+    wtChecked: info.infoFor(i.entryKey).checked,
+    release: i.inLibrary ? null : info.infoFor(i.entryKey).release,
     note: i.libraryTitle && i.libraryTitle !== i.label ? `as "${i.libraryTitle}"` : null,
   }));
 
@@ -133,6 +156,7 @@ export function CreateFranchise(props: { onClose: () => void; onCreated: (id: st
 
   const requestItems = (list: typeof items) =>
     list.map((i) => ({
+      key: i.entryKey,
       kind: i.kind,
       label: i.label,
       tmdbId: i.tmdbId,
@@ -230,17 +254,20 @@ export function CreateFranchise(props: { onClose: () => void; onCreated: (id: st
                 ? `${previewQuery.data.inLibraryCount} of ${previewQuery.data.total} in your library`
                 : "Preview"}
             </h3>
-            {missing.filter((m) => !requestedLabels.has(m.label)).length > 0 && (
+            {requestable.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
                 disabled={requestMissing.isPending}
-                onClick={() => sendRequests(missing.filter((m) => !requestedLabels.has(m.label)))}
+                onClick={() => sendRequests(requestable)}
               >
-                {requestMissing.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Request all missing (${missing.filter((m) => !requestedLabels.has(m.label)).length})`}
+                {requestMissing.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Request all missing (${requestable.length})`}
               </Button>
             )}
           </div>
+          {info.problem && (
+            <p className="text-xs text-muted-foreground" data-testid="wt-status-problem">{info.problem}</p>
+          )}
           {previewQuery.isLoading && (
             <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
           )}

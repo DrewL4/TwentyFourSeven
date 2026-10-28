@@ -17,7 +17,7 @@ export type WtRequestItem = {
 
 export type WtRequestOutcome =
   | { ok: true; status: "requested"; requestId: number | null; wtStatus: string | null; message: string }
-  | { ok: false; status: "duplicate"; requestId: number | null; message: string }
+  | { ok: false; status: "duplicate"; requestId: number | null; wtStatus: string | null; message: string }
   | { ok: false; status: "no-token" | "unauthorized" | "rejected" | "unreachable"; message: string };
 
 export const WT_NO_TOKEN_MESSAGE =
@@ -76,6 +76,7 @@ export async function sendWtRequest(
       ok: false,
       status: "duplicate",
       requestId: typeof data.existing_request_id === "number" ? data.existing_request_id : null,
+      wtStatus: typeof data.existing_status === "string" ? data.existing_status : null,
       message: typeof data.error === "string" ? data.error : `${opts.item.title} has already been requested`,
     };
   }

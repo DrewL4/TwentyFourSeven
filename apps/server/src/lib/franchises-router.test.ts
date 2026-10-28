@@ -18,6 +18,10 @@ let seal: typeof import('./wt-user-token').sealWatchTowerToken;
 let wt: Server;
 let wtUrl = '';
 const wtCalls: Array<{ auth: string | undefined; body: any }> = [];
+const lookupCalls: Array<{ auth: string | undefined; body: any }> = [];
+// What the fake WatchTower says about a tmdb id when asked (movie type); `lookupMode` can make it misbehave.
+const wtKnown = new Map<number, { status: string; byMe: boolean }>();
+let lookupMode: 'ok' | 'old' | 'down' = 'ok';
 
 before(async () => {
   execFileSync('npx', ['prisma', 'db', 'push', '--schema', './prisma/schema', '--skip-generate'], {
@@ -33,10 +37,26 @@ before(async () => {
     req.on('data', (c) => (raw += c));
     req.on('end', () => {
       const body = JSON.parse(raw || '{}');
+      if (req.url?.endsWith('/api/requests/lookup/')) {
+        lookupCalls.push({ auth: req.headers.authorization, body });
+        if (lookupMode !== 'ok') {
+          res.writeHead(lookupMode === 'old' ? 404 : 500);
+          return res.end('{}');
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(
+          JSON.stringify({
+            results: body.items.map((it: any) => {
+              const k = wtKnown.get(it.tmdb_id);
+              return { tmdb_id: it.tmdb_id, media_type: it.media_type, requested: !!k, status: k?.status ?? null, requested_by_me: k?.byMe ?? false, earliest_release_date: null, theatrical_release_date: null };
+            }),
+          }),
+        );
+      }
       wtCalls.push({ auth: req.headers.authorization, body });
       const dup = body.tmdb_id === 999;
       res.writeHead(dup ? 409 : 201, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(dup ? { error: 'already requested', existing_request_id: 5 } : { id: 41, status: 'pending', message: 'ok' }));
+      res.end(JSON.stringify(dup ? { error: 'already requested', existing_request_id: 5, existing_status: 'downloading' } : { id: 41, status: 'pending', message: 'ok' }));
     });
   });
   await new Promise<void>((r) => wt.listen(0, '127.0.0.1', () => r()));
@@ -63,6 +83,10 @@ const forbidden = (e: unknown) => e instanceof ORPCError && e.code === 'FORBIDDE
 
 beforeEach(async () => {
   wtCalls.length = 0;
+  lookupCalls.length = 0;
+  wtKnown.clear();
+  lookupMode = 'ok';
+  (await import('./wt-status')).clearWtStatusCache();
   await seed('mgr', 'MANAGER');
   await seed('ann', 'USER');
   await seed('bob', 'USER', { watchTowerToken: seal('bob-wt-token') });
@@ -257,5 +281,67 @@ describe('franchises.requestMissing', () => {
       { context: ctx('bob') },
     );
     assert.match(out.results[0].outcome.message, /TMDB/);
+  });
+});
+
+describe('franchises.requestInfo', () => {
+  const thor = { key: 'k-thor', kind: 'MOVIE', tmdbId: 10195, releaseDate: '2011-05-06' };
+  const loki = { key: 'k-loki', kind: 'SHOW', tmdbId: 84958, releaseDate: null };
+  const info = (user: string, items: any[]) => call(fr().requestInfo, { items }, { context: ctx(user) }) as Promise<any>;
+  const byKey = (out: any, key: string) => out.items.find((i: any) => i.key === key);
+
+  it('shows the real WatchTower status for each title in one call, as the signed-in user', async () => {
+    wtKnown.set(10195, { status: 'pending', byMe: false });
+    wtKnown.set(84958, { status: 'available', byMe: true });
+    const out = await info('bob', [thor, loki, { key: 'k-none', kind: 'MOVIE', tmdbId: 1, releaseDate: null }]);
+    assert.equal(lookupCalls.length, 1);
+    assert.equal(lookupCalls[0].auth, 'Token bob-wt-token');
+    assert.equal(lookupCalls[0].body.items.length, 3);
+    assert.equal(out.watchtower.ok, true);
+    assert.deepEqual(byKey(out, 'k-thor').wt, { state: 'pending', requestedByMe: false });
+    assert.deepEqual(byKey(out, 'k-loki').wt, { state: 'available', requestedByMe: true });
+    assert.equal(byKey(out, 'k-none').wt, null);
+    assert.ok(!JSON.stringify(out).match(/username|requested_by"|"user"/));
+  });
+
+  it('flips a row to the real status after it is requested, and does not reuse a stale answer', async () => {
+    assert.equal(byKey(await info('bob', [thor]), 'k-thor').wt, null);
+    const out: any = await call(fr().requestMissing, { items: [{ key: 'k-thor', kind: 'MOVIE', label: 'Thor', tmdbId: 10195 }] }, { context: ctx('bob') });
+    assert.equal(out.results[0].key, 'k-thor');
+    wtKnown.set(10195, { status: 'approved', byMe: true });
+    assert.deepEqual(byKey(await info('bob', [thor]), 'k-thor').wt, { state: 'approved', requestedByMe: true });
+  });
+
+  it('hands back the status WatchTower already has for a duplicate request', async () => {
+    const out: any = await call(fr().requestMissing, { items: [{ key: 'k-dup', kind: 'MOVIE', label: 'Dup', tmdbId: 999 }] }, { context: ctx('bob') });
+    assert.equal(out.results[0].outcome.status, 'duplicate');
+    assert.equal(out.results[0].outcome.wtStatus, 'downloading');
+  });
+
+  it('still answers when WatchTower is down, old, or the user has no sign-in', async () => {
+    lookupMode = 'down';
+    let out = await info('bob', [thor]);
+    assert.equal(out.watchtower.ok, false);
+    assert.equal(out.watchtower.reason, 'unreachable');
+    assert.equal(byKey(out, 'k-thor').wt, null);
+    lookupMode = 'old';
+    (await import('./wt-status')).clearWtStatusCache();
+    out = await info('bob', [thor]);
+    assert.equal(out.watchtower.reason, 'unsupported');
+    out = await info('ann', [thor]);
+    assert.equal(out.watchtower.reason, 'no-token');
+    assert.equal(lookupCalls.length, 2);
+  });
+
+  it('turns an episode range and a season into a season lookup, and skips titles with no TMDB id', async () => {
+    await info('bob', [
+      { key: 'a', kind: 'SEASON', tmdbId: 5, seasonNumber: 2, releaseDate: null },
+      { key: 'b', kind: 'EPISODES', tmdbId: 6, seasonNumber: 1, releaseDate: null },
+      { key: 'c', kind: 'MOVIE', tmdbId: null, releaseDate: null },
+    ]);
+    assert.deepEqual(lookupCalls[0].body.items, [
+      { tmdb_id: 5, media_type: 'season', season_number: 2 },
+      { tmdb_id: 6, media_type: 'season', season_number: 1 },
+    ]);
   });
 });

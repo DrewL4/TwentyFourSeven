@@ -24,10 +24,11 @@ import {
   searchTmdbMovies,
   searchTmdbTv,
   getTmdbApiKeyFromSettings,
+  tmdbFetch,
 } from '../lib/tmdb-service';
 import { normalizeTitle } from '../lib/title-normalize';
 import { dedupeLibraryRows } from '../lib/library-dedupe';
-import { findLibraryMovieForEntry } from '../lib/franchise-title-match';
+import { findPreparedMovieForEntry, prepareLibrary } from '../lib/franchise-title-match';
 import { buildFranchiseCandidates, type FranchiseCandidate } from '../lib/franchise-candidates';
 import { entryKeyFor, entryLabelFor, orderEntries, type EntryKind, type OrderMode } from '../lib/franchise-order';
 import { STORY_LISTS, getStoryList, findStoryListForSource } from '../lib/franchise-story-lists';
@@ -37,6 +38,8 @@ import {
   type EpisodeRef,
 } from '../lib/franchise-availability';
 import { sendWtRequest, WT_NO_TOKEN_MESSAGE, type WtRequestOutcome } from '../lib/wt-requests';
+import { forgetUserWtStatuses, lookupWtStatuses, wtItemKey, type WtLookupItem } from '../lib/wt-status';
+import { loadReleaseInfo, needsReleaseLookup, releaseViewFor, type TmdbJsonFetch } from '../lib/tmdb-release-info';
 import { openWatchTowerToken } from '../lib/wt-user-token';
 import { getEffectiveRole } from '../lib/admin-auth';
 import { roleRank } from '../lib/wt-roles';
@@ -316,14 +319,15 @@ export const franchisesRouter = {
         prisma.mediaMovie.findMany({ select: { id: true, title: true, year: true, tmdbId: true } }),
         prisma.mediaShow.findMany({ select: { id: true, title: true, year: true } }),
       ]);
+      const preparedLibrary = prepareLibrary(libraryMovies);
       const usedMovies = new Set<string>();
       const items = ordered.map((c) => {
         let inLibrary = false;
         let libraryTitle: string | null = null;
         if (c.kind === 'MOVIE') {
-          const match = findLibraryMovieForEntry(
+          const match = findPreparedMovieForEntry(
             { tmdbId: c.tmdbId, label: c.label, titlePattern: c.titlePattern },
-            libraryMovies,
+            preparedLibrary,
             usedMovies,
           );
           if (match) {
@@ -583,6 +587,81 @@ export const franchisesRouter = {
   }),
 
   /**
+   * Request status and release dates for titles that are not in the library: one WatchTower call
+   * for the whole list (as the signed-in user, so "requested by me" is right) and a few cached
+   * TMDB lookups. Never throws for a WatchTower or TMDB problem: it says what it could not check.
+   */
+  requestInfo: protectedProcedure
+    .input(
+      z.object({
+        items: z
+          .array(
+            z.object({
+              key: z.string().min(1),
+              kind: kindSchema,
+              tmdbId: z.number().int().positive().nullable(),
+              seasonNumber: z.number().int().min(0).nullable().optional(),
+              releaseDate: z.string().nullable().optional(),
+            }),
+          )
+          .max(100),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = userIdOf(context);
+      const today = new Date().toISOString().slice(0, 10);
+      const rows = input.items.map((it) => {
+        const request = requestItemForEntry({
+          kind: it.kind,
+          label: 'x',
+          tmdbId: it.tmdbId,
+          seasonNumber: it.seasonNumber ?? null,
+          posterPath: null,
+        });
+        const wtItem: WtLookupItem | null =
+          request && request.mediaType !== 'episode'
+            ? { mediaType: request.mediaType, tmdbId: request.tmdbId, seasonNumber: request.seasonNumber ?? null }
+            : null;
+        return { ...it, wtItem };
+      });
+
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { watchTowerToken: true } });
+      const setting = await prisma.setting.findUnique({ where: { key: 'watchtower_url' } });
+      const wtItems = rows.flatMap((r) => (r.wtItem ? [r.wtItem] : []));
+      const tmdbKey = await getTmdbApiKeyFromSettings();
+      const releaseTargets = rows
+        .filter((r) => needsReleaseLookup({ kind: r.kind, tmdbId: r.tmdbId, releaseDate: r.releaseDate ?? null }, today))
+        .map((r) => ({ kind: r.kind === 'MOVIE' ? ('movie' as const) : ('tv' as const), tmdbId: r.tmdbId as number }));
+      const get: TmdbJsonFetch = (path) => tmdbFetch(path, tmdbKey as string);
+
+      const [wt, releases] = await Promise.all([
+        wtItems.length
+          ? lookupWtStatuses({ baseUrl: setting?.value ?? null, userId, userToken: openWatchTowerToken(user?.watchTowerToken ?? null), items: wtItems })
+          : Promise.resolve(null),
+        tmdbKey && releaseTargets.length ? loadReleaseInfo(releaseTargets, get) : Promise.resolve(new Map()),
+      ]);
+
+      return {
+        watchtower: wt === null ? { ok: true as const } : wt.ok ? { ok: true as const } : { ok: false as const, reason: wt.reason, message: wt.message },
+        items: rows.map((r) => {
+          const status = wt?.ok && r.wtItem ? (wt.statuses.get(wtItemKey(r.wtItem)) ?? null) : null;
+          const info = r.tmdbId != null ? releases.get(`${r.kind === 'MOVIE' ? 'movie' : 'tv'}:${r.tmdbId}`) : undefined;
+          const release = releaseViewFor(
+            { kind: r.kind, seasonNumber: r.seasonNumber ?? null, releaseDate: r.releaseDate ?? null },
+            info,
+            status ? { theatrical: status.theatricalDate, earliest: status.earliestDate } : null,
+            today,
+          );
+          return {
+            key: r.key,
+            wt: status ? { state: status.state, requestedByMe: status.requestedByMe } : null,
+            release,
+          };
+        }),
+      };
+    }),
+
+  /**
    * Ask WatchTower for missing titles, as the signed-in user, through WatchTower's own request
    * API. WatchTower decides approval exactly as it does for a request made in WatchTower.
    */
@@ -596,6 +675,8 @@ export const franchisesRouter = {
         items: z
           .array(
             z.object({
+              /** Echoed back so the page can put the answer on the right row. */
+              key: z.string().optional(),
               kind: kindSchema,
               label: z.string().min(1),
               tmdbId: z.number().int().positive().nullable(),
@@ -618,6 +699,7 @@ export const franchisesRouter = {
 
       type Target = {
         entryId: string | null;
+        key: string | null;
         label: string;
         item: ReturnType<typeof requestItemForEntry>;
       };
@@ -628,12 +710,13 @@ export const franchisesRouter = {
         for (const e of detail.entries) {
           if (e.excluded || e.available) continue;
           if (wanted && !wanted.has(e.id)) continue;
-          targets.push({ entryId: e.id, label: e.label ?? 'Untitled', item: requestItemForEntry(e) });
+          targets.push({ entryId: e.id, key: e.id, label: e.label ?? 'Untitled', item: requestItemForEntry(e) });
         }
       }
       for (const it of input.items ?? []) {
         targets.push({
           entryId: null,
+          key: it.key ?? null,
           label: it.label,
           item: requestItemForEntry({
             kind: it.kind,
@@ -652,18 +735,19 @@ export const franchisesRouter = {
       const unresolvedMessage = tmdbReady
         ? 'TMDB has no match for this title yet, so it cannot be requested.'
         : 'TMDB is not set up on this server, so this title cannot be looked up to request it. Ask an admin to add the TMDB key.';
-      const results: Array<{ entryId: string | null; label: string; outcome: WtRequestOutcome | { ok: false; status: 'unresolved'; message: string } }> = [];
+      const results: Array<{ entryId: string | null; key: string | null; label: string; outcome: WtRequestOutcome | { ok: false; status: 'unresolved'; message: string } }> = [];
       for (const t of targets) {
         if (!t.item) {
           results.push({
             entryId: t.entryId,
+            key: t.key,
             label: t.label,
             outcome: { ok: false, status: 'unresolved', message: unresolvedMessage },
           });
           continue;
         }
         const outcome = await sendWtRequest({ baseUrl, userToken: token, item: t.item });
-        results.push({ entryId: t.entryId, label: t.label, outcome });
+        results.push({ entryId: t.entryId, key: t.key, label: t.label, outcome });
         if (t.entryId && (outcome.status === 'requested' || outcome.status === 'duplicate')) {
           await prisma.franchiseEntry.update({
             where: { id: t.entryId },
@@ -673,6 +757,8 @@ export const franchisesRouter = {
         // Sign-in problems apply to every item: stop instead of repeating the failure.
         if (outcome.status === 'unauthorized' || outcome.status === 'unreachable') break;
       }
+      // The next look at WatchTower must show what just happened, not a 30-second-old answer.
+      forgetUserWtStatuses(userId);
       const count = (s: string) => results.filter((r) => r.outcome.status === s).length;
       return {
         results,

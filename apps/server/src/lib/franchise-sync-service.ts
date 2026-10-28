@@ -6,7 +6,7 @@ import {
 } from './franchise-sort-service';
 import { LEGACY_TIMELINE_SORT_ALIASES } from './franchise-legacy-sort';
 import { normalizeTitle } from './title-normalize';
-import { scoreTitleMatch } from './franchise-title-match';
+import { prepareEntry, prepareMovie, scorePrepared } from './franchise-title-match';
 import {
   fetchTmdbCollection,
   fetchTmdbKeywordMovies,
@@ -105,10 +105,14 @@ async function linkEntriesToLibraryMovies(franchiseId: string): Promise<number> 
     select: { id: true, tmdbId: true, title: true, year: true },
   });
 
+  // Normalize each title once (not once per entry x movie): a library of tens of thousands of
+  // movies against dozens of entries used to cost millions of regex passes and block the server.
+  const preparedMovies = movies.map((m) => ({ id: m.id, prepared: prepareMovie(m) }));
   const pairs: Array<{ entryId: string; movieId: string; score: number }> = [];
   for (const entry of entries) {
-    for (const movie of movies) {
-      const score = scoreTitleMatch(movie, { ...entry, movieId: undefined });
+    const prepared = prepareEntry({ ...entry, movieId: undefined });
+    for (const movie of preparedMovies) {
+      const score = scorePrepared(movie.prepared, prepared);
       if (score > 0) pairs.push({ entryId: entry.id, movieId: movie.id, score });
     }
   }

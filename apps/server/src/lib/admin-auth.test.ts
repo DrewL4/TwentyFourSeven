@@ -102,6 +102,7 @@ const VIEWER_PROCEDURES = new Set([
   'franchises.resetOrder',
   'franchises.resync',
   'franchises.requestMissing',
+  'franchises.requestInfo',
 ]);
 
 type AnyNode = Record<string, unknown>;

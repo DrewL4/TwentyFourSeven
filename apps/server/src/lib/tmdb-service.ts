@@ -63,10 +63,11 @@ export async function validateTmdbApiKey(apiKey: string): Promise<{ valid: boole
   }
 }
 
-async function tmdbFetch<T>(path: string, apiKey: string): Promise<T> {
+export async function tmdbFetch<T>(path: string, apiKey: string): Promise<T> {
   const url = new URL(`${TMDB_API_BASE}${path}`);
   url.searchParams.set('api_key', apiKey);
-  const response = await fetch(url.toString());
+  // A slow TMDB must not hold a request (or startup sync) open forever.
+  const response = await fetch(url.toString(), { signal: AbortSignal.timeout(12_000) });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`TMDB request failed (${response.status}): ${text.slice(0, 200)}`);

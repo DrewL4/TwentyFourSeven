@@ -12,6 +12,8 @@ import { useAdmin } from "@/hooks/use-admin";
 import { OrderControls, type OrderMode } from "./order-controls";
 import { EntryRow, type RowItem } from "./entry-row";
 import { useRequestMissing } from "./use-request-missing";
+import { useRequestInfo } from "./use-request-info";
+import { statusView } from "./request-status";
 
 type ShowPart = "SHOW" | "SEASON" | "EPISODES";
 
@@ -96,7 +98,18 @@ export function FranchiseDetail(props: { id: string; onBack: () => void }) {
       },
     }),
   );
-  const requestMissing = useRequestMissing();
+  const dayOf = (d: unknown) => (d ? new Date(d as string).toISOString().slice(0, 10) : null);
+  const infoEntries = (f?.entries ?? [])
+    .filter((e) => !e.excluded && !e.available)
+    .map((e) => ({
+      key: e.id,
+      kind: e.kind as "MOVIE" | "SHOW" | "SEASON" | "EPISODES",
+      tmdbId: e.tmdbId ?? null,
+      seasonNumber: e.seasonNumber ?? null,
+      releaseDate: dayOf(e.releaseDate),
+    }));
+  const info = useRequestInfo(infoEntries, !!f);
+  const requestMissing = useRequestMissing(info.noteRequested);
 
   const busy =
     update.isPending || addEntry.isPending || removeEntry.isPending || restoreEntry.isPending || moveEntry.isPending || resetOrder.isPending;
@@ -119,7 +132,11 @@ export function FranchiseDetail(props: { id: string; onBack: () => void }) {
 
   const live = f.entries.filter((e) => !e.excluded);
   const hidden = f.entries.filter((e) => e.excluded);
-  const missing = live.filter((e) => !e.available && !e.requestedAt);
+  const missing = live.filter((e) => {
+    if (e.available) return false;
+    const { wt, checked } = info.infoFor(e.id);
+    return statusView(wt, !!e.requestedAt && !checked).canRequest;
+  });
 
   const toRow = (e: (typeof f.entries)[number]): RowItem => ({
     key: e.id,
@@ -129,6 +146,9 @@ export function FranchiseDetail(props: { id: string; onBack: () => void }) {
     posterPath: e.posterPath,
     available: e.available,
     requested: !!e.requestedAt,
+    wt: info.infoFor(e.id).wt,
+    wtChecked: info.infoFor(e.id).checked,
+    release: info.infoFor(e.id).release,
     excluded: e.excluded,
     manual: e.manual,
     note:
@@ -198,13 +218,17 @@ export function FranchiseDetail(props: { id: string; onBack: () => void }) {
         </p>
       )}
 
+      {info.problem && (
+        <p className="text-xs text-muted-foreground" data-testid="wt-status-problem">{info.problem}</p>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         {missing.length > 0 && (
           <Button
             size="sm"
             variant="outline"
             disabled={requestMissing.isPending}
-            onClick={() => requestMissing.mutate({ franchiseId: f.id })}
+            onClick={() => requestMissing.mutate({ franchiseId: f.id, entryIds: missing.slice(0, 60).map((e) => e.id) })}
           >
             {requestMissing.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Request all missing (${missing.length})`}
           </Button>

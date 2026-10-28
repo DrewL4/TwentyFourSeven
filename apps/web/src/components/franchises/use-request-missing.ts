@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { orpc } from "@/utils/orpc";
 
 /** Request missing titles from WatchTower as the signed-in user, and say plainly what happened. */
-export function useRequestMissing(onDone?: () => void) {
+export function useRequestMissing(onResults?: (results: Array<{ key: string | null; outcome: { ok: boolean; status: string; wtStatus?: string | null } }>) => void) {
   const queryClient = useQueryClient();
   return useMutation(
     orpc.franchises.requestMissing.mutationOptions({
@@ -26,7 +26,8 @@ export function useRequestMissing(onDone?: () => void) {
         }
         queryClient.invalidateQueries({ queryKey: orpc.franchises.get.key() });
         queryClient.invalidateQueries({ queryKey: orpc.franchises.list.key() });
-        onDone?.();
+        queryClient.invalidateQueries({ queryKey: orpc.franchises.requestInfo.key() });
+        onResults?.(out.results);
       },
       onError: (error: Error) => toast.error(error.message || "Could not send the request"),
     }),
