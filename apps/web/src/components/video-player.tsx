@@ -1,5 +1,6 @@
 "use client"
 
+import { FREEZE_TICKS_BEFORE_RESTART, isLivePictureFrozen } from '@/lib/live-freeze';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, RefreshCw, AlertCircle, Loader2, Maximize, Minimize, Volume2, VolumeX, Play, Pause } from 'lucide-react';
@@ -59,7 +60,7 @@ export default function VideoPlayer({
   const stalledCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const noProgressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const attemptReconnectRef = useRef<(reason: 'network' | 'stalled' | 'error') => void>(() => {});
+  const attemptReconnectRef = useRef<(reason: 'network' | 'stalled' | 'error', delayMs?: number) => void>(() => {});
   const hideControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectInFlightRef = useRef(false);
   const sustainedPlayStartedAtRef = useRef<number>(0);
@@ -326,7 +327,7 @@ export default function VideoPlayer({
   }, [isOpen, isPlaying, currentTime, channelNumber, STALLED_THRESHOLD, NO_PROGRESS_THRESHOLD]);
 
   // Attempt to reconnect/recover playback
-  const attemptReconnect = useCallback((reason: 'network' | 'stalled' | 'error') => {
+  const attemptReconnect = useCallback((reason: 'network' | 'stalled' | 'error', delayMs?: number) => {
     if (reconnectInFlightRef.current) {
       return;
     }
@@ -418,10 +419,46 @@ export default function VideoPlayer({
       }, { once: true });
 
       setCurrentUrl(newUrl);
-    }, RECONNECT_DELAY);
+    }, delayMs ?? RECONNECT_DELAY);
   }, [currentUrl, url, isLiveTV, channelNumber, getVideoUrl, withReconnectParam, MAX_RETRIES, RECONNECT_DELAY]);
 
   attemptReconnectRef.current = attemptReconnect;
+
+  // Live: a picture that stops while video data keeps arriving. Chrome cannot
+  // continue a stream when the next program changes picture size (for example
+  // 640x272 -> 640x268): the new data is buffered but never decoded, the
+  // playhead sits still, and nothing else notices. Restart the player on the
+  // same channel as soon as that happens instead of leaving a frozen frame.
+  useEffect(() => {
+    if (!isOpen || !channelNumber || isCatchup) return;
+    let stuckSeconds = 0;
+    let lastTime = -1;
+    const id = setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.paused || video.ended || reconnectInFlightRef.current) {
+        stuckSeconds = 0;
+        lastTime = -1;
+        return;
+      }
+      const ranges = video.buffered;
+      const frozen = isLivePictureFrozen({
+        paused: video.paused,
+        ended: video.ended,
+        currentTime: video.currentTime,
+        previousTime: lastTime,
+        readyState: video.readyState,
+        bufferedAhead: ranges.length ? ranges.end(ranges.length - 1) - video.currentTime : 0,
+      });
+      stuckSeconds = frozen ? stuckSeconds + 1 : 0;
+      lastTime = video.currentTime;
+      if (stuckSeconds >= FREEZE_TICKS_BEFORE_RESTART) {
+        stuckSeconds = 0;
+        console.warn('Live picture frozen while data keeps arriving - restarting player');
+        attemptReconnectRef.current('stalled', 500);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isOpen, channelNumber, isCatchup]);
 
   // Browsers cannot play video/mp2t on a <video> element. Transmux MPEG-TS
   // in the page and keep the request on this site, not a baked-in localhost URL.
