@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "../index.css";
 import Providers from "@/components/providers";
 import AuthGuard from "@/components/auth-guard";
+import BundleWatch from "@/components/bundle-watch";
 import AppLayout from "@/components/app-layout";
 import { APP_LOGO_SRC } from "@/components/app-logo";
 
@@ -23,6 +24,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
         <Providers>
+          <BundleWatch />
           <AuthGuard>
             <AppLayout>
               {children}
