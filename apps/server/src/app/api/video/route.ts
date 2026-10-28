@@ -721,6 +721,7 @@ export async function GET(request: NextRequest) {
       }
     };
 
+    let handoffTiming: { closedAt: number; loadedAt: number; spawnedAt: number } | null = null;
     const beginLiveEncoderGap = () => {
       if (liveHub) {
         sharedLiveTranscodePool.beginEncoderGap(liveHub);
@@ -802,6 +803,17 @@ export async function GET(request: NextRequest) {
       child.stdout?.on('data', (chunk: Buffer) => {
         tsTimeline.push(chunk);
       });
+      const handoff = handoffTiming;
+      if (handoff) {
+        handoffTiming = null;
+        handoff.spawnedAt = Date.now();
+        child.stdout?.once('data', () => {
+          const now = Date.now();
+          console.log(
+            `[Video] handoff channel=${channelNumber} old-exit->next-program-loaded=${handoff.loadedAt - handoff.closedAt}ms loaded->spawn=${handoff.spawnedAt - handoff.loadedAt}ms spawn->first-bytes=${now - handoff.spawnedAt}ms total=${now - handoff.closedAt}ms`,
+          );
+        });
+      }
       if (liveHub) {
         sharedLiveTranscodePool.attachFfmpeg(liveHub, child);
         syncFfmpegToSessions(child);
@@ -935,6 +947,7 @@ export async function GET(request: NextRequest) {
         // Live 24/7: the current file ended. Keep the MPEG-TS connection and
         // start the next episode instead of dropping the client.
         if (!isAborted && useSharedLive) {
+          handoffTiming = { closedAt: Date.now(), loadedAt: 0, spawnedAt: 0 };
           beginLiveEncoderGap();
           continueLiveToNextProgram()
             .then((continued) => {
@@ -1065,6 +1078,9 @@ export async function GET(request: NextRequest) {
           streamMonitorService.updateSessionMetadata(sessionId, metadata);
         }
         mpegtsDiscontinuity = true;
+        if (handoffTiming) {
+          handoffTiming.loadedAt = Date.now();
+        }
         const child = await startFfmpeg(encodeMode);
         return child !== null;
       }

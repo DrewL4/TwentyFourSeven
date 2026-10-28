@@ -1,5 +1,6 @@
 import type { ChildProcess } from "child_process";
 import { PassThrough } from "stream";
+import { TsJoinCache } from "./ts-join-cache";
 
 export const MPEG_TS_PACKET_SIZE = 188;
 
@@ -77,6 +78,8 @@ export type SharedLiveHub = {
   copy: boolean;
   /** Set while the hub has no viewers and waits for a re-tune (idle grace). */
   idleTimer?: ReturnType<typeof setTimeout> | null;
+  /** PAT/PMT + bytes since the latest video keyframe, so a joiner starts on a keyframe. */
+  joinCache?: TsJoinCache;
   /** Set while FFmpeg stdout is paused because all viewers are backpressured. */
   stallTimer?: ReturnType<typeof setTimeout> | null;
 };
@@ -288,6 +291,16 @@ export class SharedLiveTranscodePool {
       hub.idleTimer = null;
     }
     hub.viewers.set(sessionId, { sessionId, passthrough });
+    // Start on the latest keyframe instead of waiting up to a GOP for the next one.
+    const primer = hub.joinCache?.primer();
+    if (primer && !passthrough.destroyed && !passthrough.writableEnded) {
+      try {
+        passthrough.write(primer);
+        console.log(`[Video] live join channel=${hub.channelNumber} primer=${primer.length}B (starts on the latest keyframe)`);
+      } catch {
+        // ignore write errors from disconnected clients
+      }
+    }
     if (!hub.viewers.has(hub.ownerSessionId)) {
       // Joined a hub kept warm by idle grace: this viewer owns it now.
       hub.ownerSessionId = sessionId;
@@ -313,6 +326,9 @@ export class SharedLiveTranscodePool {
     this.clearStallTimer(hub);
     hub.ffmpeg = child;
     this.clearPendingCreate(hub.key);
+    // A new FFmpeg writes a new stream (own PAT/PMT, keyframe first).
+    hub.joinCache = new TsJoinCache();
+    const joinCache = hub.joinCache;
 
     const stdout = child.stdout;
     if (!stdout) {
@@ -332,6 +348,9 @@ export class SharedLiveTranscodePool {
     };
 
     stdout.on("data", (chunk: Buffer) => {
+      if (hub.joinCache === joinCache) {
+        joinCache.push(chunk);
+      }
       const viewers = [...hub.viewers.values()].filter(isWritable);
       let ready = 0;
       for (const viewer of viewers) {
@@ -424,6 +443,8 @@ export class SharedLiveTranscodePool {
    */
   beginEncoderGap(hub: SharedLiveHub): void {
     hub.ffmpeg = null;
+    // The old stream is over; a joiner must not be handed its tail.
+    hub.joinCache = undefined;
     this.startHandoffStuffing(hub);
   }
 
