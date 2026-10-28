@@ -4,6 +4,7 @@ import { clientAddress } from '@/lib/link-security';
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { auth } from '@/lib/auth';
+import { startSessionForExistingUser } from '@/lib/wt-sso-session';
 import { prisma } from '@/lib/prisma';
 import {
   classifyWatchTowerLoginFailure,
@@ -267,60 +268,48 @@ export async function POST(request: NextRequest) {
       }, watchTowerUser, Date.now())
     };
 
-    let keptPlaylistLoginId: string | null = null;
-    let oldUserId: string | null = null;
+    // One path for new and existing users: get a throw-away password, then sign in with it.
+    // An existing user keeps their row and their other sessions (each device keeps its own);
+    // only a drop in role or active status ends them all.
+    let tempPassword: string;
+    let account: { id: string; email: string; name: string };
     if (user) {
-      oldUserId = user.id;
-      // Update existing user
-      
       await prisma.user.update({
         where: { id: user.id },
         data: {
           ...userData,
+          // Better Auth looks the user up by lower-case email when signing in.
+          email: userData.email.toLowerCase(),
           updatedAt: new Date()
         }
       });
-      
-
-      // For existing users, delete and recreate to use better-auth
-      
-      
-      // The playlist login is keyed by user id; keep it so TV apps keep working
-      // after the user is recreated below.
-      keptPlaylistLoginId =
-        (await prisma.playlistLogin.findUnique({ where: { userId: user.id }, select: { id: true } }))?.id ?? null;
-
-      // Delete existing user and sessions
-      await prisma.session.deleteMany({ where: { userId: user.id } });
-      await prisma.account.deleteMany({ where: { userId: user.id } });
-      await prisma.user.delete({ where: { id: user.id } });
-    }
-
-    // Create temporary password for the user
-    const tempPassword = crypto.randomBytes(16).toString('hex');
-
-    // Create new user using better-auth's signUpEmail
-    
-    
-    const signUpResult = await auth.api.signUpEmail({
-      body: {
-        name: userData.name,
-        email: userData.email,
-        password: tempPassword,
-        callbackURL: undefined
+      const started = await startSessionForExistingUser({
+        userId: user.id,
+        before: { isActive: user.isActive, role: user.role },
+        after: { isActive: userData.isActive, role: userData.role },
+      });
+      tempPassword = started.tempPassword;
+      account = { id: user.id, email: userData.email, name: userData.name };
+    } else {
+      tempPassword = crypto.randomBytes(16).toString('hex');
+      const signUpResult = await auth.api.signUpEmail({
+        body: {
+          name: userData.name,
+          email: userData.email,
+          password: tempPassword,
+          callbackURL: undefined
+        }
+      });
+      if (!signUpResult) {
+        throw new Error('Failed to create user with better-auth');
       }
-    });
-
-    if (!signUpResult) {
-      throw new Error('Failed to create user with better-auth');
+      account = { id: signUpResult.user.id, email: signUpResult.user.email, name: signUpResult.user.name };
     }
-
-    
 
     // Sign in before clearing credentials so Better Auth can issue session cookies
     const signInResponse = await auth.api.signInEmail({
       body: {
-        email: userData.email,
+        email: userData.email.toLowerCase(),
         password: tempPassword,
       },
       asResponse: true,
@@ -335,7 +324,7 @@ export async function POST(request: NextRequest) {
 
     // Attach WatchTower fields after session is established
     await prisma.user.update({
-      where: { id: signUpResult.user.id },
+      where: { id: account.id },
       data: {
         firstName: userData.firstName,
         lastName: userData.lastName,
@@ -351,24 +340,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (keptPlaylistLoginId) {
-      await prisma.playlistLogin
-        .update({ where: { id: keptPlaylistLoginId }, data: { userId: signUpResult.user.id } })
-        .catch((e: unknown) => console.warn("[watchtower] could not keep playlist login:", e instanceof Error ? e.message : "error"));
-    }
-    // Other rows that point at the user by id (no foreign key, so nothing
-    // cascades): device keys this user made and IP-to-person mappings.
-    if (oldUserId && oldUserId !== signUpResult.user.id) {
-      const newUserId = signUpResult.user.id;
-      await Promise.all([
-        prisma.playerKey.updateMany({ where: { userId: oldUserId }, data: { userId: newUserId } }),
-        prisma.viewer.updateMany({ where: { userId: oldUserId }, data: { userId: newUserId } }),
-      ]).catch((e: unknown) => console.warn("[watchtower] could not move user rows:", e instanceof Error ? e.message : "error"));
-    }
-
     // Managers and Admins signing in are always logged for WatchTower's Activity page.
     await auditElevatedLogin({
-      userId: signUpResult.user.id,
+      userId: account.id,
       role: userData.role as TfsRole,
       db: prisma,
       method: 'watchtower',
@@ -381,9 +355,9 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'WatchTower SSO login successful',
       user: {
-        id: signUpResult.user.id,
-        email: signUpResult.user.email,
-        name: signUpResult.user.name,
+        id: account.id,
+        email: account.email,
+        name: account.name,
         role: userData.role,
         isActive: userData.isActive
       },
