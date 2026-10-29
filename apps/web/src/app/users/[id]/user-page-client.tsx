@@ -2,8 +2,12 @@
 
 import React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import UserPage from "@/components/users/user-page";
+import UserPageSource from "@/components/users/user-page";
+
 import { useAdmin } from "@/hooks/use-admin";
+// The shared source is plain JS; give it loose props so the wrapper can pass its own.
+const UserPage = UserPageSource as unknown as React.ComponentType<any>;
+
 
 async function readJson(response: Response) {
   let body: any = null;
@@ -59,6 +63,14 @@ const pageApi = {
     ),
 };
 
+function PageSpinner() {
+  return (
+    <div className="flex justify-center py-12" role="status" aria-label="Loading">
+      <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+    </div>
+  );
+}
+
 export default function UserPageClient() {
   const router = useRouter();
   const pathname = usePathname() || "";
@@ -69,8 +81,8 @@ export default function UserPageClient() {
     return <p className="p-6 text-sm text-gray-700 dark:text-gray-300">Choose a person from the Users list.</p>;
   }
   return (
-    <div className="mx-auto max-w-5xl p-4">
-      <UserPage api={pageApi} userId={id} onBack={() => router.push("/users/")} />
+    <div className="mx-auto max-w-6xl p-4">
+      <UserPage api={pageApi} userId={id} Spinner={PageSpinner} onBack={() => router.push("/users/")} />
     </div>
   );
 }

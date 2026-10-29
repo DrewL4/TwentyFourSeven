@@ -1,316 +1,385 @@
-"use client";
-
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+// @ts-nocheck: shared with WatchTower and the other app, which are plain JS; keep this file identical to theirs.
+"use client"
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  APP_KEYS, APP_LABELS, ROLE_LABELS, filterUsers, formatDay, formatWhen,
-  type TabDirectory, type TabUser, type UsersTabApi,
-} from '@/lib/users-tab-helpers'
-import { Loader2 } from 'lucide-react'
+    Alert, Avatar, Badge, Button, Card, Chip, EmptyState, Icons, InlineSpinner, SearchInput, Select, Switch,
+    TBody, THead, Table, Td, Th, Tr, tx,
+} from './ui';
+import {
+    APP_FILTERS, APP_KEYS, APP_LABELS, EMPTY_FILTERS, LOGIN_FILTERS, ROLE_LABELS, ROLE_TONES, STATUS_LABELS, STATUS_ORDER, STATUS_TONES,
+    countBy, displayName, filterUsers, formatAgo, formatDay, formatWhen, hasActiveFilters, lastSeen, lastUse, nextDue, pendingRow,
+    sortUsers, userStatus,
+} from './users-shared';
 
 /*
- * The shared Users tab. WatchTower, ESPG and 24/7 show the same list with the same actions; WatchTower is
- * the source of truth and decides every action from the person's WatchTower role. Keep the three copies
- * in step: same columns, same labels, same data-testid values.
+ * The shared Users tab. WatchTower, ESPG and 24/7 show the same list with the same filters and the same actions;
+ * WatchTower is the source of truth and decides every action from the person's WatchTower role. Keep the three
+ * copies in step: same columns, same labels, same data-testid values. Only ./ui differs between the apps.
  */
 
-function errorText(err: unknown, fallback: string): string {
-  const e = err as { response?: { data?: { error?: string } }; message?: string }
-  return e?.response?.data?.error || e?.message || fallback
+export { ROLE_LABELS };
+
+const VIEW_KEY = 'users-tab-view';
+
+function errorText(err, fallback) {
+    return err?.response?.data?.error || err?.message || fallback;
 }
 
-const inputCls = 'rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-
-function Spinner() {
-  return (
-    <div className="flex justify-center py-10" role="status" aria-label="Loading users">
-      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-    </div>
-  )
-}
-
-function RoleCell({ row, busy, onChange }: {
-  row: TabUser
-  busy: boolean
-  onChange: (row: TabUser, role: string, password: string, clear: () => void) => void
-}) {
-  const options = row.can?.roles || []
-  const [role, setRole] = useState(row.role)
-  const [password, setPassword] = useState('')
-  // Follow the server's role when it changes (after a save); do not reset on first mount.
-  const seenRole = useRef(row.role)
-  useEffect(() => {
-    if (seenRole.current !== row.role) {
-      seenRole.current = row.role
-      setRole(row.role)
-    }
-  }, [row.role])
-  return (
-    <div className="space-y-1">
-      <span data-testid={`role-${row.id}`} className="inline-block rounded bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-xs font-medium text-gray-800 dark:text-gray-100">
-        {ROLE_LABELS[row.role] || row.role}
-      </span>
-      {row.role_lapsed && <p className="text-xs text-amber-700 dark:text-amber-300">Service expired: counts as a User until renewed</p>}
-      {options.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          <select aria-label={`New role for ${row.username}`} value={role} onChange={(e) => setRole(e.target.value)}
-            className={`${inputCls} px-1 py-0.5 text-xs`}>
-            <option value={row.role}>{ROLE_LABELS[row.role]}</option>
-            {options.filter((r) => r !== row.role).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-          </select>
-          {role !== row.role && (
-            <>
-              <input type="password" autoComplete="current-password" aria-label={`Your password to change ${row.username}`}
-                placeholder="Your password" value={password} onChange={(e) => setPassword(e.target.value)}
-                className={`${inputCls} w-28 px-1 py-0.5 text-xs`} />
-              <button type="button" disabled={busy || !password}
-                onClick={() => onChange(row, role, password, () => setPassword(''))}
-                className="rounded bg-violet-700 px-2 py-0.5 text-xs font-medium text-white disabled:opacity-40">
-                Change
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function EditRow({ row, busy, onSave, onCancel }: {
-  row: TabUser
-  busy: boolean
-  onSave: (row: TabUser, fields: Record<string, string>) => void
-  onCancel: () => void
-}) {
-  const [fields, setFields] = useState<Record<string, string>>({
-    first_name: row.first_name || '', last_name: row.last_name || '', email: row.email || '', phone: row.phone || '',
-  })
-  return (
-    <tr className="bg-violet-50 dark:bg-violet-900/20" data-testid={`edit-row-${row.id}`}>
-      <td colSpan={8} className="p-3">
-        <div className="grid gap-2 md:grid-cols-4">
-          {Object.keys(fields).map((key) => (
-            <label key={key} className="text-xs text-gray-700 dark:text-gray-300">
-              {key.replace('_', ' ')}
-              <input value={fields[key]} onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
-                className={`${inputCls} mt-1 w-full px-2 py-1 text-sm`} />
-            </label>
-          ))}
-        </div>
-        <div className="mt-2 flex gap-2">
-          <button type="button" disabled={busy} onClick={() => onSave(row, fields)}
-            className="rounded bg-violet-700 px-3 py-1 text-sm text-white disabled:opacity-40">Save</button>
-          <button type="button" onClick={onCancel} className={`${inputCls} px-3 py-1 text-sm`}>Cancel</button>
-        </div>
-      </td>
-    </tr>
-  )
-}
-
-export default function UsersTab({ api, onOpenUser = null }: { api: UsersTabApi; onOpenUser?: ((row: TabUser) => void) | null }) {
-  const [data, setData] = useState<TabDirectory | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [busyKey, setBusyKey] = useState('')
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [filters, setFilters] = useState({ search: '', role: 'all', app: 'all' })
-
-  const load = useCallback(async () => {
+function readView() {
     try {
-      setData(await api.directory())
-      setError('')
-    } catch (err) {
-      setError(errorText(err, 'Could not load users.'))
-    } finally {
-      setLoading(false)
-    }
-  }, [api])
+        const saved = JSON.parse(window.sessionStorage.getItem(VIEW_KEY) || 'null');
+        if (saved && typeof saved === 'object') {
+            return { filters: { ...EMPTY_FILTERS, ...(saved.filters || {}) }, sort: saved.sort || { key: 'name', dir: 'asc' } };
+        }
+    } catch { /* a blocked or broken sessionStorage just means the view is not remembered */ }
+    return { filters: { ...EMPTY_FILTERS }, sort: { key: 'name', dir: 'asc' } };
+}
 
-  useEffect(() => { void load() }, [load])
+function writeView(view) {
+    try { window.sessionStorage.setItem(VIEW_KEY, JSON.stringify(view)); } catch { /* not remembered */ }
+}
 
-  const run = useCallback(async (key: string, body: Record<string, unknown>, okMessage: string, after?: () => void) => {
-    setBusyKey(key)
-    setError('')
-    setNotice('')
-    try {
-      await api.action(body)
-      setNotice(okMessage)
-      if (after) after()
-      await load()
-    } catch (err) {
-      setError(errorText(err, 'The change was not made.'))
-    } finally {
-      setBusyKey('')
-    }
-  }, [api, load])
+function loginsTitle(row) {
+    return ['wt', 'espg', 'twentyfourseven'].map((k) => `${APP_LABELS[k]}: ${formatWhen(row.last_login?.[k])}`).join('\n');
+}
 
-  const users = useMemo(() => filterUsers(data?.users || [], filters), [data, filters])
+function LoginCell({ row }) {
+    const seen = lastSeen(row);
+    return (
+        <div data-testid={`logins-${row.id}`} title={loginsTitle(row)} className="min-w-0 text-sm">
+            {seen.at ? (
+                <>
+                    <p className={`font-medium ${tx.strong}`}>{formatAgo(seen.at)}</p>
+                    <p className={`text-xs ${tx.muted}`}>on {APP_LABELS[seen.app]}</p>
+                </>
+            ) : <p className={tx.muted}>Never signed in</p>}
+        </div>
+    );
+}
 
-  if (loading) return <Spinner />
-  if (!data) return <p role="alert" className="text-sm text-red-700 dark:text-red-300">{error || 'Could not load users.'}</p>
+function UseCell({ row }) {
+    const use = lastUse(row);
+    const more = (row.last_used || []).filter((u) => u.at).length - 1;
+    const title = (row.last_used || []).map((u) => `${u.label}: ${u.what ? `${u.what}, ` : ''}${formatWhen(u.at)}`).join('\n');
+    return (
+        <div data-testid={`uses-${row.id}`} title={title} className="min-w-0 text-sm">
+            {use ? (
+                <>
+                    <p className={`truncate font-medium ${tx.strong}`}>{use.what || use.label}</p>
+                    <p className={`text-xs ${tx.muted}`}>{use.what ? `${use.label} · ` : ''}{formatAgo(use.at)}{more > 0 ? ` · +${more} more` : ''}</p>
+                </>
+            ) : <p className={tx.muted}>Nothing yet</p>}
+        </div>
+    );
+}
 
-  const can = data.viewer?.can || {}
-  const pending = data.pending_signups || []
-
-  return (
-    <div className="space-y-4" data-testid="users-tab">
-      {error && <p role="alert" className="rounded bg-red-50 dark:bg-red-900/30 p-2 text-sm text-red-800 dark:text-red-200">{error}</p>}
-      {notice && <p role="status" className="rounded bg-green-50 dark:bg-green-900/30 p-2 text-sm text-green-800 dark:text-green-200">{notice}</p>}
-      {!can.edit_basic && (
-        <p className="text-xs text-gray-600 dark:text-gray-400" data-testid="read-only-note">
-          You can see everyone here{can.approve ? ' and approve new sign-ups' : ''}
-          {data.viewer?.role === 'manager' ? ', and turn another Manager back into a regular user' : ''}. Editing is for Admins and the Owner.
-        </p>
-      )}
-
-      {pending.length > 0 && (
-        <section aria-label="Sign-ups waiting" className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
-          <h3 className="text-sm font-semibold">Sign-ups waiting for approval ({pending.length})</h3>
-          <ul className="mt-2 divide-y divide-amber-200 dark:divide-amber-800">
-            {pending.map((p) => (
-              <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                <span className="text-sm">
-                  {[p.first_name, p.last_name].filter(Boolean).join(' ') || p.username}
-                  <span className="ml-2 text-xs text-gray-600 dark:text-gray-400">{p.username} · {p.email}</span>
-                </span>
-                <span className="flex gap-2">
-                  {can.approve && (
-                    <button type="button" disabled={busyKey === `approve-${p.id}`}
-                      onClick={() => run(`approve-${p.id}`, { action: 'approve', user_id: p.id }, `Approved ${p.username}.`)}
-                      className="rounded bg-green-600 px-3 py-1 text-xs text-white disabled:opacity-40">Approve</button>
-                  )}
-                  {can.deny && (
-                    <button type="button" disabled={busyKey === `deny-${p.id}`}
-                      onClick={() => run(`deny-${p.id}`, { action: 'deny', user_id: p.id }, `Denied ${p.username}.`)}
-                      className="rounded bg-red-600 px-3 py-1 text-xs text-white disabled:opacity-40">Deny</button>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <input type="search" aria-label="Search users" placeholder="Search name, username or email" value={filters.search}
-          onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-          className={`${inputCls} min-w-[14rem] px-2 py-1 text-sm`} />
-        <select aria-label="Filter by role" value={filters.role} onChange={(e) => setFilters((f) => ({ ...f, role: e.target.value }))}
-          className={`${inputCls} px-2 py-1 text-sm`}>
-          <option value="all">All roles</option>
-          {Object.entries(ROLE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-        </select>
-        <select aria-label="Filter by app access" value={filters.app} onChange={(e) => setFilters((f) => ({ ...f, app: e.target.value }))}
-          className={`${inputCls} px-2 py-1 text-sm`}>
-          <option value="all">All access</option>
-          <option value="espg_off">ESPG turned off</option>
-          <option value="twentyfourseven_off">24/7 turned off</option>
-        </select>
-        <span className="text-xs text-gray-600 dark:text-gray-400">{users.length} of {data.users.length} users</span>
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-800 text-left text-xs uppercase text-gray-600 dark:text-gray-400">
-            <tr>
-              <th className="px-3 py-2">User</th>
-              <th className="px-3 py-2">Role</th>
-              <th className="px-3 py-2">Services</th>
-              <th className="px-3 py-2">Donations</th>
-              <th className="px-3 py-2">Last login</th>
-              <th className="px-3 py-2">Last service use</th>
-              <th className="px-3 py-2">App access</th>
-              <th className="px-3 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
-            {users.length === 0 && (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-600 dark:text-gray-400">No users match.</td></tr>
+function DonationCell({ row }) {
+    const due = nextDue(row);
+    return (
+        <div data-testid={`donations-${row.id}`} className="min-w-0 text-sm">
+            {due ? (
+                <p className={`font-medium ${due.past ? tx.warn : tx.strong}`}>
+                    {due.label} {due.past ? 'ended' : 'due'} {formatDay(due.date)}
+                </p>
+            ) : <p className={tx.muted}>No paid service</p>}
+            {row.tv_donation_due && row.movie_donation_due && nextDue(row)?.label === 'Live TV' && (
+                <p className={`text-xs ${tx.muted}`}>Movies due {formatDay(row.movie_donation_due)}</p>
             )}
-            {users.map((row) => (
-              <React.Fragment key={row.id}>
-                <tr data-testid={`user-row-${row.id}`} className="align-top">
-                  <td className="px-3 py-2">
-                    {onOpenUser ? (
-                      <button type="button" data-testid={`user-open-${row.id}`} onClick={() => onOpenUser(row)}
-                        className="text-left font-medium text-blue-600 dark:text-blue-400 underline">
-                        {[row.first_name, row.last_name].filter(Boolean).join(' ') || row.username}
-                      </button>
-                    ) : (
-                      <p className="font-medium">{[row.first_name, row.last_name].filter(Boolean).join(' ') || row.username}</p>
-                    )}
-                    <p className="text-xs text-gray-600 dark:text-gray-400">{row.username}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">{row.email}</p>
-                    {!row.is_active && <p className="text-xs text-red-700 dark:text-red-300">Account turned off</p>}
-                  </td>
-                  <td className="px-3 py-2">
-                    <RoleCell row={row} busy={busyKey === `role-${row.id}`}
-                      onChange={(r, role, password, clear) => run(`role-${r.id}`,
-                        { action: 'set_role', user_id: r.id, role, password },
-                        `${r.username} is now ${ROLE_LABELS[role]}.`, clear)} />
-                  </td>
-                  <td className="px-3 py-2 text-xs">
-                    {(row.services || []).length === 0 ? '—' : (row.services || []).map((s) => <p key={s}>{s}</p>)}
-                  </td>
-                  <td className="px-3 py-2 text-xs" data-testid={`donations-${row.id}`}>
-                    {row.last_donation
-                      ? <p>Last: {formatDay(row.last_donation.date)}{row.last_donation.amount ? ` ($${row.last_donation.amount})` : ''}</p>
-                      : <p>No donations yet</p>}
-                    {row.tv_donation_due && <p>Live TV due {formatDay(row.tv_donation_due)}</p>}
-                    {row.movie_donation_due && <p>Movies due {formatDay(row.movie_donation_due)}</p>}
-                  </td>
-                  <td className="px-3 py-2 text-xs" data-testid={`logins-${row.id}`}>
-                    {['wt', 'espg', 'twentyfourseven'].map((k) => (
-                      <p key={k}>{APP_LABELS[k]}: {formatWhen(row.last_login?.[k])}</p>
-                    ))}
-                  </td>
-                  <td className="px-3 py-2 text-xs" data-testid={`uses-${row.id}`}>
-                    {(row.last_used || []).length === 0 ? 'Nothing yet' : (row.last_used || []).map((u) => (
-                      <p key={u.key}><strong>{u.label}</strong>: {u.what ? `${u.what}, ` : ''}{formatWhen(u.at)}</p>
-                    ))}
-                  </td>
-                  <td className="px-3 py-2 text-xs">
-                    {APP_KEYS.map((k) => {
-                      const on = row.access?.[k] !== false
-                      return (
-                        <p key={k} className="flex items-center gap-1">
-                          {can.disable_app && row.can?.disable_app ? (
-                            <label className="flex items-center gap-1">
-                              <input type="checkbox" checked={on} disabled={busyKey === `${k}-${row.id}`}
-                                aria-label={`${APP_LABELS[k]} sign-in for ${row.username}`}
-                                onChange={() => run(`${k}-${row.id}`,
-                                  { action: 'set_app_access', user_id: row.id, app: k, enabled: !on },
-                                  `${APP_LABELS[k]} sign-in ${on ? 'turned off' : 'turned on'} for ${row.username}.`)} />
-                              {APP_LABELS[k]}
-                            </label>
-                          ) : (
-                            <span>{APP_LABELS[k]}: {on ? 'On' : 'Off'}</span>
-                          )}
-                        </p>
-                      )
-                    })}
-                  </td>
-                  <td className="px-3 py-2">
-                    {row.can?.edit_basic && (
-                      <button type="button" onClick={() => setEditingId(editingId === row.id ? null : row.id)}
-                        className={`${inputCls} px-2 py-0.5 text-xs`}>Edit</button>
-                    )}
-                  </td>
-                </tr>
-                {editingId === row.id && (
-                  <EditRow row={row} busy={busyKey === `edit-${row.id}`} onCancel={() => setEditingId(null)}
-                    onSave={(r, fields) => run(`edit-${r.id}`, { action: 'edit_basic', user_id: r.id, fields },
-                      `Saved ${r.username}.`, () => setEditingId(null))} />
-                )}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-gray-500 dark:text-gray-400">
-        Turning off an app only stops that person signing in there, so they cannot create their own playlists or channels.
-        Playlists and streams that already exist keep working.
-      </p>
-    </div>
-  )
+            {row.tv_donation_due && row.movie_donation_due && nextDue(row)?.label === 'Movies' && (
+                <p className={`text-xs ${tx.muted}`}>Live TV due {formatDay(row.tv_donation_due)}</p>
+            )}
+            <p className={`text-xs ${tx.muted}`}>
+                {row.last_donation
+                    ? `Last: ${formatDay(row.last_donation.date)}${row.last_donation.amount ? ` ($${row.last_donation.amount})` : ''}`
+                    : 'No donations yet'}
+            </p>
+        </div>
+    );
+}
+
+function RoleBadge({ row }) {
+    return (
+        <div className="space-y-1">
+            <Badge tone={ROLE_TONES[row.role] || 'neutral'} data-testid={`role-${row.id}`}>{ROLE_LABELS[row.role] || row.role}</Badge>
+            {row.role_lapsed && <p className={`max-w-[11rem] text-xs ${tx.warn}`}>Service expired: counts as a User until renewed</p>}
+        </div>
+    );
+}
+
+function AccessSwitches({ row, canToggle, busyKey, onToggle }) {
+    return (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2" onClick={(e) => e.stopPropagation()}>
+            {APP_KEYS.map((k) => {
+                const on = row.access?.[k] !== false;
+                return canToggle ? (
+                    <span key={k} className={`inline-flex items-center gap-2 text-xs font-medium ${tx.strong}`}>
+                        <Switch checked={on} disabled={busyKey === `${k}-${row.id}`} aria-label={`${APP_LABELS[k]} sign-in for ${row.username}`}
+                            onChange={() => onToggle(row, k, on)} />
+                        {APP_LABELS[k]}
+                    </span>
+                ) : (
+                    <Badge key={k} tone={on ? 'ok' : 'neutral'}>{APP_LABELS[k]}: {on ? 'On' : 'Off'}</Badge>
+                );
+            })}
+        </div>
+    );
+}
+
+function PersonCell({ row, onOpenUser }) {
+    const name = displayName(row);
+    return (
+        <div className="flex min-w-0 items-center gap-3">
+            <Avatar name={name} />
+            <div className="min-w-0">
+                {onOpenUser && !row._pending ? (
+                    <button type="button" data-testid={`user-open-${row.id}`} onClick={(e) => { e.stopPropagation(); onOpenUser(row); }}
+                        className={`block max-w-full truncate text-left text-sm font-semibold hover:underline ${tx.strong}`}>
+                        {name}
+                    </button>
+                ) : <p className={`truncate text-sm font-semibold ${tx.strong}`}>{name}</p>}
+                <p className={`truncate text-xs ${tx.muted}`}>@{row.username}{row.email ? ` · ${row.email}` : ''}</p>
+            </div>
+        </div>
+    );
+}
+
+function PendingActions({ row, can, busyKey, onRun }) {
+    const p = row._pending;
+    return (
+        <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            {can.approve && (
+                <Button variant="success" size="sm" disabled={busyKey === `approve-${p.id}`}
+                    onClick={() => onRun(`approve-${p.id}`, { action: 'approve', user_id: p.id }, `Approved ${p.username}.`)}>Approve</Button>
+            )}
+            {can.deny && (
+                <Button variant="danger" size="sm" disabled={busyKey === `deny-${p.id}`}
+                    onClick={() => onRun(`deny-${p.id}`, { action: 'deny', user_id: p.id }, `Denied ${p.username}.`)}>Deny</Button>
+            )}
+        </div>
+    );
+}
+
+/** The table needs room; below this width the same rows are shown as cards, and only one of the two is ever rendered. */
+function useWideScreen() {
+    const query = '(min-width: 768px)';
+    const read = () => (typeof window === 'undefined' || !window.matchMedia ? true : window.matchMedia(query).matches);
+    const [wide, setWide] = useState(read);
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+        const media = window.matchMedia(query);
+        const update = () => setWide(media.matches);
+        update();
+        media.addEventListener('change', update);
+        return () => media.removeEventListener('change', update);
+    }, []);
+    return wide;
+}
+
+function rowHandlers(row, onOpenUser) {
+    if (!onOpenUser || row._pending) return {};
+    return { onClick: () => onOpenUser(row) };
+}
+
+export default function UsersTab({ api, Spinner = InlineSpinner, onOpenUser = null, reloadEvent = null }) {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [notice, setNotice] = useState('');
+    const [busyKey, setBusyKey] = useState('');
+    const [view, setView] = useState(readView);
+    const wide = useWideScreen();
+    const { filters, sort } = view;
+
+    const load = useCallback(async () => {
+        try {
+            setData(await api.directory());
+            setError('');
+        } catch (err) {
+            setError(errorText(err, 'Could not load users.'));
+        } finally {
+            setLoading(false);
+        }
+    }, [api]);
+
+    useEffect(() => { void load(); }, [load]);
+
+    useEffect(() => {
+        if (!reloadEvent) return undefined;
+        const handler = () => { void load(); };
+        window.addEventListener(reloadEvent, handler);
+        return () => window.removeEventListener(reloadEvent, handler);
+    }, [reloadEvent, load]);
+
+    useEffect(() => { writeView(view); }, [view]);
+
+    const setFilter = (patch) => setView((v) => ({ ...v, filters: { ...v.filters, ...patch } }));
+    const clearFilters = () => setView((v) => ({ ...v, filters: { ...EMPTY_FILTERS } }));
+    const sortBy = (key) => setView((v) => ({
+        ...v, sort: { key, dir: v.sort.key === key && v.sort.dir === 'asc' ? 'desc' : 'asc' },
+    }));
+
+    const run = useCallback(async (key, body, okMessage, after) => {
+        setBusyKey(key);
+        setError('');
+        setNotice('');
+        try {
+            await api.action(body);
+            setNotice(okMessage);
+            if (after) after();
+            await load();
+        } catch (err) {
+            setError(errorText(err, 'The change was not made.'));
+        } finally {
+            setBusyKey('');
+        }
+    }, [api, load]);
+
+    const toggleApp = useCallback((row, k, on) => run(`${k}-${row.id}`,
+        { action: 'set_app_access', user_id: row.id, app: k, enabled: !on },
+        `${APP_LABELS[k]} sign-in ${on ? 'turned off' : 'turned on'} for ${row.username}.`), [run]);
+
+    const everyone = useMemo(
+        () => [...(data?.users || []), ...(data?.pending_signups || []).map(pendingRow)],
+        [data],
+    );
+    const counts = useMemo(() => countBy(everyone), [everyone]);
+    const rows = useMemo(() => sortUsers(filterUsers(everyone, filters), sort.key, sort.dir), [everyone, filters, sort]);
+
+    if (loading) return <Spinner />;
+    if (!data) return <Alert tone="danger" role="alert">{error || 'Could not load users.'}</Alert>;
+
+    const can = data.viewer?.can || {};
+    const filtered = hasActiveFilters(filters);
+    const sortProps = (key) => ({ sortable: true, active: sort.key === key, dir: sort.dir, onSort: () => sortBy(key) });
+
+    return (
+        <div className="space-y-4" data-testid="users-tab">
+            {error && <Alert tone="danger" role="alert">{error}</Alert>}
+            {notice && <Alert tone="ok" role="status">{notice}</Alert>}
+            {!can.edit_basic && (
+                <Alert data-testid="read-only-note">
+                    You can see everyone here{can.approve ? ' and approve new sign-ups' : ''}
+                    {data.viewer?.role === 'manager' ? ', and turn another Manager back into a regular user' : ''}. Editing is for Admins and the Owner.
+                </Alert>
+            )}
+
+            <Card className="space-y-3 p-3 sm:p-4" role="search" aria-label="Find users">
+                <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+                    <SearchInput aria-label="Search users" placeholder="Search name, username or email" value={filters.search}
+                        onChange={(e) => setFilter({ search: e.target.value })} />
+                    <Select aria-label="Filter by role" value={filters.role} onChange={(e) => setFilter({ role: e.target.value })}>
+                        <option value="all">All roles</option>
+                        {Object.entries(ROLE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    </Select>
+                    <Select aria-label="Filter by app access" value={filters.app} onChange={(e) => setFilter({ app: e.target.value })}>
+                        {APP_FILTERS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </Select>
+                    <Select aria-label="Filter by last sign-in" value={filters.login} onChange={(e) => setFilter({ login: e.target.value })}>
+                        {LOGIN_FILTERS.map((o) => <option key={o.value} value={o.value}>{o.value === 'any' ? 'Last sign-in: any time' : o.label}</option>)}
+                    </Select>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by status">
+                        <Chip active={filters.status === 'all'} count={counts.all} onClick={() => setFilter({ status: 'all' })}>All</Chip>
+                        {STATUS_ORDER.map((s) => (
+                            <Chip key={s} active={filters.status === s} count={counts[s]} onClick={() => setFilter({ status: filters.status === s ? 'all' : s })}>
+                                {STATUS_LABELS[s]}
+                            </Chip>
+                        ))}
+                    </div>
+                    <div className={`flex items-center gap-3 text-xs ${tx.muted}`}>
+                        <span data-testid="users-count" aria-live="polite">Showing {rows.length} of {everyone.length}</span>
+                        {filtered && <button type="button" onClick={clearFilters} className={`font-medium hover:underline ${tx.link}`}>Clear filters</button>}
+                    </div>
+                </div>
+            </Card>
+
+            {rows.length === 0 ? (
+                <EmptyState title={everyone.length === 0 ? 'No users yet' : 'No users match'}
+                    action={filtered ? <Button onClick={clearFilters}>Clear filters</Button> : null}>
+                    {everyone.length === 0 ? 'People show up here once they sign up and are approved.' : 'Try a different search or clear a filter.'}
+                </EmptyState>
+            ) : (
+                wide ? (
+                    <Card className="overflow-hidden">
+                        <Table label="Users">
+                            <THead>
+                                <Th {...sortProps('name')}>User</Th>
+                                <Th {...sortProps('role')}>Role</Th>
+                                <Th {...sortProps('status')}>Status</Th>
+                                <Th {...sortProps('login')}>Last sign-in</Th>
+                                <Th>Last service use</Th>
+                                <Th {...sortProps('due')}>Services</Th>
+                                <Th>App access</Th>
+                                <Th className="w-8"><span className="sr-only">Open</span></Th>
+                            </THead>
+                            <TBody>
+                                {rows.map((row) => {
+                                    const status = userStatus(row);
+                                    return (
+                                        <Tr key={row.id} data-testid={`user-row-${row.id}`} {...rowHandlers(row, onOpenUser)}>
+                                            <Td className="max-w-[16rem]"><PersonCell row={row} onOpenUser={onOpenUser} /></Td>
+                                            <Td>{row._pending ? <span className={tx.muted}>—</span> : <RoleBadge row={row} />}</Td>
+                                            <Td><Badge tone={STATUS_TONES[status]} data-testid={`status-${row.id}`}>{STATUS_LABELS[status]}</Badge></Td>
+                                            {row._pending ? (
+                                                <Td colSpan={3}><PendingActions row={row} can={can} busyKey={busyKey} onRun={run} /></Td>
+                                            ) : (
+                                                <>
+                                                    <Td><LoginCell row={row} /></Td>
+                                                    <Td className="max-w-[14rem]"><UseCell row={row} /></Td>
+                                                    <Td><DonationCell row={row} /></Td>
+                                                </>
+                                            )}
+                                            <Td>{row._pending ? null : (
+                                                <AccessSwitches row={row} canToggle={!!(can.disable_app && row.can?.disable_app)} busyKey={busyKey} onToggle={toggleApp} />
+                                            )}</Td>
+                                            <Td className="w-8 pl-0">{onOpenUser && !row._pending && <Icons.Next className={`h-4 w-4 ${tx.muted}`} aria-hidden />}</Td>
+                                        </Tr>
+                                    );
+                                })}
+                            </TBody>
+                        </Table>
+                    </Card>
+                ) : (
+                    <ul className="space-y-3" aria-label="Users">
+                        {rows.map((row) => {
+                            const status = userStatus(row);
+                            return (
+                                <li key={row.id}>
+                                    <Card className={`space-y-3 p-4 ${onOpenUser && !row._pending ? 'cursor-pointer' : ''}`} {...rowHandlers(row, onOpenUser)}>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <PersonCell row={row} onOpenUser={onOpenUser} />
+                                            <Badge tone={STATUS_TONES[status]}>{STATUS_LABELS[status]}</Badge>
+                                        </div>
+                                        {row._pending ? (
+                                            <PendingActions row={row} can={can} busyKey={busyKey} onRun={run} />
+                                        ) : (
+                                            <>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <Badge tone={ROLE_TONES[row.role] || 'neutral'}>{ROLE_LABELS[row.role] || row.role}</Badge>
+                                                    {row.role_lapsed && <span className={`text-xs ${tx.warn}`}>Service expired: counts as a User</span>}
+                                                </div>
+                                                <dl className="grid grid-cols-2 gap-3 text-xs">
+                                                    <div><dt className={tx.muted}>Last sign-in</dt><dd><LoginCell row={row} /></dd></div>
+                                                    <div><dt className={tx.muted}>Last service use</dt><dd><UseCell row={row} /></dd></div>
+                                                    <div className="col-span-2"><dt className={tx.muted}>Services</dt><dd><DonationCell row={row} /></dd></div>
+                                                </dl>
+                                                <AccessSwitches row={row} canToggle={!!(can.disable_app && row.can?.disable_app)} busyKey={busyKey} onToggle={toggleApp} />
+                                            </>
+                                        )}
+                                    </Card>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )
+            )}
+
+            <p className={`text-xs ${tx.muted}`}>
+                Turning off an app only stops that person signing in there, so they cannot create their own playlists or channels.
+                Playlists and streams that already exist keep working.
+            </p>
+        </div>
+    );
 }

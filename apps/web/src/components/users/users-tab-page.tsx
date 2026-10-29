@@ -2,8 +2,12 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import UsersTab from "./users-tab";
-import type { UsersTabApi } from "@/lib/users-tab-helpers";
+import UsersTabSource from "./users-tab";
+
+import { PillTabs } from "./ui";
+// The shared source is plain JS; give it loose props so the wrapper can pass its own.
+const UsersTab = UsersTabSource as unknown as React.ComponentType<any>;
+
 
 async function readJson(response: Response) {
   let body: any = null;
@@ -21,9 +25,9 @@ async function readJson(response: Response) {
 }
 
 // 24/7 asks its own server, which asks WatchTower (signed) on this person's behalf.
-const sharedApi: UsersTabApi = {
+const sharedApi = {
   directory: async () => readJson(await fetch("/api/users-tab", { credentials: "include", cache: "no-store" })),
-  action: async (body) =>
+  action: async (body: unknown) =>
     readJson(
       await fetch("/api/users-tab/action", {
         method: "POST",
@@ -34,6 +38,14 @@ const sharedApi: UsersTabApi = {
     ),
 };
 
+function Spinner() {
+  return (
+    <div className="flex justify-center py-12" role="status" aria-label="Loading users">
+      <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+    </div>
+  );
+}
+
 /**
  * The same Users tab as WatchTower and ESPG. Admins also get "Manage & logins" (24/7's own tools);
  * a Manager sees only the shared tab.
@@ -41,25 +53,25 @@ const sharedApi: UsersTabApi = {
 export default function UsersTabPage({ showManage, children }: { showManage: boolean; children: React.ReactNode }) {
   const router = useRouter();
   const [view, setView] = useState<"users" | "manage">("users");
-  const tabCls = (on: boolean) =>
-    `px-4 py-2 text-sm font-medium border-b-2 ${
-      on
-        ? "border-blue-600 text-blue-700 dark:text-blue-300"
-        : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-    }`;
   return (
-    <div className="space-y-4 p-4">
+    <div className="mx-auto w-full max-w-7xl space-y-4 p-4">
       {showManage && (
-        <div role="tablist" aria-label="Users views" className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
-          <button type="button" role="tab" aria-selected={view === "users"} onClick={() => setView("users")} className={tabCls(view === "users")}>
-            Users
-          </button>
-          <button type="button" role="tab" aria-selected={view === "manage"} onClick={() => setView("manage")} className={tabCls(view === "manage")}>
-            Manage &amp; logins
-          </button>
-        </div>
+        <PillTabs
+          label="Users views"
+          className="w-fit max-w-full"
+          items={[
+            { id: "users", label: "Users" },
+            { id: "manage", label: "Manage & logins" },
+          ]}
+          value={view}
+          onChange={(id: string) => setView(id as "users" | "manage")}
+        />
       )}
-      {view === "users" || !showManage ? <UsersTab api={sharedApi} onOpenUser={(row) => router.push(`/users/${row.id}/`)} /> : children}
+      {view === "users" || !showManage ? (
+        <UsersTab api={sharedApi} Spinner={Spinner} onOpenUser={(row: { id: number | string }) => router.push(`/users/${row.id}/`)} />
+      ) : (
+        children
+      )}
     </div>
   );
 }
