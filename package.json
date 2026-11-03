@@ -38,5 +38,10 @@
     "dotenv-cli": "^8.0.0",
     "turbo": "^2.11.10"
   },
-  "packageManager": "npm@10.8.2"
+  "packageManager": "npm@10.8.2",
+  "overrides": {
+    "next": {
+      "postcss": "8.5.31"
+    }
+  }
 }
