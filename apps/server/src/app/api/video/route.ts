@@ -36,12 +36,13 @@ import {
 import { resolveLocalStream } from '@/lib/local-media/resolve';
 import { localCopyProbe } from '@/lib/local-media/copy-probe';
 import {
-  chooseLocalPlayback,
-  copyRemuxBlocker,
   describeRemoteVideo,
   type LocalProbe,
   type RemoteVideoInfo,
 } from '@/lib/local-media/playback';
+import { describeCaps, resolveClientCaps } from '@/lib/client-caps';
+import { decidePlayback, passThroughAnyway, transcodeDecision, type PlaybackDecision } from '@/lib/playback-decision';
+import { noteCpuConfiguredTranscode, noteGpuEncodeOk, reportGpuStepDown } from '@/lib/encoder-policy';
 import {
   buildCopyFfmpegArgs,
   buildLiveFfmpegArgs,
@@ -157,8 +158,8 @@ async function buildFfmpegArgs(
     fallback?: boolean;
     copy?: boolean;
     browser?: boolean;
-    /** Local file that can be copied as-is (no video encode). */
-    localCopy?: { copyAudio: boolean };
+    /** Direct play: remux the program's video as-is (no video encode). */
+    directCopy?: { copyAudio: boolean; stripDolbyVision: boolean };
     /** Local file being transcoded: read at 1x. */
     pace?: boolean;
     /** HDR source: tone-map to SDR bt709. */
@@ -166,12 +167,13 @@ async function buildFfmpegArgs(
   },
 ): Promise<string[]> {
   const ffmpegSettings = await loadFfmpegSettings();
-  if (options?.localCopy) {
+  if (options?.directCopy) {
     return buildCopyFfmpegArgs(streamUrl, seekSeconds, {
       discontinuity: options.discontinuity,
       outputTsOffset: options.outputTsOffset,
       logLevel: ffmpegSettings?.logLevel,
-      copyAudio: options.localCopy.copyAudio,
+      copyAudio: options.directCopy.copyAudio,
+      stripDolbyVision: options.directCopy.stripDolbyVision,
       readrateInitialBurst: ffmpegSupportsReadrateInitialBurst(),
     });
   }
@@ -218,11 +220,14 @@ export async function GET(request: NextRequest) {
   //   • `utc`   – Unix epoch seconds (IPTV player standard)
   //   • `lutc`  – "live" Unix epoch (current wall-clock when player made request)
   const isCatchup = request.nextUrl.searchParams.get('catchup') === 'true';
-  const copyRequested = request.nextUrl.searchParams.get('copy') === '1';
-  // copy=1 is a request: a Plex or local file whose video players can't take as-is
-  // (10-bit / HDR / Dolby Vision / very high bitrate) is transcoded instead.
-  let useCopyRemux = copyRequested;
   const useBrowser = request.nextUrl.searchParams.get('browser') === '1';
+  // Direct play first. What can this client play as it is? (copy=1 / copy=0 /
+  // caps=... / browser=1 / User-Agent; see lib/client-caps.ts.)
+  const caps = resolveClientCaps({
+    params: request.nextUrl.searchParams,
+    userAgent: request.headers.get('user-agent'),
+    capsHeader: request.headers.get('x-tfs-caps'),
+  });
   const timeParam = request.nextUrl.searchParams.get('time');
   const utcParam = request.nextUrl.searchParams.get('utc');
   const lutcParam = request.nextUrl.searchParams.get('lutc');
@@ -421,13 +426,12 @@ export async function GET(request: NextRequest) {
     // The video now on air (changes at each program handoff); drives the tone map.
     let currentVideo = remoteVideo;
     let hdrLoggedFor: string | null = null;
-    const copyBlocker = copyRequested && !useBrowser ? copyRemuxBlocker(remoteVideo) : null;
-
-    // Local files: copy compatible video as-is (no encode); otherwise transcode.
-    const localAuto = isLocal && !copyRequested;
-    const initialLocalCopy =
-      localAuto && chooseLocalPlayback(localProbe ?? null, { browser: useBrowser }).copyVideo;
-    let countsAsCopy = (copyRequested && !useBrowser) || initialLocalCopy;
+    const transcodingEnabled = (await loadFfmpegSettings())?.enableTranscoding !== false;
+    // Decided for this program now and again at every program handoff.
+    let initialDecision: PlaybackDecision = decidePlayback(caps, remoteVideo, { transcodingEnabled });
+    let countsAsCopy = initialDecision.action === 'copy';
+    /** Every transcode slot was busy at start: keep passing programs through. */
+    let keepDirectDespiteCaps = false;
 
     // Await everything first: from the counts below to createSession nothing
     // yields, so two players can't both take the last slot.
@@ -449,7 +453,7 @@ export async function GET(request: NextRequest) {
       viewerActive = active;
     }
     const streamLimit = streamSettings?.concurrentStreams ?? 1;
-    if (copyBlocker) {
+    if (!countsAsCopy && caps.trustUnknownSource && !caps.forceTranscode) {
       const transcodeFull = shouldRejectNewTranscode(
         streamMonitorService.getActiveSessions(),
         channelNumber,
@@ -459,12 +463,11 @@ export async function GET(request: NextRequest) {
         false,
       );
       if (transcodeFull) {
-        // Better a copy the player may struggle with than no picture at all.
-        console.warn(`[Video] copy=1 kept channel=${channelNumber}: ${copyBlocker}, but every transcode slot is in use`);
-      } else {
-        console.warn(`[Video] copy=1 ignored channel=${channelNumber}: ${copyBlocker}; transcoding instead`);
-        useCopyRemux = false;
-        countsAsCopy = false;
+        // Better a pass-through the player may struggle with than no picture at all.
+        console.warn(`[Video] direct play kept channel=${channelNumber} client=${caps.id}: ${initialDecision.reason}, but every transcode slot is in use`);
+        initialDecision = passThroughAnyway(remoteVideo, `${initialDecision.reason}; transcode slots full`);
+        countsAsCopy = initialDecision.action === 'copy';
+        keepDirectDespiteCaps = countsAsCopy;
       }
     }
     if (
@@ -563,8 +566,9 @@ export async function GET(request: NextRequest) {
         streamUrl,
         seekSeconds,
         passthrough,
-        copy: useCopyRemux && !useBrowser,
+        copy: countsAsCopy,
         browser: useBrowser,
+        profile: caps.id,
       });
       liveHub = joined.hub;
       shouldStartFfmpeg = joined.shouldStartFfmpeg;
@@ -662,8 +666,26 @@ export async function GET(request: NextRequest) {
      * restart at ~0 and freezes until it catches up to the old end.
      */
     const tsTimeline = new TsTimeline();
-    const buildFfmpegArgsOnTimeline: typeof buildFfmpegArgs = (url, seek, opts) =>
-      buildFfmpegArgs(url, seek, { ...opts, outputTsOffset: tsTimeline.nextOffsetSeconds() });
+    /** Options of the FFmpeg start that is running, so a recovery respawn repeats it (direct play stays direct). */
+    let lastBuildOptions: Parameters<typeof buildFfmpegArgs>[2];
+    const buildFfmpegArgsOnTimeline: typeof buildFfmpegArgs = (url, seek, opts) => {
+      let merged = opts;
+      if (opts?.mode !== undefined) {
+        lastBuildOptions = opts;
+      } else {
+        // Stream recovery: keep what the current start decided (copy or transcode, browser, tone map).
+        merged = { ...lastBuildOptions, ...opts };
+        if (merged.forceSoftware) {
+          if (merged.directCopy) {
+            // A pass-through has no encoder to fall back from.
+            merged = { ...merged, forceSoftware: false };
+          } else if (merged.mode !== 'software' && !reportGpuStepDown(channelNumber, merged.mode ?? 'hardware', 'software', 'stream recovery gave up on the GPU encoder')) {
+            merged = { ...merged, forceSoftware: false, mode: 'cpu-decode' };
+          }
+        }
+      }
+      return buildFfmpegArgs(url, seek, { ...merged, outputTsOffset: tsTimeline.nextOffsetSeconds() });
+    };
     const ignoredClosePids = new Set<number>();
     /** A local file is being copied right now (no encode). */
     let autoCopyActive = false;
@@ -671,26 +693,26 @@ export async function GET(request: NextRequest) {
     const copyFailedKeys = new Set<string>();
 
     /**
-     * Copy failed. Explicit copy=1 keeps the old behaviour (end the stream so
-     * the client falls back). A local auto-copy switches to transcoding.
-     * Returns true when handled.
+     * Direct play failed (FFmpeg couldn't remux this video, or the client can't
+     * take it). Switch this program to a GPU transcode on the same stream.
+     * `transient` (a network error) is left to stream recovery, which retries
+     * the pass-through. Returns true when handled.
      */
-    const handleCopyFailure = (reason: string): boolean => {
+    const handleCopyFailure = (reason: string, opts?: { transient?: boolean }): boolean => {
       if (autoCopyActive && !isAborted) {
+        if (opts?.transient) {
+          return false;
+        }
         autoCopyActive = false;
         copyFailedKeys.add(String(programInfo.ratingKey));
-        streamMonitorService.addError(sessionId, `${reason}; transcoding this file instead`);
+        streamMonitorService.addError(sessionId, `${reason}; direct play failed, transcoding this program instead`);
+        console.warn(`[Video] direct play failed channel=${channelNumber} client=${caps.id}: ${reason.replace(/\s+/g, ' ').slice(0, 200)}; transcoding this program instead`);
         mpegtsDiscontinuity = true;
         beginLiveEncoderGap();
         startFfmpeg(preferredMode).catch((err) => {
           streamMonitorService.addError(sessionId, `Transcode fallback failed: ${err.message}`);
           failOpenStream();
         });
-        return true;
-      }
-      if (useCopyRemux) {
-        streamMonitorService.addError(sessionId, reason);
-        failOpenStream();
         return true;
       }
       return false;
@@ -757,6 +779,11 @@ export async function GET(request: NextRequest) {
         failOpenStream();
         return;
       }
+      if (!reportGpuStepDown(channelNumber, encodeMode, next, reason)) {
+        streamMonitorService.addError(sessionId, `${reason}; CPU encode is disabled`);
+        failOpenStream();
+        return;
+      }
       encoderStepInFlight = true;
       encodeMode = next;
       mpegtsDiscontinuity = true;
@@ -776,6 +803,11 @@ export async function GET(request: NextRequest) {
         return;
       }
       if (encoderStepInFlight || isAborted || encodeMode === 'software') {
+        return;
+      }
+      if (!reportGpuStepDown(channelNumber, encodeMode, 'software', reason)) {
+        streamMonitorService.addError(sessionId, `${reason}; CPU encode is disabled`);
+        failOpenStream();
         return;
       }
       encoderStepInFlight = true;
@@ -839,7 +871,7 @@ export async function GET(request: NextRequest) {
 
       child.stderr?.on('data', (data) => {
         const text = data.toString();
-        if (useCopyRemux || autoCopyActive) {
+        if (autoCopyActive) {
           const line = text.replace(/\s+/g, ' ').trim().slice(0, 400);
           if (line) {
             console.warn(`[Video] copy ffmpeg channel=${channelNumber}: ${line}`);
@@ -881,7 +913,9 @@ export async function GET(request: NextRequest) {
           } catch {
             // ignore
           }
-          if (handleCopyFailure(errorMessage)) {
+          // A network blip is retried by recovery (still direct). A codec error
+          // on a pass-through means this video can't be remuxed: transcode it.
+          if (handleCopyFailure(errorMessage, { transient: hasNetworkError && !hasCodecError })) {
             return;
           }
           beginLiveEncoderGap();
@@ -907,7 +941,7 @@ export async function GET(request: NextRequest) {
           return;
         }
         ignoreClose(child);
-        if (handleCopyFailure(`Process error: ${error.message}`)) {
+        if (handleCopyFailure(`Process error: ${error.message}`, { transient: true })) {
           return;
         }
         beginLiveEncoderGap();
@@ -937,7 +971,7 @@ export async function GET(request: NextRequest) {
           return;
         }
 
-        if (code !== 0 && !isAborted && (useCopyRemux || autoCopyActive)) {
+        if (code !== 0 && !isAborted && autoCopyActive) {
           handleCopyFailure(`FFmpeg remux exited with code ${code}`);
           return;
         }
@@ -1116,20 +1150,29 @@ export async function GET(request: NextRequest) {
 
       encodeMode = mode;
       encoderStepInFlight = false;
-      const fallingBack = !useCopyRemux && mode === 'software' && preferredMode !== 'software';
-      // Decided per file: a channel can mix files that copy and files that need encoding.
-      const localChoice =
-        localAuto && !copyFailedKeys.has(String(programInfo.ratingKey))
-          ? chooseLocalPlayback(localProbe ?? null, { browser: useBrowser })
-          : null;
-      autoCopyActive = !!localChoice?.copyVideo;
-      // HDR -> SDR only when video is encoded (copy keeps the source as-is).
-      const hdr =
-        !useCopyRemux && !autoCopyActive
-          ? planHdrToneMap(currentVideo, ffmpegCanToneMap())
-          : { toneMap: null };
-      if (hdr.log && hdrLoggedFor !== String(programInfo.ratingKey)) {
-        hdrLoggedFor = String(programInfo.ratingKey);
+      // Direct play first, decided per program: a channel can mix programs that
+      // pass through and programs that need a transcode for this client.
+      const programKey = String(programInfo.ratingKey);
+      const liveSettings = await loadFfmpegSettings();
+      const decision: PlaybackDecision = copyFailedKeys.has(programKey)
+        ? transcodeDecision('direct play failed earlier on this program')
+        : keepDirectDespiteCaps
+          ? passThroughAnyway(currentVideo, 'every transcode slot is in use')
+          : decidePlayback(caps, currentVideo, { transcodingEnabled: liveSettings?.enableTranscoding !== false });
+      autoCopyActive = decision.action === 'copy';
+      const fallingBack = !autoCopyActive && mode === 'software' && preferredMode !== 'software';
+      console.log(
+        `[Video] direct-play channel=${channelNumber} client=${describeCaps(caps)} program=${programKey} video="${describeRemoteVideo(currentVideo)}" -> ${autoCopyActive ? `copy${decision.copyAudio ? '+audio-copy' : ''}${decision.stripDolbyVision ? '+dv-strip' : ''}` : `transcode(${mode})`}: ${decision.reason}`,
+      );
+      if (!autoCopyActive && (mode === 'software' ? preferredMode === 'software' : false)) {
+        noteCpuConfiguredTranscode(channelNumber, liveSettings?.videoCodec);
+      }
+      // HDR -> SDR only when video is encoded (a pass-through keeps the source as-is).
+      const hdr = !autoCopyActive
+        ? planHdrToneMap(currentVideo, ffmpegCanToneMap())
+        : { toneMap: null };
+      if (hdr.log && hdrLoggedFor !== programKey) {
+        hdrLoggedFor = programKey;
         const line = `[Video] channel=${channelNumber} ${hdr.log.message}`;
         if (hdr.log.level === 'warn') console.warn(line);
         else console.log(line);
@@ -1139,35 +1182,32 @@ export async function GET(request: NextRequest) {
         mode,
         fallback: fallingBack,
         discontinuity: mpegtsDiscontinuity,
-        copy: useCopyRemux && !useBrowser,
         browser: useBrowser,
-        localCopy: autoCopyActive ? { copyAudio: !!localChoice?.copyAudio } : undefined,
+        directCopy: autoCopyActive
+          ? { copyAudio: decision.copyAudio, stripDolbyVision: decision.stripDolbyVision }
+          : undefined,
         pace: isLocal && !autoCopyActive,
       });
-      if (localAuto) {
-        console.log(
-          `[Video] local channel=${channelNumber} file=${autoCopyActive ? 'copy' : 'transcode'}${autoCopyActive && localChoice?.copyAudio ? '+audio-copy' : ''} reason=${localChoice?.reason ?? 'copy-failed-earlier'}`,
-        );
-      }
 
       const child = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
       if (liveHub && fallingBack) {
         sharedLiveTranscodePool.setRestartedToSoftware(liveHub, true);
+      }
+      if (!autoCopyActive && mode !== 'software') {
+        child.stdout?.once('data', noteGpuEncodeOk);
       }
       bindFfmpegLifecycle(child);
       return child;
     }
 
     const ffmpegSettingsForMode = await loadFfmpegSettings();
-    preferredMode = useCopyRemux
+    preferredMode = !ffmpegSettingsForMode || ffmpegSettingsForMode.enableTranscoding === false
       ? 'software'
-      : !ffmpegSettingsForMode || ffmpegSettingsForMode.enableTranscoding === false
-        ? 'software'
-        : initialEncodeMode(ffmpegSettingsForMode.videoCodec);
+      : initialEncodeMode(ffmpegSettingsForMode.videoCodec);
     encodeMode = preferredMode;
     await startFfmpeg(encodeMode);
     console.log(
-      `[Video] start channel=${channelNumber} mode=${useBrowser ? 'browser' : useCopyRemux ? 'copy' : 'transcode'}${isLocal ? ' source=local' : ''} encode=${autoCopyActive ? 'copy' : encodeMode} via=${access.auth.via}${viewer ? ` viewer=${viewerActive + 1}/${viewer.limit.allowed}` : ''} session=${sessionId}${isCatchup ? ' catchup' : ''}${remoteVideo ? ` video="${describeRemoteVideo(remoteVideo)}"` : ''}`,
+      `[Video] start channel=${channelNumber} mode=${useBrowser ? 'browser' : autoCopyActive ? 'copy' : 'transcode'} client=${caps.id}${isLocal ? ' source=local' : ''} encode=${autoCopyActive ? 'copy' : encodeMode} via=${access.auth.via}${viewer ? ` viewer=${viewerActive + 1}/${viewer.limit.allowed}` : ''} session=${sessionId}${isCatchup ? ' catchup' : ''}${remoteVideo ? ` video="${describeRemoteVideo(remoteVideo)}"` : ''}`,
     );
 
     // Handle client abort / stream close (IPTV clients often drop without a

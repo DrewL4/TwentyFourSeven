@@ -178,6 +178,9 @@ function browserSafeVideoCodec(codec: string): string {
  * down, so an unpaced remux pulls the whole MKV into Node and RAM climbs
  * into multiple gigabytes while the player only consumes realtime.
  */
+/** Dolby Vision RPU (62) and enhancement layer (63) NAL units. HDR10 / HLG base layer stays. */
+export const DV_STRIP_BSF = "filter_units=remove_types=62|63";
+
 export function buildCopyFfmpegArgs(
   streamUrl: string,
   seekSeconds: number,
@@ -188,6 +191,8 @@ export function buildCopyFfmpegArgs(
     logLevel?: string | null;
     /** Local files whose audio is already stereo AAC: copy it too (no encode at all). */
     copyAudio?: boolean;
+    /** HEVC with Dolby Vision RPU / enhancement-layer NAL units (types 62, 63): drop them. */
+    stripDolbyVision?: boolean;
     readrateInitialBurst?: boolean;
   },
 ): string[] {
@@ -218,6 +223,7 @@ export function buildCopyFfmpegArgs(
     "-dn",
     "-c:v",
     "copy",
+    ...(options?.stripDolbyVision ? ["-bsf:v", DV_STRIP_BSF] : []),
     ...(options?.copyAudio ? ["-c:a", "copy"] : ["-c:a", "aac", "-ac", "2", "-b:a", "160k"]),
     "-max_interleave_delta",
     "0",
@@ -273,8 +279,8 @@ export function buildLiveFfmpegArgs(
   const enableTranscoding = settings?.enableTranscoding ?? true;
 
   if (
-    !options.browser &&
-    (options.copy === true || (!enableTranscoding && !useEnvironmentFallback && !options.fallback))
+    options.copy === true ||
+    (!options.browser && !enableTranscoding && !useEnvironmentFallback && !options.fallback)
   ) {
     return buildCopyFfmpegArgs(streamUrl, seekSeconds, {
       discontinuity: options.discontinuity,

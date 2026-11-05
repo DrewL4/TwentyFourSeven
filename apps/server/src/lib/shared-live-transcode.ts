@@ -126,7 +126,13 @@ export class SharedLiveTranscodePool {
     _ratingKey?: string,
     copy = false,
     browser = false,
+    profile?: string,
   ): string {
+    // Direct play: viewers share a hub only with clients that can play the same
+    // stream (a TV that takes HEVC as-is must not share with a phone that can't).
+    if (profile) {
+      return `${channelNumber}:live:${profile}`;
+    }
     if (browser) {
       return `${channelNumber}:live:browser`;
     }
@@ -142,8 +148,9 @@ export class SharedLiveTranscodePool {
     ratingKey: string,
     copy = false,
     browser = false,
+    profile?: string,
   ): SharedLiveHub | undefined {
-    return this.hubs.get(this.getLiveShareKey(channelNumber, ratingKey, copy, browser));
+    return this.hubs.get(this.getLiveShareKey(channelNumber, ratingKey, copy, browser, profile));
   }
 
   /** True when this session is attached to a shared live hub. */
@@ -186,12 +193,15 @@ export class SharedLiveTranscodePool {
     passthrough: PassThrough;
     copy?: boolean;
     browser?: boolean;
+    /** Client capability class (see client-caps.ts). Absent: the old copy / transcode / browser keys. */
+    profile?: string;
   }): Promise<{ hub: SharedLiveHub; shouldStartFfmpeg: boolean }> {
     const key = this.getLiveShareKey(
       options.channelNumber,
       options.ratingKey,
       options.copy === true,
       options.browser === true,
+      options.profile,
     );
 
     const existing = this.hubs.get(key);
@@ -225,6 +235,7 @@ export class SharedLiveTranscodePool {
         passthrough: options.passthrough,
         copy: options.copy === true,
         browser: options.browser === true,
+        profile: options.profile,
       });
       resolveHub(hub);
       return { hub, shouldStartFfmpeg: true };
@@ -248,12 +259,15 @@ export class SharedLiveTranscodePool {
     passthrough: PassThrough;
     copy?: boolean;
     browser?: boolean;
+    /** Client capability class (see client-caps.ts). Absent: the old copy / transcode / browser keys. */
+    profile?: string;
   }): SharedLiveHub {
     const key = this.getLiveShareKey(
       options.channelNumber,
       options.ratingKey,
       options.copy === true,
       options.browser === true,
+      options.profile,
     );
     const existing = this.hubs.get(key);
     if (existing) {

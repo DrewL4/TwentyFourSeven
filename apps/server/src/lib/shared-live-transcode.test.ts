@@ -14,6 +14,36 @@ describe("SharedLiveTranscodePool", () => {
     pool.resetForTests();
   });
 
+  it("hub keys by client class: a TV and a browser never share one stream", () => {
+    assert.equal(pool.getLiveShareKey(5, "r", true, false, "tv"), "5:live:tv");
+    assert.equal(pool.getLiveShareKey(5, "r", false, true, "browser"), "5:live:browser");
+    assert.notEqual(pool.getLiveShareKey(5, "r", true, false, "tv"), pool.getLiveShareKey(5, "r", true, false, "player"));
+    // No class: the old keys.
+    assert.equal(pool.getLiveShareKey(5, "r", true, false), "5:live:copy");
+  });
+
+  it("two clients of one class share a hub, a different class gets its own", async () => {
+    const make = (profile: string, sessionId: string) =>
+      pool.joinOrCreateLiveHub({
+        channelNumber: 9,
+        ratingKey: "r1",
+        sessionId,
+        streamUrl: "http://x/y",
+        seekSeconds: 0,
+        passthrough: new PassThrough(),
+        copy: true,
+        profile,
+      });
+    const a = await make("tv", "s1");
+    const b = await make("tv", "s2");
+    const c = await make("transcode", "s3");
+    assert.equal(a.shouldStartFfmpeg, true);
+    assert.equal(b.shouldStartFfmpeg, false);
+    assert.equal(a.hub, b.hub);
+    assert.equal(c.shouldStartFfmpeg, true);
+    assert.notEqual(a.hub, c.hub);
+  });
+
   it("emits a valid MPEG-TS null packet", () => {
     const packet = createMpegTsNullPacket();
     assert.equal(packet.length, 188);

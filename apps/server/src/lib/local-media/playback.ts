@@ -56,9 +56,9 @@ export type RemoteVideoInfo = {
 export const COPY_MAX_BITRATE_KBPS = 25_000;
 
 const COPY_SAFE_VIDEO = new Set(["h264", "hevc", "mpeg2video"]);
-const HDR_TRANSFERS = /smpte2084|arib-std-b67|pq|hlg/i;
+export const HDR_TRANSFERS = /smpte2084|arib-std-b67|pq|hlg/i;
 
-function isHighBitDepth(info: RemoteVideoInfo): boolean {
+export function isHighBitDepth(info: RemoteVideoInfo): boolean {
   if ((info.bitDepth ?? 0) > 8) return true;
   return /\b(main ?1[02]|high ?10|high ?4:[24]:[24])/i.test(info.videoProfile || "");
 }
